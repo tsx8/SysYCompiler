@@ -1,0 +1,99 @@
+int g_side_effect = 0;
+const int G_CONST_A = 10, G_CONST_B = 20;
+const int SINGLE_CONST = 99;
+const int G_CONST_ARR[3] = {1, 2, 3};
+const int EMPTY_CONST_ARR[2] = {};
+
+int check_side_effect(int val) {
+    g_side_effect = g_side_effect + val;
+    return 1;
+}
+
+void void_func_no_args() {
+    return;
+}
+
+int get_static_val(int arr[]) {
+    static int static_counter = 0;
+    static int s1, s2;
+    static_counter = static_counter + 1;
+    return static_counter;
+}
+
+int main() {
+    printf("23371263\n");
+
+    ;
+
+    if (0 && check_side_effect(1)) {}
+    if (g_side_effect <= 0) {
+        int a;
+        printf("%d\n", g_side_effect);
+    }
+
+    if (1 || check_side_effect(1)) {}
+    printf("%d\n", g_side_effect);
+
+    void_func_no_args();
+    printf("%d\n", get_static_val(EMPTY_CONST_ARR));
+
+    int positive_val = -1;
+    positive_val = +SINGLE_CONST;
+    if (positive_val > 50)
+        printf("%d\n", positive_val);
+
+    int i = 0, j = 0, loop_sum = 0;
+    for (i = 0, j = 10; i < 5; i = i + 1, j = j - 1) {
+        if (i == 2) continue;
+        if (i >= 4) break;
+        loop_sum = loop_sum + i * j / 2 % 1;
+    }
+    printf("%d\n", loop_sum);
+
+    int k = 0, for_sum_inf = 0;
+    for (k = 0; k != -1; k = k + 1) {
+        for_sum_inf = for_sum_inf + 1;
+        if (k >= 2) break;
+    }
+    printf("%d\n", for_sum_inf);
+
+    int l = 0, for_sum_while = 0;
+    for (; l <= 3;) {
+        for_sum_while = for_sum_while + l;
+        l = l + 1;
+    }
+
+    for (;;) {
+        break;
+    }
+
+    for (l = 0;; l = l + 1) {
+        break;
+    }
+
+    for (l = 0; l < 0;) {
+        break;
+    }
+
+    for (;;l = l + 1) {
+        break;
+    }
+
+    for (l=0;;) {
+        break;
+    }
+
+    for (;l!=0;l = l + 1) {
+        break;
+    }
+
+    if (!0) {} else {}
+
+    printf("%d\n", for_sum_while);
+
+    printf("%d\n", EMPTY_CONST_ARR[0] + EMPTY_CONST_ARR[1]);
+
+    printf("All tests finished.\n");
+
+    return 0;
+}

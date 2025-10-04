@@ -1,0 +1,9 @@
+23371263
+Global array element 1: 10
+Sum of global array: 30
+Local array element 3: 30
+Sum of local array: 100
+Local sum is larger or equal.
+Static counter call 1: 1
+Static counter call 2: 2
+Static counter call 3: 3

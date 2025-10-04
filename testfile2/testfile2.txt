@@ -1,0 +1,46 @@
+int global_arr[3];
+
+int sum_array(int arr[], int len) {
+    int i = 0;
+    int total = 0;
+    for (i = 0; i < len; i = i + 1) {
+        total = total + arr[i];
+    }
+    return total;
+}
+
+int static_counter() {
+    static int count = 0;
+    count = count + 1;
+    return count;
+}
+
+int main() {
+    printf("23371263\n");
+
+    global_arr[0] = getint();
+    global_arr[1] = getint();
+    global_arr[2] = getint();
+    
+    printf("Global array element 1: %d\n", global_arr[1]);
+
+    int g_sum = sum_array(global_arr, 3);
+    printf("Sum of global array: %d\n", g_sum);
+
+    int local_arr[4] = {10, 20, 30, 40};
+    printf("Local array element 3: %d\n", local_arr[2]);
+    int l_sum = sum_array(local_arr, 4);
+    printf("Sum of local array: %d\n", l_sum);
+
+    if (g_sum > l_sum) {
+        printf("Global sum is larger.\n");
+    } else {
+        printf("Local sum is larger or equal.\n");
+    }
+
+    printf("Static counter call 1: %d\n", static_counter());
+    printf("Static counter call 2: %d\n", static_counter());
+    printf("Static counter call 3: %d\n", static_counter());
+
+    return 0;
+}

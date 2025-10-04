@@ -1,0 +1,10 @@
+23371263
+Reversed array element 0: 5
+Reversed array element 4: 1
+Calculation result: 13
+Sum is: 30
+Factorial of 4 is: 24
+Value of a: 110
+Value of c2: 200
+Empty block executed.
+Expression statement executed.

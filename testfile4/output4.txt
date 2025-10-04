@@ -1,0 +1,10 @@
+23371263
+Local global_var = 10
+Sum from add function: 15
+Inside void_func, local_in_void = 20
+If condition is true.
+Loop sum (1 to 4) is: 10
+Unary positive: 10
+Unary negative: -20
+Complex expression with parens: 16
+Empty expression statement executed.

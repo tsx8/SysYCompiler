@@ -1,0 +1,47 @@
+const int C_ARR[5] = {1, 2, 3, 4, 5};
+
+void print_sum(int a, int b) {
+    printf("Sum is: %d\n", a + b);
+    return;
+}
+
+int main() {
+    printf("23371263\n");
+
+    int i = 0, j = 4;
+    int reversed_arr[5];
+
+    for (i = 0, j = 4; i < 5; i = i + 1, j = j - 1) {
+        reversed_arr[j] = C_ARR[i];
+    }
+    printf("Reversed array element 0: %d\n", reversed_arr[0]);
+    printf("Reversed array element 4: %d\n", reversed_arr[4]);
+
+    int result = reversed_arr[0] * C_ARR[0] + reversed_arr[1] * C_ARR[1];
+    printf("Calculation result: %d\n", result);
+
+    print_sum(10, 20);
+
+    int k = 0;
+    int factorial = 1;
+    for (; k < 4; k = k + 1) {
+        factorial = factorial * (k + 1);
+    }
+    printf("Factorial of 4 is: %d\n", factorial);
+
+    int a;
+    int b = 10;
+    const int c1 = 100, c2 = 200;
+    a = b + c1;
+    printf("Value of a: %d\n", a);
+    printf("Value of c2: %d\n", c2);
+    
+    {
+    }
+    printf("Empty block executed.\n");
+    
+    a + b;
+    printf("Expression statement executed.\n");
+
+    return 0;
+}

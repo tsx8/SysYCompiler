@@ -1,0 +1,47 @@
+int global_var = 100;
+
+void void_func() {
+    int local_in_void = 20;
+    printf("Inside void_func, local_in_void = %d\n", local_in_void);
+    return;
+}
+
+int add(int a, int b) {
+    return a + b;
+}
+
+int main() {
+    printf("23371263\n");
+
+    int global_var = 10;
+    printf("Local global_var = %d\n", global_var);
+
+    int sum = add(global_var, 5);
+    printf("Sum from add function: %d\n", sum);
+
+    void_func();
+
+    if (sum == 15) {
+        printf("If condition is true.\n");
+    }
+
+    int i = 0;
+    int loop_sum = 0;
+    for (i = 1; i <= 4; i = i + 1) {
+        loop_sum = loop_sum + i;
+    }
+    printf("Loop sum (1 to 4) is: %d\n", loop_sum);
+
+    int positive = +10;
+    int negative = -20;
+    printf("Unary positive: %d\n", positive);
+    printf("Unary negative: %d\n", negative);
+    
+    int complex_exp = (5 + 3) * 2;
+    printf("Complex expression with parens: %d\n", complex_exp);
+
+    ;
+    printf("Empty expression statement executed.\n");
+
+    return 0;
+}
