@@ -11,6 +11,7 @@ import top.tsxb.compiler.common.ErrorEntry;
 import top.tsxb.compiler.common.ErrorReporter;
 import top.tsxb.compiler.config.Config;
 import top.tsxb.compiler.frontend.Lexer;
+import top.tsxb.compiler.frontend.LexicalException;
 import top.tsxb.compiler.frontend.Token;
 import top.tsxb.compiler.frontend.TokenType;
 
@@ -31,15 +32,19 @@ public class Pipeline {
 
   /** Run. */
   public void run() throws IOException {
-    String sourceCode = Files.readString(Paths.get(config.getSourceFile()));
+    try {
+      String sourceCode = Files.readString(Paths.get(config.getSourceFile()));
 
-    Lexer lexer = new Lexer(sourceCode, errorReporter);
-    List<Token> tokens = lexer.scan();
+      Lexer lexer = new Lexer(sourceCode, errorReporter);
+      List<Token> tokens = lexer.scan();
 
-    if (errorReporter.hasErrors()) {
-      writeErrors();
-    } else {
-      writeTokens(tokens);
+      if (errorReporter.hasErrors()) {
+        writeErrors();
+      } else {
+        writeTokens(tokens);
+      }
+    } catch (LexicalException e) {
+      System.err.println("Fatal Lexical Error: " + e.getMessage());
     }
   }
 

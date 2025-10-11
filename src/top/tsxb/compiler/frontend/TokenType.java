@@ -22,21 +22,21 @@ public enum TokenType {
   STRCON, // StringConst
 
   // Operators and Punctuators
-  NOT, // !
-  AND, // &&
-  OR, // ||
-  PLUS, // +
-  MINU, // -
-  MULT, // *
-  DIV, // /
-  MOD, // %
-  LSS, // <
-  LEQ, // <=  
-  GRE, // >
-  GEQ, // >=  
-  EQL, // ==  
-  NEQ, // !=
-  ASSIGN, // =
+  NOT("!", 1),   // '!'
+  AND("&&", 2),  // '&&'
+  OR("||", 3),   // '||'
+  PLUS("+", 4),  // '+'
+  MINU("-", 4),  // '-'
+  MULT("*", 5),  // '*'
+  DIV("/", 5),   // '/'
+  MOD("%", 5),   // '%'
+  LSS("<", 6),   // '<'
+  LEQ("<=", 6),  // '<='
+  GRE(">", 6),   // '>'
+  GEQ(">=", 6),  // '>='
+  EQL("==", 7),  // '=='
+  NEQ("!=", 7),  // '!='
+  ASSIGN("="), // '='
 
   // Delimiters
   SEMICN, // ;
@@ -49,5 +49,27 @@ public enum TokenType {
   RBRACE, // }
 
   // EOF
-  EOF,
+  EOF;
+
+  private final String repr;
+  private final int priv;
+
+  TokenType() {
+    this.repr = null;
+    this.priv = -1;
+  }
+
+  TokenType(String repr) {
+    this.repr = repr;
+    this.priv = -1;
+  }
+
+  TokenType(String repr, int priv) {
+    this.repr = repr;
+    this.priv = priv;
+  }
+
+  public int getPriv() {
+    return priv;
+  }
 }

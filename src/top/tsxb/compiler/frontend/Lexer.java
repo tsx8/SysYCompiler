@@ -1,7 +1,6 @@
 package top.tsxb.compiler.frontend;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import top.tsxb.compiler.common.ErrorReporter;
@@ -9,24 +8,20 @@ import top.tsxb.compiler.common.ErrorType;
 
 /** The type Lexer. Scans the source code and produces tokens. */
 public class Lexer {
-  private static final Map<String, TokenType> KEYWORDS;
-
-  static {
-    KEYWORDS = new HashMap<>();
-    // To put keywords into the map
-    KEYWORDS.put("const", TokenType.CONSTTK);
-    KEYWORDS.put("int", TokenType.INTTK);
-    KEYWORDS.put("static", TokenType.STATICTK);
-    KEYWORDS.put("break", TokenType.BREAKTK);
-    KEYWORDS.put("continue", TokenType.CONTINUETK);
-    KEYWORDS.put("if", TokenType.IFTK);
-    KEYWORDS.put("else", TokenType.ELSETK);
-    KEYWORDS.put("for", TokenType.FORTK);
-    KEYWORDS.put("return", TokenType.RETURNTK);
-    KEYWORDS.put("void", TokenType.VOIDTK);
-    KEYWORDS.put("main", TokenType.MAINTK);
-    KEYWORDS.put("printf", TokenType.PRINTFTK);
-  }
+  private static final Map<String, TokenType> KEYWORDS = Map.ofEntries(
+      Map.entry("const", TokenType.CONSTTK),
+      Map.entry("int", TokenType.INTTK),
+      Map.entry("static", TokenType.STATICTK),
+      Map.entry("break", TokenType.BREAKTK),
+      Map.entry("continue", TokenType.CONTINUETK),
+      Map.entry("if", TokenType.IFTK),
+      Map.entry("else", TokenType.ELSETK),
+      Map.entry("for", TokenType.FORTK),
+      Map.entry("return", TokenType.RETURNTK),
+      Map.entry("void", TokenType.VOIDTK),
+      Map.entry("main", TokenType.MAINTK),
+      Map.entry("printf", TokenType.PRINTFTK)
+  );
 
   private final String source;
   private final ErrorReporter errorReporter;
@@ -64,96 +59,57 @@ public class Lexer {
   private void scanToken() {
     char c = advance();
     switch (c) {
-      case '(':
-        addToken(TokenType.LPARENT);
-        break;
-      case ')':
-        addToken(TokenType.RPARENT);
-        break;
-      case '[':
-        addToken(TokenType.LBRACK);
-        break;
-      case ']':
-        addToken(TokenType.RBRACK);
-        break;
-      case '{':
-        addToken(TokenType.LBRACE);
-        break;
-      case '}':
-        addToken(TokenType.RBRACE);
-        break;
-      case ',':
-        addToken(TokenType.COMMA);
-        break;
-      case ';':
-        addToken(TokenType.SEMICN);
-        break;
-      case '+':
-        addToken(TokenType.PLUS);
-        break;
-      case '-':
-        addToken(TokenType.MINU);
-        break;
-      case '*':
-        addToken(TokenType.MULT);
-        break;
-      case '%':
-        addToken(TokenType.MOD);
-        break;
-      case '!':
-        addToken(match('=') ? TokenType.NEQ : TokenType.NOT);
-        break;
-      case '=':
-        addToken(match('=') ? TokenType.EQL : TokenType.ASSIGN);
-        break;
-      case '<':
-        addToken(match('=') ? TokenType.LEQ : TokenType.LSS);
-        break;
-      case '>':
-        addToken(match('=') ? TokenType.GEQ : TokenType.GRE);
-        break;
-
-      case '&':
+      case '(' -> addToken(TokenType.LPARENT);
+      case ')' -> addToken(TokenType.RPARENT);
+      case '[' -> addToken(TokenType.LBRACK);
+      case ']' -> addToken(TokenType.RBRACK);
+      case '{' -> addToken(TokenType.LBRACE);
+      case '}' -> addToken(TokenType.RBRACE);
+      case ',' -> addToken(TokenType.COMMA);
+      case ';' -> addToken(TokenType.SEMICN);
+      case '+' -> addToken(TokenType.PLUS);
+      case '-' -> addToken(TokenType.MINU);
+      case '*' -> addToken(TokenType.MULT);
+      case '%' -> addToken(TokenType.MOD);
+      case '!' -> addToken(match('=') ? TokenType.NEQ : TokenType.NOT);
+      case '=' -> addToken(match('=') ? TokenType.EQL : TokenType.ASSIGN);
+      case '<' -> addToken(match('=') ? TokenType.LEQ : TokenType.LSS);
+      case '>' -> addToken(match('=') ? TokenType.GEQ : TokenType.GRE);
+      case '&' -> {
         if (match('&')) {
           addToken(TokenType.AND);
         } else {
           errorReporter.report(line, ErrorType.INVALID_TOKEN, "&");
         }
-        break;
-      case '|':
+      }
+      case '|' -> {
         if (match('|')) {
           addToken(TokenType.OR);
         } else {
           errorReporter.report(line, ErrorType.INVALID_TOKEN, "|");
         }
-        break;
-      case '/':
-        handleSlash();
-        break;
-      case ' ', '\r', '\t':
+      }
+      case ' ', '\r', '\t' -> {
         // Ignore whitespace.
-        break;
-      case '\n':
-        line++;
-        break;
-      case '"':
-        handleString();
-        break;
-      default:
-        if (isDigit(c)) {
+      }
+      case '/' -> handleSlash();
+      case '\n' -> line++;
+      case '"' -> handleString();
+      default -> {
+        if (Character.isDigit(c)) {
           handleNumber();
-        } else if (isAlpha(c)) {
+        } else if (Character.isLetter(c) || c == '_') {
           handleIdentifier();
         } else {
           // should not reach here
-          throw new RuntimeException("Unexpected character: " + c + " at line " + line);
+          throw new LexicalException("Unexpected character: " + c + " at line " + line);
         }
-        break;
+      }
     }
   }
 
   private void handleIdentifier() {
-    while (isAlnum(peek())) {
+    while (Character.isLetterOrDigit(peek()) || peek() == '_') {
       advance();
     }
     String lexeme = source.substring(start, current);
@@ -162,8 +118,12 @@ public class Lexer {
   }
 
   private void handleNumber() {
-    while (isDigit(peek())) {
-      advance();
+    if (source.charAt(start) == '0' && current < source.length() && Character.isDigit(peek())) {
+      throw new LexicalException("Invalid number format at line " + line);
+    } else {
+      while (Character.isDigit(peek())) {
+        advance();
+      }
     }
     String lexeme = source.substring(start, current);
     addToken(TokenType.INTCON, Integer.parseInt(lexeme));
@@ -171,18 +131,45 @@ public class Lexer {
 
   private void handleString() {
     while (peek() != '"' && !isAtEnd()) {
-      if (peek() == '\n') {
-        line++;
+      char c = peek();
+      if (c == '\n') {
+        throw new LexicalException("Unterminated string: literal newline found at line " + line);
       }
-      advance();
+      if (c == '\\') {
+        advance();
+        if (peekNext() == 'n') {
+          advance();
+        } else {
+          throw new LexicalException("Invalid escape sequence in string literal at line " + line);
+        }
+      } else if (c == '%') {
+        advance();
+        if (peekNext() == 'd') {
+          advance();
+        } else {
+          throw new LexicalException("Invalid format specifier in string literal at line " + line);
+        }
+      } else {
+        if (isNormalChar(c)) {
+          advance();
+        } else {
+          throw new LexicalException("Illegal character in string literal at line " + line);
+        }
+      }
     }
+
     if (isAtEnd()) {
-      throw new RuntimeException("Unterminated string at line " + line);
+      throw new LexicalException("Unterminated string starting at line " + line);
     }
     // Consume the closing ".
     advance();
     String value = source.substring(start, current);
     addToken(TokenType.STRCON, value);
+  }
+
+  private boolean isNormalChar(char c) {
+    // <NormalChar> → 十进制编码为32,33,40-126的ASCII字符
+    return c == 32 || c == 33 || c >= 40 && c <= 126 && c != '\\';
   }
 
   private void handleSlash() {
@@ -191,6 +178,7 @@ public class Lexer {
         advance();
       }
     } else if (match('*')) { // Multi-line comment
+      int blockCommentStartLine = line;
       while (!(peek() == '*' && peekNext() == '/') && !isAtEnd()) {
         if (peek() == '\n') {
           line++;
@@ -198,7 +186,8 @@ public class Lexer {
         advance();
       }
       if (isAtEnd()) {
-        throw new RuntimeException("Unexpected end of file at line " + line);
+        throw new LexicalException(
+            "Unterminated block comment starting at line " + blockCommentStartLine);
       }
       // consume '*' and '/'
       advance();
@@ -248,17 +237,5 @@ public class Lexer {
     }
     current++;
     return true;
-  }
-
-  private boolean isDigit(char c) {
-    return c >= '0' && c <= '9';
-  }
-
-  private boolean isAlpha(char c) {
-    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
-  }
-
-  private boolean isAlnum(char c) {
-    return isAlpha(c) || isDigit(c);
   }
 }
