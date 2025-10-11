@@ -45,6 +45,7 @@ public class Pipeline {
       }
     } catch (LexicalException e) {
       System.err.println("Fatal Lexical Error: " + e.getMessage());
+      e.printStackTrace(System.err);
     }
   }
 

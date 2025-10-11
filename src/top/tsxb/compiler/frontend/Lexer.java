@@ -137,14 +137,14 @@ public class Lexer {
       }
       if (c == '\\') {
         advance();
-        if (peekNext() == 'n') {
+        if (peek() == 'n') {
           advance();
         } else {
           throw new LexicalException("Invalid escape sequence in string literal at line " + line);
         }
       } else if (c == '%') {
         advance();
-        if (peekNext() == 'd') {
+        if (peek() == 'd') {
           advance();
         } else {
           throw new LexicalException("Invalid format specifier in string literal at line " + line);
