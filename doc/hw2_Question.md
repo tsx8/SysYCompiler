@@ -9,30 +9,30 @@
 
 词法分析中，单词的类别码统一定义如下：
 
-| 单词名称 | 类别码 | 单词名称 | 类别码 | 单词名称 | 类别码 |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| Ident | IDENFR | else | ELSETK | * | MULT |
-| IntConst | INTCON | ! | NOT | / | DIV |
-| StringConst | STRCON | && | AND | % | MOD |
-| const | CONSTTK | \|\| | OR | < | LSS |
-| int | INTTK | for | FORTK | <= | LEQ |
-| static | STATICTK | return | RETURNTK | > | GRE |
-| break | BREAKTK | void | VOIDTK | >= | GEQ |
-| continue | CONTINUETK | + | PLUS | == | EQL |
-| if | IFTK | - | MINU | != | NEQ |
-| main | MAINTK | printf | PRINTFTK | | |
+| 单词名称        | 类别码        | 单词名称   | 类别码      | 单词名称 | 类别码  |
+|:------------|:-----------|:-------|:---------|:-----|:-----|
+| Ident       | IDENFR     | else   | ELSETK   | *    | MULT |
+| IntConst    | INTCON     | !      | NOT      | /    | DIV  |
+| StringConst | STRCON     | &&     | AND      | %    | MOD  |
+| const       | CONSTTK    | \|\|   | OR       | <    | LSS  |
+| int         | INTTK      | for    | FORTK    | <=   | LEQ  |
+| static      | STATICTK   | return | RETURNTK | >    | GRE  |
+| break       | BREAKTK    | void   | VOIDTK   | >=   | GEQ  |
+| continue    | CONTINUETK | +      | PLUS     | ==   | EQL  |
+| if          | IFTK       | -      | MINU     | !=   | NEQ  |
+| main        | MAINTK     | printf | PRINTFTK |      |      |
 
-| 单词名称 | 类别码 |
-| :--- | :--- |
-| ; | SEMICN |
-| , | COMMA |
-| ( | LPARENT |
-| ) | RPARENT |
-| [ | LBRACK |
-| ] | RBRACK |
-| { | LBRACE |
-| } | RBRACE |
-| = | ASSIGN |
+| 单词名称 | 类别码     |
+|:-----|:--------|
+| ;    | SEMICN  |
+| ,    | COMMA   |
+| (    | LPARENT |
+| )    | RPARENT |
+| [    | LBRACK  |
+| ]    | RBRACK  |
+| {    | LBRACE  |
+| }    | RBRACE  |
+| =    | ASSIGN  |
 
 ## 输入形式
 `testfile.txt` 中的测试程序，有的是正确的源程序，有的是有错误的源程序。

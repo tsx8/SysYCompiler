@@ -388,21 +388,21 @@ int main() {
 
 剩余错误类别均为语义分析中会出现的错误。
 
-| 错误类型 | 错误类别码 | 解释 | 对应文法及出错符号,...表示省略该条规则其他部分 |
-| :--- | :--- | :--- | :--- |
-| 非法符号 | a | 出现了 '&' 和 '\|' 这两个符号,应该将其当做 '&&'与'\|\|' 进行处理,但是在记录单词名称的时候仍记录 '&' 和 '\|', 报错行号为'&' 或 '\|' 所在的行号。 | `LAndExp → LAndExp '&&' EqExp` <br> `LOrExp → LOrExp '||' LAndExp` |
-| 名字重定义 | b | 函数名或者变量名在当前作用域下重复定义。注意,变量一定是同一级作用域下才会判定出错,不同级作用域下,内层会覆盖外层定义。报错行号 `Ident` 所在行数。 | `ConstDef → Ident ...` <br> `VarDef → ... Ident ...` <br> `FuncDef → FuncType Ident ...` <br> `FuncFParam → BType Ident ...` |
-| 未定义的名字 | c | 使用了未定义的标识符报错行号为 `Ident` 所在行数。 | `LVal→ Ident ...` <br> `UnaryExp → Ident ...` |
-| 函数参数个数不匹配 | d | 函数调用语句中,参数个数与函数定义中的参数个数不匹配。报错行号为函数调用语句的函数名所在行数。 | `UnaryExp → Ident '(' [ FuncRParams ] ')'` |
-| 函数参数类型不匹配 | e | 函数调用语句中,参数类型与函数定义中对应位置的参数类型不匹配。报错行号为函数调用语句的函数名所在行数。关于参数类型不匹配会在下方特别说明进行详细说明。 | `UnaryExp → Ident '(' [ FuncRParams ] ')'` |
-| 无返回值的函数存在不匹配的return语句 | f | 报错行号为`'return'`所在行号。 | `Stmt → 'return' { '[' Exp ']' } ';'` |
-| 有返回值的函数缺少return语句 | g | 只需要考虑函数末尾是否存在return语句,无需考虑控制流。报错行号为函数结尾的`}`所在行号。 | `FuncDef → FuncType Ident '(' [FuncFParams] ')' Block` <br> `MainFuncDef → 'int' 'main' '(' ')' Block` |
-| 不能改变常量的值 | h | `LVal` 为常量时,不能对其修改。报错行号为 `LVal` 所在行号。 | `Stmt → LVal '=' Exp ';'` <br> `ForStmt → LVal '=' Exp ...` |
-| 缺少分号 | i | 报错行号为分号前一个非终结符所在行号。 | `Stmt`, `ConstDecl`及 `VarDecl` 中的`';'` |
-| 缺少右小括号)` | j | 报错行号为右小括号前一个非终结符所在行号。 | 函数调用(`UnaryExp`)、函数定义(`FuncDef`, `MainFuncDef`)、`Stmt` 及 `PrimaryExp` 中的`')'` |
-| 缺少右中括号]` | k | 报错行号为右中括号前一个非终结符所在行号。 | 数组定义(`ConstDef`, `VarDef`, `FuncFParam`)和使用(`LVal`)中的`']'` |
-| printf中格式字符与表达式个数不匹配 | l | 报错行号为`'printf'`所在行号。 | `'printf' '(' StringConst {',' Exp} ')' ';'` |
-| 在非循环块中使用break和continue语句 | m | 报错行号为`'break'`与`'continue'`所在行号。 | `Stmt → 'break' ';' | 'continue' ';'` |
+| 错误类型                     | 错误类别码 | 解释                                                                                              | 对应文法及出错符号,...表示省略该条规则其他部分                                                                                                    |
+|:-------------------------|:------|:------------------------------------------------------------------------------------------------|:-----------------------------------------------------------------------------------------------------------------------------|
+| 非法符号                     | a     | 出现了 '&' 和 '\|' 这两个符号,应该将其当做 '&&'与'\|\|' 进行处理,但是在记录单词名称的时候仍记录 '&' 和 '\|', 报错行号为'&' 或 '\|' 所在的行号。 | `LAndExp → LAndExp '&&' EqExp` <br> `LOrExp → LOrExp '                                                                       ||' LAndExp` |
+| 名字重定义                    | b     | 函数名或者变量名在当前作用域下重复定义。注意,变量一定是同一级作用域下才会判定出错,不同级作用域下,内层会覆盖外层定义。报错行号 `Ident` 所在行数。                  | `ConstDef → Ident ...` <br> `VarDef → ... Ident ...` <br> `FuncDef → FuncType Ident ...` <br> `FuncFParam → BType Ident ...` |
+| 未定义的名字                   | c     | 使用了未定义的标识符报错行号为 `Ident` 所在行数。                                                                   | `LVal→ Ident ...` <br> `UnaryExp → Ident ...`                                                                                |
+| 函数参数个数不匹配                | d     | 函数调用语句中,参数个数与函数定义中的参数个数不匹配。报错行号为函数调用语句的函数名所在行数。                                                 | `UnaryExp → Ident '(' [ FuncRParams ] ')'`                                                                                   |
+| 函数参数类型不匹配                | e     | 函数调用语句中,参数类型与函数定义中对应位置的参数类型不匹配。报错行号为函数调用语句的函数名所在行数。关于参数类型不匹配会在下方特别说明进行详细说明。                     | `UnaryExp → Ident '(' [ FuncRParams ] ')'`                                                                                   |
+| 无返回值的函数存在不匹配的return语句    | f     | 报错行号为`'return'`所在行号。                                                                            | `Stmt → 'return' { '[' Exp ']' } ';'`                                                                                        |
+| 有返回值的函数缺少return语句        | g     | 只需要考虑函数末尾是否存在return语句,无需考虑控制流。报错行号为函数结尾的`}`所在行号。                                                | `FuncDef → FuncType Ident '(' [FuncFParams] ')' Block` <br> `MainFuncDef → 'int' 'main' '(' ')' Block`                       |
+| 不能改变常量的值                 | h     | `LVal` 为常量时,不能对其修改。报错行号为 `LVal` 所在行号。                                                           | `Stmt → LVal '=' Exp ';'` <br> `ForStmt → LVal '=' Exp ...`                                                                  |
+| 缺少分号                     | i     | 报错行号为分号前一个非终结符所在行号。                                                                             | `Stmt`, `ConstDecl`及 `VarDecl` 中的`';'`                                                                                       |
+| 缺少右小括号)`                 | j     | 报错行号为右小括号前一个非终结符所在行号。                                                                           | 函数调用(`UnaryExp`)、函数定义(`FuncDef`, `MainFuncDef`)、`Stmt` 及 `PrimaryExp` 中的`')'`                                                |
+| 缺少右中括号]`                 | k     | 报错行号为右中括号前一个非终结符所在行号。                                                                           | 数组定义(`ConstDef`, `VarDef`, `FuncFParam`)和使用(`LVal`)中的`']'`                                                                   |
+| printf中格式字符与表达式个数不匹配     | l     | 报错行号为`'printf'`所在行号。                                                                            | `'printf' '(' StringConst {',' Exp} ')' ';'`                                                                                 |
+| 在非循环块中使用break和continue语句 | m     | 报错行号为`'break'`与`'continue'`所在行号。                                                                | `Stmt → 'break' ';'                                                                                                          | 'continue' ';'` |
 
 ### 错误输出示例
 
