@@ -1,5 +1,6 @@
 package top.tsxb.compiler.config;
 
+import java.io.FileInputStream;
 import java.io.InputStream;
 import java.util.Properties;
 
@@ -13,15 +14,18 @@ public class Config {
    * @param fileName the file name
    */
   public Config(String fileName) {
-    try (InputStream input =
-         getClass().getClassLoader().getResourceAsStream(fileName)) {
-      if (input == null) {
-        System.err.println("Cannot find configuration file: " + fileName);
-        return;
-      }
+    try (InputStream input = new FileInputStream(fileName)) {
       props.load(input);
     } catch (Exception e) {
-      e.printStackTrace(System.err);
+      try (InputStream input = getClass().getClassLoader().getResourceAsStream(fileName)) {
+        if (input == null) {
+          System.err.println("Cannot find configuration file: " + fileName);
+          return;
+        }
+        props.load(input);
+      } catch (Exception e2) {
+        e2.printStackTrace(System.err);
+      }
     }
   }
 
@@ -45,5 +49,9 @@ public class Config {
       default -> "output.txt";
     };
     return props.getProperty("output.file", defaultOutput);
+  }
+
+  public String getErrorFile() {
+    return props.getProperty("error.file", "error.txt");
   }
 }

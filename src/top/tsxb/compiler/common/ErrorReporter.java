@@ -1,6 +1,7 @@
 package top.tsxb.compiler.common;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /** The type Error reporter. */
@@ -33,6 +34,13 @@ public class ErrorReporter {
     return !errors.isEmpty();
   }
 
-
-
+  /**
+   * Gets all reported errors, sorted by line number.
+   *
+   * @return A sorted list of errors.
+   */
+  public List<ErrorEntry> getErrors() {
+    Collections.sort(errors);
+    return Collections.unmodifiableList(errors);
+  }
 }
