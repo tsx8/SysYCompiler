@@ -9,4 +9,5 @@
 
 ## CHANGELOG
 
+- [2025.10.13] Finished lexer part.
 - [2025.10.04] Refactor from the old repo.
