@@ -200,7 +200,7 @@ SysY 语言中 `<StringConst>` 的定义如下:
 
 ```
 <FormatChar> → %d
-<NormalChar> → 十进制编码为32,33,40-126的ASCII字符, '\' (编码92) 出现当且仅当为'\n'
+<NormalChar> → 十进制编码为32,33,35-126的ASCII字符, '\' (编码92) 出现当且仅当为'\n'
 <char> → <FormatChar> | <NormalChar>
 <StringConst> → '"' {<char>} '"'
 ```

@@ -1,5 +1,4 @@
 import top.tsxb.compiler.Pipeline;
-import top.tsxb.compiler.config.Config;
 
 /** The type Compiler. */
 public class Compiler {
@@ -9,15 +8,7 @@ public class Compiler {
    * @param args the input arguments
    */
   public static void main(String[] args) {
-    String configPath;
-    if (args.length > 0) {
-      configPath = args[0];
-    } else {
-      configPath = "config/compiler.properties";
-    }
-
-    Config config = new Config(configPath);
-    Pipeline pipeline = new Pipeline(config);
+    Pipeline pipeline = new Pipeline();
 
     try {
       pipeline.run();

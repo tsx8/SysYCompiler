@@ -1,7 +1,5 @@
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -9,7 +7,6 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Properties;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -45,7 +42,9 @@ public class Packaging {
     String zipFileName = String.format("homework_%s.zip", timestamp);
     Path zipFilePath = targetDir.resolve(zipFileName);
 
-    Map<String, String> configData = getConfig();
+    Map<String, String> configData = new HashMap<>();
+    configData.put("programming language", "java");
+    configData.put("object code", "mips");
     String configJson = createConfigJson(configData);
 
     try (FileOutputStream fos = new FileOutputStream(zipFilePath.toFile());
@@ -54,14 +53,6 @@ public class Packaging {
       zos.putNextEntry(configEntry);
       zos.write(configJson.getBytes());
       zos.closeEntry();
-
-      Path propertiesFile = Paths.get("config", "compiler.properties");
-      if (Files.exists(propertiesFile)) {
-        ZipEntry propertiesEntry = new ZipEntry("config/compiler.properties");
-        zos.putNextEntry(propertiesEntry);
-        Files.copy(propertiesFile, zos);
-        zos.closeEntry();
-      }
 
       try (Stream<Path> paths = Files.walk(sourceDir)) {
         paths.filter(Files::isRegularFile)
@@ -85,22 +76,6 @@ public class Packaging {
       }
       throw e;
     }
-  }
-
-  private static Map<String, String> getConfig() {
-    Properties prop = new Properties();
-    try (InputStream input = new FileInputStream("config/compiler.properties")) {
-      prop.load(input);
-    } catch (IOException e) {
-      e.printStackTrace(System.err);
-    }
-
-    String targetArch = prop.getProperty("target.arch", "mips");
-
-    Map<String, String> configData = new HashMap<>();
-    configData.put("programming language", "java");
-    configData.put("object code", targetArch);
-    return configData;
   }
 
   private static String createConfigJson(Map<String, String> configData) {

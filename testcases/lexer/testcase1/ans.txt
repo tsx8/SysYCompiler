@@ -757,7 +757,7 @@ RPARENT )
 LBRACE {
 PRINTFTK printf
 LPARENT (
-STRCON "Shouldnt be seen in \n"
+STRCON "Shouldn't be seen in &&\n"
 RPARENT )
 SEMICN ;
 RBRACE }
@@ -813,7 +813,7 @@ RPARENT )
 LBRACE {
 PRINTFTK printf
 LPARENT (
-STRCON "%d Shouldnt be seen\n"
+STRCON "%d Shouldn't be seen\n"
 COMMA ,
 IDENFR i
 RPARENT )

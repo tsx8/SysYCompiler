@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.function.Consumer;
 import top.tsxb.compiler.common.ErrorEntry;
 import top.tsxb.compiler.common.ErrorReporter;
-import top.tsxb.compiler.config.Config;
+import top.tsxb.compiler.config.CompilerConfig;
 import top.tsxb.compiler.frontend.Lexer;
 import top.tsxb.compiler.frontend.LexicalException;
 import top.tsxb.compiler.frontend.Token;
@@ -17,23 +17,19 @@ import top.tsxb.compiler.frontend.TokenType;
 
 /** The type top.tsxb.compiler.Pipeline. */
 public class Pipeline {
-  private final Config config;
   private final ErrorReporter errorReporter;
 
   /**
    * Instantiates a new top.tsxb.compiler.Pipeline.
-   *
-   * @param config the config
    */
-  public Pipeline(Config config) {
-    this.config = config;
+  public Pipeline() {
     this.errorReporter = new ErrorReporter();
   }
 
   /** Run. */
   public void run() throws IOException {
     try {
-      String sourceCode = Files.readString(Paths.get(config.getSourceFile()));
+      String sourceCode = Files.readString(Paths.get(CompilerConfig.SOURCE_FILE));
 
       Lexer lexer = new Lexer(sourceCode, errorReporter);
       List<Token> tokens = lexer.scan();
@@ -50,7 +46,7 @@ public class Pipeline {
   }
 
   private void writeTokens(List<Token> tokens) throws IOException {
-    writeFile(config.getOutputFile(), writer -> {
+    writeFile(CompilerConfig.OUTPUT_FILE, writer -> {
       for (Token token : tokens) {
         if (token.type() != TokenType.EOF) {
           writer.println(token);
@@ -60,7 +56,7 @@ public class Pipeline {
   }
 
   private void writeErrors() throws IOException {
-    writeFile(config.getErrorFile(), writer -> {
+    writeFile(CompilerConfig.ERROR_FILE, writer -> {
       List<ErrorEntry> sortedErrors = errorReporter.getErrors();
       for (ErrorEntry entry : sortedErrors) {
         writer.println(entry.submission());

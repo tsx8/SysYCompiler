@@ -48,11 +48,11 @@ int main()
 	if (0 && func()){
 		;
 	}
-	printf("%d",global_var); // ��� 0
+	printf("%d",global_var);
 	if (1 || func()) {
 		;
 	}
-	printf("%d",global_var); // ��� 0
+	printf("%d",global_var);
 
 	i = 1;
 	if (i == 1)
@@ -169,7 +169,7 @@ int main()
 
 	if (i1 == 1 && c1 == 2)
 	{
-		printf("Shouldnt be seen in \n");
+		printf("Shouldn't be seen in &&\n");
 	}
 
 	for (i = 0; i <= 10; i = i + 1)
@@ -181,7 +181,7 @@ int main()
 		}
 		if (i != -2)
 		{
-			printf("%d Shouldnt be seen\n", i);
+			printf("%d Shouldn't be seen\n", i);
 			continue;
 		}
 		break;

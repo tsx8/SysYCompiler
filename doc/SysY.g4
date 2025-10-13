@@ -76,7 +76,7 @@ IDENFR:     [a-zA-Z_] [a-zA-Z_0-9]*;
 INTCON:     '0' | [1-9] [0-9]*;
 
 fragment FormatChar: '%' 'd';
-fragment NormalChar: ' ' | '!' | '('..'[' | ']'..'~' | '\\n';
+fragment NormalChar: ' ' | '!' | '#'..'[' | ']'..'~' | '\\n';
 STRCON: '"' (FormatChar | NormalChar)* '"';
 
 PLUS:   '+';

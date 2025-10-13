@@ -1,8 +1,11 @@
 package top.tsxb.compiler.frontend;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import top.tsxb.compiler.common.ErrorReporter;
 import top.tsxb.compiler.common.ErrorType;
 
@@ -23,12 +26,59 @@ public class Lexer {
       Map.entry("printf", TokenType.PRINTFTK)
   );
 
+  private static final Map<String, String> TOKEN_PATTERNS = new LinkedHashMap<>();
+  private static final Pattern TOKEN_PATTERN;
+
+  static {
+    TOKEN_PATTERNS.put("COMMENT", "//[^\n]*|/\\*.*?\\*/");
+    TOKEN_PATTERNS.put("WHITESPACE", "\\s+");
+    TOKEN_PATTERNS.put("IDENFR", "[a-zA-Z_][a-zA-Z_0-9]*");
+    TOKEN_PATTERNS.put("INTCON", "0|[1-9][0-9]*");
+    TOKEN_PATTERNS.put("STRCON", "\"(%d|\\\\n|[ !#-\\[\\]-~])*\"");
+
+    TOKEN_PATTERNS.put("LEQ", "<=");
+    TOKEN_PATTERNS.put("GEQ", ">=");
+    TOKEN_PATTERNS.put("EQL", "==");
+    TOKEN_PATTERNS.put("NEQ", "!=");
+    TOKEN_PATTERNS.put("AND", "&&");
+    TOKEN_PATTERNS.put("OR", "\\|\\|");
+    TOKEN_PATTERNS.put("LSS", "<");
+    TOKEN_PATTERNS.put("GRE", ">");
+    TOKEN_PATTERNS.put("ASSIGN", "=");
+    TOKEN_PATTERNS.put("PLUS", "\\+");
+    TOKEN_PATTERNS.put("MINU", "-");
+    TOKEN_PATTERNS.put("MULT", "\\*");
+    TOKEN_PATTERNS.put("DIV", "/");
+    TOKEN_PATTERNS.put("MOD", "%");
+    TOKEN_PATTERNS.put("NOT", "!");
+
+    TOKEN_PATTERNS.put("LPARENT", "\\(");
+    TOKEN_PATTERNS.put("RPARENT", "\\)");
+    TOKEN_PATTERNS.put("LBRACK", "\\[");
+    TOKEN_PATTERNS.put("RBRACK", "\\]");
+    TOKEN_PATTERNS.put("LBRACE", "\\{");
+    TOKEN_PATTERNS.put("RBRACE", "\\}");
+    TOKEN_PATTERNS.put("COMMA", ",");
+    TOKEN_PATTERNS.put("SEMICN", ";");
+
+    TOKEN_PATTERNS.put("ILLEGALAND", "&");
+    TOKEN_PATTERNS.put("ILLEGALOR", "\\|");
+
+    TOKEN_PATTERNS.put("MISMATCH", ".");
+
+    StringBuilder combinedPattern = new StringBuilder();
+    for (Map.Entry<String, String> entry : TOKEN_PATTERNS.entrySet()) {
+      combinedPattern.append(String.format("(?<%s>%s)|", entry.getKey(), entry.getValue()));
+    }
+    combinedPattern.setLength(combinedPattern.length() - 1);
+
+    TOKEN_PATTERN = Pattern.compile(combinedPattern.toString(), Pattern.DOTALL);
+  }
+
   private final String source;
   private final ErrorReporter errorReporter;
   private final List<Token> tokens = new ArrayList<>();
 
-  private int start = 0;
-  private int current = 0;
   private int line = 1;
 
   /**
@@ -48,194 +98,54 @@ public class Lexer {
    * @return A list of scanned tokens.
    */
   public List<Token> scan() {
-    while (!isAtEnd()) {
-      start = current;
-      scanToken();
+    Matcher matcher = TOKEN_PATTERN.matcher(source);
+    while (matcher.find()) {
+      String lexeme = matcher.group();
+      String groupName = findMatchedGroup(matcher);
+
+      switch (groupName) {
+        case "WHITESPACE", "COMMENT" -> line += countNewlines(lexeme);
+        case "IDENFR" -> addToken(KEYWORDS.getOrDefault(lexeme, TokenType.IDENFR), lexeme);
+        case "INTCON" -> addToken(TokenType.INTCON, lexeme, Integer.parseInt(lexeme));
+        case "ILLEGALAND", "ILLEGALOR" ->
+            errorReporter.report(line, ErrorType.INVALID_TOKEN, lexeme);
+        case "MISMATCH" ->
+            throw new LexicalException("Unexpected character: " + lexeme + " at line " + line);
+        default -> {
+          TokenType type = TokenType.valueOf(groupName);
+          addToken(type, lexeme);
+        }
+      }
     }
+
     tokens.add(new Token(TokenType.EOF, "", null, line));
     return tokens;
   }
 
-  private void scanToken() {
-    char c = advance();
-    switch (c) {
-      case '(' -> addToken(TokenType.LPARENT);
-      case ')' -> addToken(TokenType.RPARENT);
-      case '[' -> addToken(TokenType.LBRACK);
-      case ']' -> addToken(TokenType.RBRACK);
-      case '{' -> addToken(TokenType.LBRACE);
-      case '}' -> addToken(TokenType.RBRACE);
-      case ',' -> addToken(TokenType.COMMA);
-      case ';' -> addToken(TokenType.SEMICN);
-      case '+' -> addToken(TokenType.PLUS);
-      case '-' -> addToken(TokenType.MINU);
-      case '*' -> addToken(TokenType.MULT);
-      case '%' -> addToken(TokenType.MOD);
-      case '!' -> addToken(match('=') ? TokenType.NEQ : TokenType.NOT);
-      case '=' -> addToken(match('=') ? TokenType.EQL : TokenType.ASSIGN);
-      case '<' -> addToken(match('=') ? TokenType.LEQ : TokenType.LSS);
-      case '>' -> addToken(match('=') ? TokenType.GEQ : TokenType.GRE);
-      case '&' -> {
-        if (match('&')) {
-          addToken(TokenType.AND);
-        } else {
-          errorReporter.report(line, ErrorType.INVALID_TOKEN, "&");
-        }
-      }
-      case '|' -> {
-        if (match('|')) {
-          addToken(TokenType.OR);
-        } else {
-          errorReporter.report(line, ErrorType.INVALID_TOKEN, "|");
-        }
-      }
-      case ' ', '\r', '\t' -> {
-        // Ignore whitespace.
-      }
-      case '/' -> handleSlash();
-      case '\n' -> line++;
-      case '"' -> handleString();
-      default -> {
-        if (Character.isDigit(c)) {
-          handleNumber();
-        } else if (Character.isLetter(c) || c == '_') {
-          handleIdentifier();
-        } else {
-          // should not reach here
-          throw new LexicalException("Unexpected character: " + c + " at line " + line);
-        }
+  private String findMatchedGroup(Matcher matcher) {
+    for (String groupName : TOKEN_PATTERNS.keySet()) {
+      if (matcher.group(groupName) != null) {
+        return groupName;
       }
     }
+    throw new LexicalException("Unexpected group: " + matcher.group());
   }
 
-  private void handleIdentifier() {
-    while (Character.isLetterOrDigit(peek()) || peek() == '_') {
-      advance();
-    }
-    String lexeme = source.substring(start, current);
-    TokenType type = KEYWORDS.getOrDefault(lexeme, TokenType.IDENFR);
-    addToken(type);
+  private void addToken(TokenType type, String lexeme) {
+    addToken(type, lexeme, null);
   }
 
-  private void handleNumber() {
-    if (source.charAt(start) == '0' && current < source.length() && Character.isDigit(peek())) {
-      throw new LexicalException("Invalid number format at line " + line);
-    } else {
-      while (Character.isDigit(peek())) {
-        advance();
-      }
-    }
-    String lexeme = source.substring(start, current);
-    addToken(TokenType.INTCON, Integer.parseInt(lexeme));
+  private void addToken(TokenType type, String lexeme, Object value) {
+    tokens.add(new Token(type, lexeme, value, line));
   }
 
-  private void handleString() {
-    while (peek() != '"' && !isAtEnd()) {
-      char c = peek();
+  private int countNewlines(String text) {
+    int newlines = 0;
+    for (char c : text.toCharArray()) {
       if (c == '\n') {
-        throw new LexicalException("Unterminated string: literal newline found at line " + line);
-      }
-      if (c == '\\') {
-        advance();
-        if (peek() == 'n') {
-          advance();
-        } else {
-          throw new LexicalException("Invalid escape sequence in string literal at line " + line);
-        }
-      } else if (c == '%') {
-        advance();
-        if (peek() == 'd') {
-          advance();
-        } else {
-          throw new LexicalException("Invalid format specifier in string literal at line " + line);
-        }
-      } else {
-        if (isNormalChar(c)) {
-          advance();
-        } else {
-          throw new LexicalException("Illegal character in string literal at line " + line);
-        }
+        newlines++;
       }
     }
-
-    if (isAtEnd()) {
-      throw new LexicalException("Unterminated string starting at line " + line);
-    }
-    // Consume the closing ".
-    advance();
-    String value = source.substring(start, current);
-    addToken(TokenType.STRCON, value);
-  }
-
-  private boolean isNormalChar(char c) {
-    // <NormalChar> → 十进制编码为32,33,40-126的ASCII字符
-    return c == 32 || c == 33 || c >= 40 && c <= 126 && c != '\\';
-  }
-
-  private void handleSlash() {
-    if (match('/')) { // Single-line comment
-      while (peek() != '\n' && !isAtEnd()) {
-        advance();
-      }
-    } else if (match('*')) { // Multi-line comment
-      int blockCommentStartLine = line;
-      while (!(peek() == '*' && peekNext() == '/') && !isAtEnd()) {
-        if (peek() == '\n') {
-          line++;
-        }
-        advance();
-      }
-      if (isAtEnd()) {
-        throw new LexicalException(
-            "Unterminated block comment starting at line " + blockCommentStartLine);
-      }
-      // consume '*' and '/'
-      advance();
-      advance();
-    } else {
-      addToken(TokenType.DIV);
-    }
-  }
-
-  private char peek() {
-    if (isAtEnd()) {
-      return '\0';
-    }
-    return source.charAt(current);
-  }
-
-  private char peekNext() {
-    if (current + 1 >= source.length()) {
-      return '\0';
-    }
-    return source.charAt(current + 1);
-  }
-
-  private boolean isAtEnd() {
-    return current >= source.length();
-  }
-
-  private char advance() {
-    return source.charAt(current++);
-  }
-
-  private void addToken(TokenType type) {
-    addToken(type, null);
-  }
-
-  private void addToken(TokenType type, Object value) {
-    String text = source.substring(start, current);
-    tokens.add(new Token(type, text, value, line));
-  }
-
-  private boolean match(char expected) {
-    if (isAtEnd()) {
-      return false;
-    }
-    if (source.charAt(current) != expected) {
-      return false;
-    }
-    current++;
-    return true;
+    return newlines;
   }
 }
