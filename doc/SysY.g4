@@ -1,9 +1,7 @@
 // SysY Grammar File for ANTLR
 grammar SysY;
 
-options { language=Cpp; }
-
-compUnit: (decl | funcDef)* mainFuncDef EOF;
+compUnit: decl* funcDef* mainFuncDef EOF;
 
 decl: constDecl | varDecl;
 

@@ -10,10 +10,14 @@ import java.util.function.Consumer;
 import top.tsxb.compiler.common.ErrorEntry;
 import top.tsxb.compiler.common.ErrorReporter;
 import top.tsxb.compiler.config.CompilerConfig;
-import top.tsxb.compiler.frontend.Lexer;
-import top.tsxb.compiler.frontend.LexicalException;
-import top.tsxb.compiler.frontend.Token;
-import top.tsxb.compiler.frontend.TokenType;
+import top.tsxb.compiler.frontend.lexer.Lexer;
+import top.tsxb.compiler.frontend.lexer.LexicalException;
+import top.tsxb.compiler.frontend.lexer.Token;
+import top.tsxb.compiler.frontend.lexer.TokenStream;
+import top.tsxb.compiler.frontend.lexer.TokenType;
+import top.tsxb.compiler.frontend.parser.Parser;
+import top.tsxb.compiler.frontend.parser.SyntacticException;
+import top.tsxb.compiler.frontend.parser.SyntaxWriter;
 
 /** The type top.tsxb.compiler.Pipeline. */
 public class Pipeline {
@@ -36,16 +40,31 @@ public class Pipeline {
 
       if (errorReporter.hasErrors()) {
         writeErrors();
+      }
+      // else {
+      //   writeLexerOutput(tokens);
+      // }
+
+      TokenStream tokenStream = new TokenStream(tokens);
+      SyntaxWriter syntaxWriter = new SyntaxWriter(!errorReporter.hasErrors());
+      Parser parser = new Parser(tokenStream, errorReporter, syntaxWriter);
+      parser.parse();
+
+      if (errorReporter.hasErrors()) {
+        writeErrors();
       } else {
-        writeTokens(tokens);
+        writeParserOutput(syntaxWriter.getOutput());
       }
     } catch (LexicalException e) {
       System.err.println("Fatal Lexical Error: " + e.getMessage());
       e.printStackTrace(System.err);
+    } catch (SyntacticException e) {
+      System.err.println("Fatal Parser Error: " + e.getMessage());
+      e.printStackTrace(System.err);
     }
   }
 
-  private void writeTokens(List<Token> tokens) throws IOException {
+  private void writeLexerOutput(List<Token> tokens) throws IOException {
     writeFile(CompilerConfig.OUTPUT_FILE, writer -> {
       for (Token token : tokens) {
         if (token.type() != TokenType.EOF) {
@@ -53,6 +72,10 @@ public class Pipeline {
         }
       }
     });
+  }
+
+  private void writeParserOutput(String output) throws IOException {
+    writeFile(CompilerConfig.OUTPUT_FILE, writer -> writer.print(output));
   }
 
   private void writeErrors() throws IOException {

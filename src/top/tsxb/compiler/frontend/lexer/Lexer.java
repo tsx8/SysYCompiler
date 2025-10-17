@@ -1,4 +1,4 @@
-package top.tsxb.compiler.frontend;
+package top.tsxb.compiler.frontend.lexer;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -107,8 +107,14 @@ public class Lexer {
         case "WHITESPACE", "COMMENT" -> line += countNewlines(lexeme);
         case "IDENFR" -> addToken(KEYWORDS.getOrDefault(lexeme, TokenType.IDENFR), lexeme);
         case "INTCON" -> addToken(TokenType.INTCON, lexeme, Integer.parseInt(lexeme));
-        case "ILLEGALAND", "ILLEGALOR" ->
-            errorReporter.report(line, ErrorType.INVALID_TOKEN, lexeme);
+        case "ILLEGALAND" -> {
+          errorReporter.report(line, ErrorType.fromCode("a"), lexeme);
+          addToken(TokenType.AND, "&&");
+        }
+        case "ILLEGALOR" -> {
+          errorReporter.report(line, ErrorType.fromCode("a"), lexeme);
+          addToken(TokenType.OR, "||");
+        }
         case "MISMATCH" ->
             throw new LexicalException("Unexpected character: " + lexeme + " at line " + line);
         default -> {

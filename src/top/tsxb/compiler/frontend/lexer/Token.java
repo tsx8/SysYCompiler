@@ -1,4 +1,4 @@
-package top.tsxb.compiler.frontend;
+package top.tsxb.compiler.frontend.lexer;
 
 /** The type Token.
  *

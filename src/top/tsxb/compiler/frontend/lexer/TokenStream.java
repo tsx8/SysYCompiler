@@ -1,4 +1,4 @@
-package top.tsxb.compiler.frontend;
+package top.tsxb.compiler.frontend.lexer;
 
 import java.util.List;
 
@@ -39,6 +39,19 @@ public class TokenStream {
    */
   public Token peek() {
     return tokens.get(current);
+  }
+
+  /**
+   * Peek token at a give offset.
+   *
+   * @param offset the offset
+   * @return the token
+   */
+  public Token peek(int offset) {
+    if (current + offset >= tokens.size()) {
+      return tokens.get(tokens.size() - 1); // EOF
+    }
+    return tokens.get(current + offset);
   }
 
   /**

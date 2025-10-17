@@ -1,4 +1,4 @@
-package top.tsxb.compiler.frontend;
+package top.tsxb.compiler.frontend.lexer;
 
 import top.tsxb.compiler.common.ErrorEntry;
 import top.tsxb.compiler.common.ErrorReporter;

@@ -4,7 +4,7 @@ package top.tsxb.compiler.config;
 public final class CompilerConfig {
   private CompilerConfig() {}
 
-  public static final String CURRENT_HOMEWORK = "Lexer";
+  public static final String CURRENT_HOMEWORK = "Parser";
 
   public static final String SOURCE_FILE = "testfile.txt";
 
