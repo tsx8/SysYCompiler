@@ -30,39 +30,39 @@ public class Lexer {
   private static final Pattern TOKEN_PATTERN;
 
   static {
-    TOKEN_PATTERNS.put("COMMENT", "//[^\n]*|/\\*.*?\\*/");
-    TOKEN_PATTERNS.put("WHITESPACE", "\\s+");
+    TOKEN_PATTERNS.put("COMMENT", "//[^\n]*|/\\*.*?\\*/"); // //[^\n]* | /* .*? */
+    TOKEN_PATTERNS.put("WHITESPACE", "\\s+"); // \s+
     TOKEN_PATTERNS.put("IDENFR", "[a-zA-Z_][a-zA-Z_0-9]*");
     TOKEN_PATTERNS.put("INTCON", "0|[1-9][0-9]*");
-    TOKEN_PATTERNS.put("STRCON", "\"(%d|\\\\n|[ !#-\\[\\]-~])*\"");
+    TOKEN_PATTERNS.put("STRCON", "\"(%d|\\\\n|[ !#-\\[\\]-~])*\""); // "(%d | \n | [ ! #-[ ]-~ ])*"
 
     TOKEN_PATTERNS.put("LEQ", "<=");
     TOKEN_PATTERNS.put("GEQ", ">=");
     TOKEN_PATTERNS.put("EQL", "==");
     TOKEN_PATTERNS.put("NEQ", "!=");
     TOKEN_PATTERNS.put("AND", "&&");
-    TOKEN_PATTERNS.put("OR", "\\|\\|");
+    TOKEN_PATTERNS.put("OR", "\\|\\|"); // ||
     TOKEN_PATTERNS.put("LSS", "<");
     TOKEN_PATTERNS.put("GRE", ">");
     TOKEN_PATTERNS.put("ASSIGN", "=");
-    TOKEN_PATTERNS.put("PLUS", "\\+");
+    TOKEN_PATTERNS.put("PLUS", "\\+"); // +
     TOKEN_PATTERNS.put("MINU", "-");
-    TOKEN_PATTERNS.put("MULT", "\\*");
+    TOKEN_PATTERNS.put("MULT", "\\*"); // *
     TOKEN_PATTERNS.put("DIV", "/");
     TOKEN_PATTERNS.put("MOD", "%");
     TOKEN_PATTERNS.put("NOT", "!");
 
-    TOKEN_PATTERNS.put("LPARENT", "\\(");
-    TOKEN_PATTERNS.put("RPARENT", "\\)");
-    TOKEN_PATTERNS.put("LBRACK", "\\[");
-    TOKEN_PATTERNS.put("RBRACK", "\\]");
-    TOKEN_PATTERNS.put("LBRACE", "\\{");
-    TOKEN_PATTERNS.put("RBRACE", "\\}");
+    TOKEN_PATTERNS.put("LPARENT", "\\("); // (
+    TOKEN_PATTERNS.put("RPARENT", "\\)"); // )
+    TOKEN_PATTERNS.put("LBRACK", "\\["); // [
+    TOKEN_PATTERNS.put("RBRACK", "\\]"); // ]
+    TOKEN_PATTERNS.put("LBRACE", "\\{"); // {
+    TOKEN_PATTERNS.put("RBRACE", "\\}"); // }
     TOKEN_PATTERNS.put("COMMA", ",");
     TOKEN_PATTERNS.put("SEMICN", ";");
 
     TOKEN_PATTERNS.put("ILLEGALAND", "&");
-    TOKEN_PATTERNS.put("ILLEGALOR", "\\|");
+    TOKEN_PATTERNS.put("ILLEGALOR", "\\|"); // |
 
     TOKEN_PATTERNS.put("MISMATCH", ".");
 
