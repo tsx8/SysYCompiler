@@ -1,0 +1,5 @@
+*
+!.gitignore
+!*/
+!**/ans.txt
+!**/testfile.txt
