@@ -31,11 +31,16 @@ public record Parser(TokenStream tokens, ErrorReporter reporter, SyntaxWriter wr
     writer.writeToken(token);
   }
 
-  private boolean check(TokenType type) {
+  private boolean check(TokenType... types) {
     if (isAtEnd()) {
       return false;
     }
-    return peek().type() == type;
+    for (TokenType type : types) {
+      if (peek().type() == type) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private boolean check(TokenType type, int offset) {
@@ -46,11 +51,9 @@ public record Parser(TokenStream tokens, ErrorReporter reporter, SyntaxWriter wr
   }
 
   private boolean match(TokenType... types) {
-    for (TokenType type : types) {
-      if (check(type)) {
-        advance();
-        return true;
-      }
+    if (check(types)) {
+      advance();
+      return true;
     }
     return false;
   }
@@ -68,11 +71,9 @@ public record Parser(TokenStream tokens, ErrorReporter reporter, SyntaxWriter wr
   }
 
   private void expect(TokenType... types) {
-    for (TokenType type : types) {
-      if (check(type)) {
-        advance();
-        return;
-      }
+    if (check(types)) {
+      advance();
+      return;
     }
     throw new SyntacticException(
         "Unexpected token: " + peek().type() + ", expected one of: " + Arrays.toString(types)
@@ -126,7 +127,7 @@ public record Parser(TokenStream tokens, ErrorReporter reporter, SyntaxWriter wr
   // constDef: IDENFR (LBRACK constExp RBRACK)? ASSIGN constInitVal;
   private void parseConstDef() {
     expect(TokenType.IDENFR);
-    while (match(TokenType.LBRACK)) {
+    if (match(TokenType.LBRACK)) { // only one dimension supported
       parseConstExp();
       expect(TokenType.RBRACK, "k");
     }
@@ -145,16 +146,16 @@ public record Parser(TokenStream tokens, ErrorReporter reporter, SyntaxWriter wr
   private void parseAddExp() {
     do {
       parseMulExp();
+      writer.writeNonTerminal("AddExp");
     } while (match(TokenType.PLUS, TokenType.MINU));
-    writer.writeNonTerminal("AddExp");
   }
 
   // mulExp: unaryExp ( (MULT | DIV | MOD) unaryExp)*;
   private void parseMulExp() {
     do {
       parseUnaryExp();
+      writer.writeNonTerminal("MulExp");
     } while (match(TokenType.MULT, TokenType.DIV, TokenType.MOD));
-    writer.writeNonTerminal("MulExp");
   }
 
   // unaryExp: primaryExp
@@ -168,7 +169,7 @@ public record Parser(TokenStream tokens, ErrorReporter reporter, SyntaxWriter wr
         parseFuncRParams();
       }
       expect(TokenType.RPARENT, "j");
-    } else if (match(TokenType.PLUS, TokenType.MINU, TokenType.NOT)) {
+    } else if (check(TokenType.PLUS, TokenType.MINU, TokenType.NOT)) {
       parseUnaryOp();
       parseUnaryExp();
     } else {
@@ -287,7 +288,7 @@ public record Parser(TokenStream tokens, ErrorReporter reporter, SyntaxWriter wr
     parseFuncType();
     expect(TokenType.IDENFR);
     expect(TokenType.LPARENT);
-    if (!check(TokenType.RPARENT)) {
+    if (check(TokenType.INTTK)) {
       parseFuncFParams();
     }
     expect(TokenType.RPARENT, "j");
@@ -333,7 +334,7 @@ public record Parser(TokenStream tokens, ErrorReporter reporter, SyntaxWriter wr
 
   // blockItem: decl | stmt;
   private void parseBlockItem() {
-    if (check(TokenType.CONSTTK) || check(TokenType.INTTK)) {
+    if (check(TokenType.CONSTTK) || check(TokenType.INTTK) || check(TokenType.STATICTK)) {
       parseDecl();
     } else {
       parseStmt();
@@ -392,7 +393,7 @@ public record Parser(TokenStream tokens, ErrorReporter reporter, SyntaxWriter wr
       }
       expect(TokenType.RPARENT, "j");
       expect(TokenType.SEMICN, "i");
-    } else if (check(TokenType.IDENFR) && check(TokenType.ASSIGN, 1)) {
+    } else if (isAssignmentStmt()) {
       parseLVal();
       expect(TokenType.ASSIGN);
       parseExp();
@@ -406,6 +407,28 @@ public record Parser(TokenStream tokens, ErrorReporter reporter, SyntaxWriter wr
     writer.writeNonTerminal("Stmt");
   }
 
+  private boolean isAssignmentStmt() {
+    int offset = 0;
+    if (!check(TokenType.IDENFR, offset)) {
+      return false;
+    }
+    offset++;
+    if (check(TokenType.LBRACK, offset)) {
+      offset++;
+      while (offset < tokens.toString().length()
+             && !check(TokenType.RBRACK, offset) && !check(TokenType.EOF, offset)) {
+        if (check(TokenType.SEMICN, offset)) {
+          return false;
+        }
+        offset++;
+      }
+      if (check(TokenType.RBRACK, offset)) {
+        offset++;
+      }
+    }
+    return check(TokenType.ASSIGN, offset);
+  }
+
   // cond: lOrExp;
   private void parseCond() {
     parseLOrExp();
@@ -417,8 +440,8 @@ public record Parser(TokenStream tokens, ErrorReporter reporter, SyntaxWriter wr
   private void parseLOrExp() {
     do {
       parseLAndExp();
+      writer.writeNonTerminal("LOrExp");
     } while (match(TokenType.OR));
-    writer.writeNonTerminal("LOrExp");
   }
 
   // lAndExp: eqExp (AND eqExp)*;
@@ -426,24 +449,24 @@ public record Parser(TokenStream tokens, ErrorReporter reporter, SyntaxWriter wr
   private void parseLAndExp() {
     do {
       parseEqExp();
+      writer.writeNonTerminal("LAndExp");
     } while (match(TokenType.AND));
-    writer.writeNonTerminal("LAndExp");
   }
 
   // eqExp: relExp ( (EQL | NEQ) relExp)*;
   private void parseEqExp() {
     do {
       parseRelExp();
+      writer.writeNonTerminal("EqExp");
     } while (match(TokenType.EQL, TokenType.NEQ));
-    writer.writeNonTerminal("EqExp");
   }
 
   // relExp: addExp ( (LSS | GRE | LEQ | GEQ) addExp)*;
   private void parseRelExp() {
     do {
       parseAddExp();
+      writer.writeNonTerminal("RelExp");
     } while (match(TokenType.LSS, TokenType.GRE, TokenType.LEQ, TokenType.GEQ));
-    writer.writeNonTerminal("RelExp");
   }
 
   // forStmt: lVal ASSIGN exp (COMMA lVal ASSIGN exp)*;

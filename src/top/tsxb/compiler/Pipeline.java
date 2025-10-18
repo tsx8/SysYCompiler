@@ -8,17 +8,14 @@ import java.nio.file.Paths;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
-
 import top.tsxb.compiler.common.ErrorEntry;
 import top.tsxb.compiler.common.ErrorReporter;
 import top.tsxb.compiler.config.CompilerConfig;
 import top.tsxb.compiler.frontend.lexer.Lexer;
-import top.tsxb.compiler.frontend.lexer.LexicalException;
 import top.tsxb.compiler.frontend.lexer.Token;
 import top.tsxb.compiler.frontend.lexer.TokenStream;
 import top.tsxb.compiler.frontend.lexer.TokenType;
 import top.tsxb.compiler.frontend.parser.Parser;
-import top.tsxb.compiler.frontend.parser.SyntacticException;
 import top.tsxb.compiler.frontend.parser.SyntaxWriter;
 
 /** The type top.tsxb.compiler.Pipeline. */
