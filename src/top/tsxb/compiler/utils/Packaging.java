@@ -1,3 +1,5 @@
+package top.tsxb.compiler.utils;
+
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -57,7 +59,6 @@ public class Packaging {
       try (Stream<Path> paths = Files.walk(sourceDir)) {
         paths.filter(Files::isRegularFile)
              .filter(path -> path.toString().endsWith(".java"))
-             .filter(path -> !path.getFileName().toString().startsWith("Packaging"))
              .forEach(path -> {
                try {
                  Path relativePath = sourceDir.relativize(path);

@@ -1,6 +1,7 @@
 package top.tsxb.compiler.frontend.parser;
 
 import java.util.Arrays;
+import java.util.Objects;
 import top.tsxb.compiler.common.ErrorReporter;
 import top.tsxb.compiler.common.ErrorType;
 import top.tsxb.compiler.frontend.lexer.Token;
@@ -14,84 +15,58 @@ public record Parser(TokenStream tokens, ErrorReporter reporter, SyntaxWriter wr
     parseCompUnit();
   }
 
-  private Token peek() {
-    return tokens.peek();
-  }
-
-  private Token prev() {
-    return tokens.previous();
-  }
-
-  private boolean isAtEnd() {
-    return tokens.isAtEnd();
-  }
-
-  private void advance() {
-    Token token = tokens.advance();
-    writer.writeToken(token);
-  }
-
-  private boolean check(TokenType... types) {
-    if (isAtEnd()) {
+  private boolean check(int offset, TokenType... types) {
+    if (tokens.isAtEnd()) {
       return false;
     }
     for (TokenType type : types) {
-      if (peek().type() == type) {
+      if (tokens.peek(offset).type() == type) {
         return true;
       }
     }
     return false;
   }
 
-  private boolean check(TokenType type, int offset) {
-    if (isAtEnd()) {
-      return false;
-    }
-    return tokens.peek(offset).type() == type;
-  }
-
   private boolean match(TokenType... types) {
-    if (check(types)) {
-      advance();
+    if (check(0, types)) {
+      Token token = tokens.advance();
+      writer.writeToken(token);
       return true;
     }
     return false;
   }
 
-  private void expect(TokenType type, String errorCode) {
-    if (check(type)) {
-      advance();
-    } else {
-      try {
-        reporter.report(prev().line(), ErrorType.fromCode(errorCode), type.name());
-      } catch (IllegalArgumentException e) {
-        throw new SyntacticException("Unknown error code: " + errorCode);
-      }
-    }
-  }
-
-  private void expect(TokenType... types) {
-    if (check(types)) {
-      advance();
+  private void expect(String errorCode, TokenType... types) {
+    if (check(0, types)) {
+      Token token = tokens.advance();
+      writer.writeToken(token);
       return;
     }
-    throw new SyntacticException(
-        "Unexpected token: " + peek().type() + ", expected one of: " + Arrays.toString(types)
-        + " at line " + peek().line()
-    );
+    if (Objects.equals(errorCode, "")) {
+      throw new SyntacticException("Unexpected token: " + tokens.peek(0).type()
+                                   + ", expected one of: " + Arrays.toString(types)
+                                   + " at line " + tokens.peek(0).line());
+    }
+    try {
+      for (TokenType type : types) {
+        reporter.report(tokens.peek(-1).line(), ErrorType.fromCode(errorCode), type.name());
+      }
+    } catch (IllegalArgumentException e) {
+      throw new SyntacticException("Unknown error code: " + errorCode);
+    }
   }
 
   // compUnit: decl* funcDef* mainFuncDef EOF;
   // FIRST SET: { CONSTTK, INTTK, STATICTK, VOIDTK }
   // 编译单元 CompUnit → {Decl} {FuncDef} MainFuncDef
   private void parseCompUnit() {
-    while (!check(TokenType.MAINTK, 1)) {
-      if (check(TokenType.LPARENT, 2)) {
+    while (!check(1, TokenType.MAINTK)) {
+      if (check(2, TokenType.LPARENT)) {
         break;
       }
       parseDecl();
     }
-    while (!check(TokenType.MAINTK, 1)) {
+    while (!check(1, TokenType.MAINTK)) {
       parseFuncDef();
     }
     parseMainFuncDef();
@@ -102,7 +77,7 @@ public record Parser(TokenStream tokens, ErrorReporter reporter, SyntaxWriter wr
   // FIRST SET: { CONSTTK, INTTK, STATICTK }
   // 声明 Decl → ConstDecl | VarDecl
   private void parseDecl() {
-    if (check(TokenType.CONSTTK)) {
+    if (check(0, TokenType.CONSTTK)) {
       parseConstDecl();
     } else {
       parseVarDecl();
@@ -114,12 +89,12 @@ public record Parser(TokenStream tokens, ErrorReporter reporter, SyntaxWriter wr
   // FIRST SET: { CONSTTK }
   // 常量声明 ConstDecl → 'const' BType ConstDef { ',' ConstDef } ';' // i
   private void parseConstDecl() {
-    expect(TokenType.CONSTTK);
+    expect("", TokenType.CONSTTK);
     parseBType();
     do {
       parseConstDef();
     } while (match(TokenType.COMMA));
-    expect(TokenType.SEMICN, "i");
+    expect("i", TokenType.SEMICN);
     writer.writeNonTerminal("ConstDecl");
   }
 
@@ -128,7 +103,7 @@ public record Parser(TokenStream tokens, ErrorReporter reporter, SyntaxWriter wr
   // 基本类型 BType → 'int'
   @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
   private void parseBType() {
-    expect(TokenType.INTTK);
+    expect("", TokenType.INTTK);
     writer.writeNonTerminal("BType");
   }
 
@@ -136,12 +111,12 @@ public record Parser(TokenStream tokens, ErrorReporter reporter, SyntaxWriter wr
   // FIRST SET: { IDENFR }
   // 常量定义 ConstDef → Ident [ '[' ConstExp ']' ] '=' ConstInitVal // k
   private void parseConstDef() {
-    expect(TokenType.IDENFR);
+    expect("", TokenType.IDENFR);
     if (match(TokenType.LBRACK)) { // only one dimension supported
       parseConstExp();
-      expect(TokenType.RBRACK, "k");
+      expect("k", TokenType.RBRACK);
     }
-    expect(TokenType.ASSIGN);
+    expect("", TokenType.ASSIGN);
     parseConstInitVal();
     writer.writeNonTerminal("ConstDef");
   }
@@ -151,13 +126,13 @@ public record Parser(TokenStream tokens, ErrorReporter reporter, SyntaxWriter wr
   // 常量初值 ConstInitVal → ConstExp | '{' [ ConstExp { ',' ConstExp } ] '}'
   private void parseConstInitVal() {
     if (match(TokenType.LBRACE)) {
-      if (check(TokenType.IDENFR, TokenType.INTCON, TokenType.LPARENT,
+      if (check(0, TokenType.IDENFR, TokenType.INTCON, TokenType.LPARENT,
                 TokenType.MINU, TokenType.NOT, TokenType.PLUS)) {
         do {
           parseConstExp();
         } while (match(TokenType.COMMA));
       }
-      expect(TokenType.RBRACE);
+      expect("", TokenType.RBRACE);
     } else {
       parseConstExp();
     }
@@ -173,7 +148,7 @@ public record Parser(TokenStream tokens, ErrorReporter reporter, SyntaxWriter wr
     do {
       parseVarDef();
     } while (match(TokenType.COMMA));
-    expect(TokenType.SEMICN, "i");
+    expect("i", TokenType.SEMICN);
     writer.writeNonTerminal("VarDecl");
   }
 
@@ -181,10 +156,10 @@ public record Parser(TokenStream tokens, ErrorReporter reporter, SyntaxWriter wr
   // FIRST SET: { IDENFR }
   // 变量定义 VarDef → Ident [ '[' ConstExp ']' ] | Ident [ '[' ConstExp ']' ] '=' InitVal // k
   private void parseVarDef() {
-    expect(TokenType.IDENFR);
+    expect("", TokenType.IDENFR);
     if (match(TokenType.LBRACK)) { // only one dimension supported
       parseConstExp();
-      expect(TokenType.RBRACK, "k");
+      expect("k", TokenType.RBRACK);
     }
     if (match(TokenType.ASSIGN)) {
       parseInitVal();
@@ -197,13 +172,13 @@ public record Parser(TokenStream tokens, ErrorReporter reporter, SyntaxWriter wr
   // 变量初值 InitVal → Exp | '{' [ Exp { ',' Exp } ] '}'
   private void parseInitVal() {
     if (match(TokenType.LBRACE)) {
-      if (check(TokenType.IDENFR, TokenType.INTCON, TokenType.LPARENT,
+      if (check(0, TokenType.IDENFR, TokenType.INTCON, TokenType.LPARENT,
                 TokenType.MINU, TokenType.NOT, TokenType.PLUS)) {
         do {
           parseExp();
         } while (match(TokenType.COMMA));
       }
-      expect(TokenType.RBRACE);
+      expect("", TokenType.RBRACE);
     } else {
       parseExp();
     }
@@ -215,12 +190,12 @@ public record Parser(TokenStream tokens, ErrorReporter reporter, SyntaxWriter wr
   // 函数定义 FuncDef → FuncType Ident '(' [FuncFParams] ')' Block // j
   private void parseFuncDef() {
     parseFuncType();
-    expect(TokenType.IDENFR);
-    expect(TokenType.LPARENT);
-    if (check(TokenType.INTTK)) {
+    expect("", TokenType.IDENFR);
+    expect("", TokenType.LPARENT);
+    if (check(0, TokenType.INTTK)) {
       parseFuncFParams();
     }
-    expect(TokenType.RPARENT, "j");
+    expect("j", TokenType.RPARENT);
     parseBlock();
     writer.writeNonTerminal("FuncDef");
   }
@@ -229,10 +204,10 @@ public record Parser(TokenStream tokens, ErrorReporter reporter, SyntaxWriter wr
   // FIRST SET: { INTTK }
   // 主函数定义 MainFuncDef → 'int' 'main' '(' ')' Block // j
   private void parseMainFuncDef() {
-    expect(TokenType.INTTK);
-    expect(TokenType.MAINTK);
-    expect(TokenType.LPARENT);
-    expect(TokenType.RPARENT, "j");
+    expect("", TokenType.INTTK);
+    expect("", TokenType.MAINTK);
+    expect("", TokenType.LPARENT);
+    expect("j", TokenType.RPARENT);
     parseBlock();
     writer.writeNonTerminal("MainFuncDef");
   }
@@ -241,7 +216,7 @@ public record Parser(TokenStream tokens, ErrorReporter reporter, SyntaxWriter wr
   // FIRST SET: { INTTK, VOIDTK }
   // 函数类型 FuncType → 'void' | 'int'
   private void parseFuncType() {
-    expect(TokenType.VOIDTK, TokenType.INTTK);
+    expect("", TokenType.VOIDTK, TokenType.INTTK);
     writer.writeNonTerminal("FuncType");
   }
 
@@ -262,9 +237,9 @@ public record Parser(TokenStream tokens, ErrorReporter reporter, SyntaxWriter wr
   @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
   private void parseFuncFParam() {
     parseBType();
-    expect(TokenType.IDENFR);
+    expect("", TokenType.IDENFR);
     if (match(TokenType.LBRACK)) { // only one dimension supported
-      expect(TokenType.RBRACK, "k");
+      expect("k", TokenType.RBRACK);
     }
     writer.writeNonTerminal("FuncFParam");
   }
@@ -273,14 +248,14 @@ public record Parser(TokenStream tokens, ErrorReporter reporter, SyntaxWriter wr
   // FIRST SET: { LBRACE }
   // 语句块 Block → '{' { BlockItem } '}'
   private void parseBlock() {
-    expect(TokenType.LBRACE);
-    while (check(TokenType.BREAKTK, TokenType.CONSTTK, TokenType.CONTINUETK, TokenType.FORTK,
+    expect("", TokenType.LBRACE);
+    while (check(0, TokenType.BREAKTK, TokenType.CONSTTK, TokenType.CONTINUETK, TokenType.FORTK,
                  TokenType.IDENFR, TokenType.IFTK, TokenType.INTCON, TokenType.INTTK,
                  TokenType.LBRACE, TokenType.LPARENT, TokenType.MINU, TokenType.NOT, TokenType.PLUS,
                  TokenType.PRINTFTK, TokenType.RETURNTK, TokenType.SEMICN, TokenType.STATICTK)) {
       parseBlockItem();
     }
-    expect(TokenType.RBRACE);
+    expect("", TokenType.RBRACE);
     writer.writeNonTerminal("Block");
   }
 
@@ -289,7 +264,7 @@ public record Parser(TokenStream tokens, ErrorReporter reporter, SyntaxWriter wr
   //              LBRACE, LPARENT, MINU, NOT, PLUS, PRINTFTK, RETURNTK, SEMICN, STATICTK }
   // 语句块项 BlockItem → Decl | Stmt
   private void parseBlockItem() {
-    if (check(TokenType.CONSTTK) || check(TokenType.INTTK) || check(TokenType.STATICTK)) {
+    if (check(0, TokenType.CONSTTK, TokenType.INTTK, TokenType.STATICTK)) {
       parseDecl();
     } else {
       parseStmt();
@@ -318,59 +293,59 @@ public record Parser(TokenStream tokens, ErrorReporter reporter, SyntaxWriter wr
   // | 'return' [Exp] ';' // i
   // | 'printf''('StringConst {','Exp}')'';' // i j
   private void parseStmt() {
-    if (check(TokenType.LBRACE)) { // block
+    if (check(0, TokenType.LBRACE)) { // block
       parseBlock();
     } else if (match(TokenType.IFTK)) { // if
-      expect(TokenType.LPARENT);
+      expect("", TokenType.LPARENT);
       parseCond();
-      expect(TokenType.RPARENT, "j");
+      expect("j", TokenType.RPARENT);
       parseStmt();
       if (match(TokenType.ELSETK)) {
         parseStmt();
       }
     } else if (match(TokenType.FORTK)) { // for
-      expect(TokenType.LPARENT);
-      if (check(TokenType.IDENFR)) {
+      expect("", TokenType.LPARENT);
+      if (check(0, TokenType.IDENFR)) {
         parseForStmt();
       }
-      expect(TokenType.SEMICN);
-      if (check(TokenType.IDENFR, TokenType.INTCON, TokenType.LPARENT,
+      expect("", TokenType.SEMICN);
+      if (check(0, TokenType.IDENFR, TokenType.INTCON, TokenType.LPARENT,
                 TokenType.MINU, TokenType.NOT, TokenType.PLUS)) {
         parseCond();
       }
-      expect(TokenType.SEMICN);
-      if (check(TokenType.IDENFR)) {
+      expect("", TokenType.SEMICN);
+      if (check(0, TokenType.IDENFR)) {
         parseForStmt();
       }
-      expect(TokenType.RPARENT);
+      expect("", TokenType.RPARENT);
       parseStmt();
     } else if (match(TokenType.BREAKTK, TokenType.CONTINUETK)) { // break | continue
-      expect(TokenType.SEMICN, "i");
+      expect("i", TokenType.SEMICN);
     } else if (match(TokenType.RETURNTK)) { // return
-      if (check(TokenType.IDENFR, TokenType.INTCON, TokenType.LPARENT,
+      if (check(0, TokenType.IDENFR, TokenType.INTCON, TokenType.LPARENT,
                 TokenType.MINU, TokenType.NOT, TokenType.PLUS)) {
         parseExp();
       }
-      expect(TokenType.SEMICN, "i");
+      expect("i", TokenType.SEMICN);
     } else if (match(TokenType.PRINTFTK)) { // printf
-      expect(TokenType.LPARENT);
-      expect(TokenType.STRCON);
+      expect("", TokenType.LPARENT);
+      expect("", TokenType.STRCON);
       while (match(TokenType.COMMA)) {
         parseExp();
       }
-      expect(TokenType.RPARENT, "j");
-      expect(TokenType.SEMICN, "i");
+      expect("j", TokenType.RPARENT);
+      expect("i", TokenType.SEMICN);
     } else if (isAssignmentStmt()) {
       parseLVal();
-      expect(TokenType.ASSIGN);
+      expect("", TokenType.ASSIGN);
       parseExp();
-      expect(TokenType.SEMICN, "i");
+      expect("i", TokenType.SEMICN);
     } else {
-      if (check(TokenType.IDENFR, TokenType.INTCON, TokenType.LPARENT,
+      if (check(0, TokenType.IDENFR, TokenType.INTCON, TokenType.LPARENT,
                 TokenType.MINU, TokenType.NOT, TokenType.PLUS)) {
         parseExp();
       }
-      expect(TokenType.SEMICN, "i");
+      expect("i", TokenType.SEMICN);
     }
     writer.writeNonTerminal("Stmt");
   }
@@ -381,7 +356,7 @@ public record Parser(TokenStream tokens, ErrorReporter reporter, SyntaxWriter wr
   private void parseForStmt() {
     do {
       parseLVal();
-      expect(TokenType.ASSIGN);
+      expect("", TokenType.ASSIGN);
       parseExp();
     } while (match(TokenType.COMMA));
     writer.writeNonTerminal("ForStmt");
@@ -408,10 +383,10 @@ public record Parser(TokenStream tokens, ErrorReporter reporter, SyntaxWriter wr
   // 左值表达式 LVal → Ident ['[' Exp ']'] // k
   @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
   private void parseLVal() {
-    expect(TokenType.IDENFR);
+    expect("", TokenType.IDENFR);
     if (match(TokenType.LBRACK)) { // only one dimension supported
       parseExp();
-      expect(TokenType.RBRACK, "k");
+      expect("k", TokenType.RBRACK);
     }
     writer.writeNonTerminal("LVal");
   }
@@ -422,8 +397,8 @@ public record Parser(TokenStream tokens, ErrorReporter reporter, SyntaxWriter wr
   private void parsePrimaryExp() {
     if (match(TokenType.LPARENT)) {
       parseExp();
-      expect(TokenType.RPARENT, "j");
-    } else if (check(TokenType.IDENFR)) {
+      expect("j", TokenType.RPARENT);
+    } else if (check(0, TokenType.IDENFR)) {
       parseLVal();
     } else {
       parseNumber();
@@ -435,7 +410,7 @@ public record Parser(TokenStream tokens, ErrorReporter reporter, SyntaxWriter wr
   // FIRST SET: { INTCON }
   // 数值 Number → IntConst
   private void parseNumber() {
-    expect(TokenType.INTCON);
+    expect("", TokenType.INTCON);
     writer.writeNonTerminal("Number");
   }
 
@@ -445,15 +420,15 @@ public record Parser(TokenStream tokens, ErrorReporter reporter, SyntaxWriter wr
   // FIRST SET: { IDENFR, INTCON, LPARENT, MINU, NOT, PLUS }
   // 一元表达式 UnaryExp → PrimaryExp | Ident '(' [FuncRParams] ')' | UnaryOp UnaryExp // j
   private void parseUnaryExp() {
-    if (check(TokenType.IDENFR) && check(TokenType.LPARENT, 1)) {
-      expect(TokenType.IDENFR);
-      expect(TokenType.LPARENT);
-      if (check(TokenType.IDENFR, TokenType.INTCON, TokenType.LPARENT,
+    if (check(0, TokenType.IDENFR) && check(1, TokenType.LPARENT)) {
+      expect("", TokenType.IDENFR);
+      expect("", TokenType.LPARENT);
+      if (check(0, TokenType.IDENFR, TokenType.INTCON, TokenType.LPARENT,
                 TokenType.MINU, TokenType.NOT, TokenType.PLUS)) {
         parseFuncRParams();
       }
-      expect(TokenType.RPARENT, "j");
-    } else if (check(TokenType.PLUS, TokenType.MINU, TokenType.NOT)) {
+      expect("j", TokenType.RPARENT);
+    } else if (check(0, TokenType.PLUS, TokenType.MINU, TokenType.NOT)) {
       parseUnaryOp();
       parseUnaryExp();
     } else {
@@ -466,7 +441,7 @@ public record Parser(TokenStream tokens, ErrorReporter reporter, SyntaxWriter wr
   // FIRST SET: { MINU, NOT, PLUS }
   // 单目运算符 UnaryOp → '+' | '−' | '!' 注：'!'仅出现在条件表达式中
   private void parseUnaryOp() {
-    expect(TokenType.PLUS, TokenType.MINU, TokenType.NOT);
+    expect("", TokenType.PLUS, TokenType.MINU, TokenType.NOT);
     writer.writeNonTerminal("UnaryOp");
   }
 
@@ -553,22 +528,22 @@ public record Parser(TokenStream tokens, ErrorReporter reporter, SyntaxWriter wr
 
   private boolean isAssignmentStmt() {
     int offset = 0;
-    if (!check(TokenType.IDENFR, offset)) {
+    if (!check(offset, TokenType.IDENFR)) {
       return false;
     }
     offset++;
-    if (check(TokenType.LBRACK, offset)) {
+    if (check(offset, TokenType.LBRACK)) {
       offset++;
-      while (!check(TokenType.RBRACK, offset) && !check(TokenType.EOF, offset)) {
-        if (check(TokenType.SEMICN, offset)) {
+      while (!check(offset, TokenType.RBRACK) && !check(offset, TokenType.EOF)) {
+        if (check(offset, TokenType.SEMICN)) {
           return false;
         }
         offset++;
       }
-      if (check(TokenType.RBRACK, offset)) {
+      if (check(offset, TokenType.RBRACK)) {
         offset++;
       }
     }
-    return check(TokenType.ASSIGN, offset);
+    return check(offset, TokenType.ASSIGN);
   }
 }

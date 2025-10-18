@@ -25,20 +25,11 @@ public class TokenStream {
     if (!isAtEnd()) {
       current++;
     }
-    return previous();
+    return peek(-1);
   }
 
   public boolean isAtEnd() {
-    return peek().type() == TokenType.EOF;
-  }
-
-  /**
-   * Peek token.
-   *
-   * @return the token
-   */
-  public Token peek() {
-    return tokens.get(current);
+    return peek(0).type() == TokenType.EOF;
   }
 
   /**
@@ -52,14 +43,5 @@ public class TokenStream {
       return tokens.get(tokens.size() - 1); // EOF
     }
     return tokens.get(current + offset);
-  }
-
-  /**
-   * Previous token.
-   *
-   * @return the token
-   */
-  public Token previous() {
-    return tokens.get(current - 1);
   }
 }
