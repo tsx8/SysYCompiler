@@ -6,7 +6,6 @@ import top.tsxb.compiler.frontend.lexer.Token;
 /** The type Syntax writer. */
 public class SyntaxWriter {
   private final StringBuilder output = new StringBuilder();
-  private final boolean enabled;
 
   private static final Set<String> OMITTED_NON_TERMINALS = Set.of(
       "BlockItem", "Decl", "BType"
@@ -15,11 +14,8 @@ public class SyntaxWriter {
   /**
    * Instantiates a new Syntax writer.
    *
-   * @param enabled the enabled
    */
-  public SyntaxWriter(boolean enabled) {
-    this.enabled = enabled;
-  }
+  public SyntaxWriter() {}
 
   /**
    * Write token.
@@ -27,9 +23,7 @@ public class SyntaxWriter {
    * @param token the token
    */
   public void writeToken(Token token) {
-    if (enabled) {
-      output.append(token.toString()).append(System.lineSeparator());
-    }
+    output.append(token.toString()).append(System.lineSeparator());
   }
 
   /**
@@ -38,7 +32,7 @@ public class SyntaxWriter {
    * @param name the name
    */
   public void writeNonTerminal(String name) {
-    if (enabled && !OMITTED_NON_TERMINALS.contains(name)) {
+    if (!OMITTED_NON_TERMINALS.contains(name)) {
       output.append("<").append(name).append(">").append(System.lineSeparator());
     }
   }

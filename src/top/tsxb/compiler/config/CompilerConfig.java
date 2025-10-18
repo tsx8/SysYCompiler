@@ -4,7 +4,7 @@ package top.tsxb.compiler.config;
 public final class CompilerConfig {
   private CompilerConfig() {}
 
-  public static final String CURRENT_HOMEWORK = "Parser";
+  public static final String CURRENT_HOMEWORK = "parser";
 
   public static final String SOURCE_FILE = "testfile.txt";
 
@@ -14,8 +14,8 @@ public final class CompilerConfig {
 
   private static String determineOutputFile() {
     return switch (CURRENT_HOMEWORK) {
-      case "Lexer" -> "lexer.txt";
-      case "Parser" -> "parser.txt";
+      case "lexer" -> "lexer.txt";
+      case "parser" -> "parser.txt";
       default -> "output.txt";
     };
   }

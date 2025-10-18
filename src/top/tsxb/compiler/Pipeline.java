@@ -7,6 +7,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
+
 import top.tsxb.compiler.common.ErrorEntry;
 import top.tsxb.compiler.common.ErrorReporter;
 import top.tsxb.compiler.config.CompilerConfig;
@@ -21,7 +23,7 @@ import top.tsxb.compiler.frontend.parser.SyntaxWriter;
 
 /** The type top.tsxb.compiler.Pipeline. */
 public class Pipeline {
-  private final ErrorReporter errorReporter;
+  private ErrorReporter errorReporter;
 
   /**
    * Instantiates a new top.tsxb.compiler.Pipeline.
@@ -34,57 +36,76 @@ public class Pipeline {
   public void run() throws IOException {
     try {
       String sourceCode = Files.readString(Paths.get(CompilerConfig.SOURCE_FILE));
-
-      Lexer lexer = new Lexer(sourceCode, errorReporter);
-      List<Token> tokens = lexer.scan();
+      String output = run(sourceCode, CompilerConfig.CURRENT_HOMEWORK);
 
       if (errorReporter.hasErrors()) {
-        writeErrors();
-      }
-      // else {
-      //   writeLexerOutput(tokens);
-      // }
-
-      TokenStream tokenStream = new TokenStream(tokens);
-      SyntaxWriter syntaxWriter = new SyntaxWriter(!errorReporter.hasErrors());
-      Parser parser = new Parser(tokenStream, errorReporter, syntaxWriter);
-      parser.parse();
-
-      if (errorReporter.hasErrors()) {
-        writeErrors();
+        writeErrors(output);
       } else {
-        writeParserOutput(syntaxWriter.getOutput());
+        writeOutput(output);
       }
-    } catch (LexicalException e) {
-      System.err.println("Fatal Lexical Error: " + e.getMessage());
-      e.printStackTrace(System.err);
-    } catch (SyntacticException e) {
-      System.err.println("Fatal Parser Error: " + e.getMessage());
+    } catch (Exception e) {
+      System.err.println("Fatal Compiler Error: " + e.getMessage());
       e.printStackTrace(System.err);
     }
   }
 
-  private void writeLexerOutput(List<Token> tokens) throws IOException {
-    writeFile(CompilerConfig.OUTPUT_FILE, writer -> {
-      for (Token token : tokens) {
-        if (token.type() != TokenType.EOF) {
-          writer.println(token);
-        }
+  /**
+   * Runs the compiler pipeline for a given stage on source code provided as a string.
+   * This method is designed for testing and does not perform file I/O.
+   *
+   * @param sourceCode the source code
+   * @param stage      the stage ("lexer", "parser", etc.)
+   * @return the string
+   */
+  public String run(String sourceCode, String stage) {
+    this.errorReporter = new ErrorReporter();
+
+    Lexer lexer = new Lexer(sourceCode, errorReporter);
+    List<Token> tokens = lexer.scan();
+
+    if ("lexer".equals(stage)) {
+      if (errorReporter.hasErrors()) {
+        return formatErrors(errorReporter.getErrors());
+      } else {
+        return formatLexerOutput(tokens);
       }
-    });
+    }
+
+    TokenStream tokenStream = new TokenStream(tokens);
+    SyntaxWriter syntaxWriter = new SyntaxWriter();
+    Parser parser = new Parser(tokenStream, errorReporter, syntaxWriter);
+    parser.parse();
+
+    if ("parser".equals(stage)) {
+      if (errorReporter.hasErrors()) {
+        return formatErrors(errorReporter.getErrors());
+      } else {
+        return syntaxWriter.getOutput();
+      }
+    }
+
+    throw new IllegalArgumentException("Unrecognized stage: " + stage);
   }
 
-  private void writeParserOutput(String output) throws IOException {
+  private String formatErrors(List<ErrorEntry> errors) {
+    return errors.stream()
+        .map(ErrorEntry::submission)
+        .collect(Collectors.joining(System.lineSeparator()));
+  }
+
+  private String formatLexerOutput(List<Token> tokens) {
+    return tokens.stream()
+        .filter(t -> t.type() != TokenType.EOF)
+        .map(Token::toString)
+        .collect(Collectors.joining(System.lineSeparator()));
+  }
+
+  private void writeOutput(String output) throws IOException {
     writeFile(CompilerConfig.OUTPUT_FILE, writer -> writer.print(output));
   }
 
-  private void writeErrors() throws IOException {
-    writeFile(CompilerConfig.ERROR_FILE, writer -> {
-      List<ErrorEntry> sortedErrors = errorReporter.getErrors();
-      for (ErrorEntry entry : sortedErrors) {
-        writer.println(entry.submission());
-      }
-    });
+  private void writeErrors(String output) throws IOException {
+    writeFile(CompilerConfig.ERROR_FILE, writer -> writer.print(output));
   }
 
   private void writeFile(String filePath, Consumer<PrintWriter> writerAction) throws  IOException {
