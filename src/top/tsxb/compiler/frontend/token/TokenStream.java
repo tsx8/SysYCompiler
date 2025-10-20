@@ -1,4 +1,4 @@
-package top.tsxb.compiler.frontend.lexer;
+package top.tsxb.compiler.frontend.token;
 
 import java.util.List;
 

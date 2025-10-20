@@ -4,9 +4,9 @@ import java.util.Arrays;
 import java.util.Objects;
 import top.tsxb.compiler.common.ErrorReporter;
 import top.tsxb.compiler.common.ErrorType;
-import top.tsxb.compiler.frontend.lexer.Token;
-import top.tsxb.compiler.frontend.lexer.TokenStream;
-import top.tsxb.compiler.frontend.lexer.TokenType;
+import top.tsxb.compiler.frontend.token.Token;
+import top.tsxb.compiler.frontend.token.TokenStream;
+import top.tsxb.compiler.frontend.token.TokenType;
 
 /** The type Parser. */
 public record Parser(TokenStream tokens, ErrorReporter reporter, SyntaxWriter writer) {

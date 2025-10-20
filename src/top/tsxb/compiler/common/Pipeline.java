@@ -10,11 +10,11 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import top.tsxb.compiler.config.CompilerConfig;
 import top.tsxb.compiler.frontend.lexer.Lexer;
-import top.tsxb.compiler.frontend.lexer.Token;
-import top.tsxb.compiler.frontend.lexer.TokenStream;
-import top.tsxb.compiler.frontend.lexer.TokenType;
 import top.tsxb.compiler.frontend.parser.Parser;
 import top.tsxb.compiler.frontend.parser.SyntaxWriter;
+import top.tsxb.compiler.frontend.token.Token;
+import top.tsxb.compiler.frontend.token.TokenStream;
+import top.tsxb.compiler.frontend.token.TokenType;
 
 /** The type Pipeline. */
 public class Pipeline {

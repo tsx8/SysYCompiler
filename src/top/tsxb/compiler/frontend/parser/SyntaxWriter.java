@@ -1,7 +1,7 @@
 package top.tsxb.compiler.frontend.parser;
 
 import java.util.Set;
-import top.tsxb.compiler.frontend.lexer.Token;
+import top.tsxb.compiler.frontend.token.Token;
 
 /** The type Syntax writer. */
 public class SyntaxWriter {

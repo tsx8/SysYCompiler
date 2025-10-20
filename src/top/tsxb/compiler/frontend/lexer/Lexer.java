@@ -8,6 +8,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import top.tsxb.compiler.common.ErrorReporter;
 import top.tsxb.compiler.common.ErrorType;
+import top.tsxb.compiler.frontend.token.Token;
+import top.tsxb.compiler.frontend.token.TokenType;
 
 /** The type Lexer. Scans the source code and produces tokens. */
 public class Lexer {
