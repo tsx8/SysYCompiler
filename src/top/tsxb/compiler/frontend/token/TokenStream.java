@@ -1,6 +1,7 @@
 package top.tsxb.compiler.frontend.token;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 /** The type Token stream. */
 public class TokenStream {
@@ -14,6 +15,18 @@ public class TokenStream {
    */
   public TokenStream(List<Token> tokens) {
     this.tokens = tokens;
+  }
+
+  /**
+   * Gets output.
+   *
+   * @return the output
+   */
+  public String getOutput() {
+    return tokens.stream()
+           .filter(t -> t.type() != TokenType.EOF)
+           .map(Token::toString)
+           .collect(Collectors.joining(System.lineSeparator()));
   }
 
   /**

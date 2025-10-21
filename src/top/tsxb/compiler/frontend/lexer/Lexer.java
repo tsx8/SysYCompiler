@@ -9,6 +9,7 @@ import java.util.regex.Pattern;
 import top.tsxb.compiler.common.ErrorReporter;
 import top.tsxb.compiler.common.ErrorType;
 import top.tsxb.compiler.frontend.token.Token;
+import top.tsxb.compiler.frontend.token.TokenStream;
 import top.tsxb.compiler.frontend.token.TokenType;
 
 /** The type Lexer. Scans the source code and produces tokens. */
@@ -99,16 +100,17 @@ public class Lexer {
    *
    * @return A list of scanned tokens.
    */
-  public List<Token> scan() {
+  public TokenStream scan() {
     Matcher matcher = TOKEN_PATTERN.matcher(source);
     while (matcher.find()) {
       String lexeme = matcher.group();
       String groupName = findMatchedGroup(matcher);
 
       switch (groupName) {
-        case "WHITESPACE", "COMMENT" -> line += countNewlines(lexeme);
+        case "WHITESPACE" -> {}
+        case "COMMENT" -> line += countNewlines(lexeme);
         case "IDENFR" -> addToken(KEYWORDS.getOrDefault(lexeme, TokenType.IDENFR), lexeme);
-        case "INTCON" -> addToken(TokenType.INTCON, lexeme, Integer.parseInt(lexeme));
+        case "INTCON" -> addToken(TokenType.INTCON, lexeme);
         case "ILLEGALAND" -> {
           errorReporter.report(line, ErrorType.fromCode("a"), lexeme);
           addToken(TokenType.AND, "&&");
@@ -126,8 +128,8 @@ public class Lexer {
       }
     }
 
-    tokens.add(new Token(TokenType.EOF, "", null, line));
-    return tokens;
+    tokens.add(new Token(TokenType.EOF, "", line));
+    return new TokenStream(tokens);
   }
 
   private String findMatchedGroup(Matcher matcher) {
@@ -140,11 +142,7 @@ public class Lexer {
   }
 
   private void addToken(TokenType type, String lexeme) {
-    addToken(type, lexeme, null);
-  }
-
-  private void addToken(TokenType type, String lexeme, Object value) {
-    tokens.add(new Token(type, lexeme, value, line));
+    tokens.add(new Token(type, lexeme, line));
   }
 
   private int countNewlines(String text) {

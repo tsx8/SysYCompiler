@@ -12,9 +12,7 @@ import top.tsxb.compiler.config.CompilerConfig;
 import top.tsxb.compiler.frontend.lexer.Lexer;
 import top.tsxb.compiler.frontend.parser.Parser;
 import top.tsxb.compiler.frontend.parser.SyntaxWriter;
-import top.tsxb.compiler.frontend.token.Token;
 import top.tsxb.compiler.frontend.token.TokenStream;
-import top.tsxb.compiler.frontend.token.TokenType;
 
 /** The type Pipeline. */
 public class Pipeline {
@@ -56,17 +54,16 @@ public class Pipeline {
     this.errorReporter = new ErrorReporter();
 
     Lexer lexer = new Lexer(sourceCode, errorReporter);
-    List<Token> tokens = lexer.scan();
+    TokenStream tokenStream = lexer.scan();
 
     if ("lexer".equals(stage)) {
       if (errorReporter.hasErrors()) {
         return formatErrors(errorReporter.getErrors());
       } else {
-        return formatLexerOutput(tokens);
+        return tokenStream.getOutput();
       }
     }
 
-    TokenStream tokenStream = new TokenStream(tokens);
     SyntaxWriter syntaxWriter = new SyntaxWriter();
     Parser parser = new Parser(tokenStream, errorReporter, syntaxWriter);
     parser.parse();
@@ -85,13 +82,6 @@ public class Pipeline {
   private String formatErrors(List<ErrorEntry> errors) {
     return errors.stream()
         .map(ErrorEntry::submission)
-        .collect(Collectors.joining(System.lineSeparator()));
-  }
-
-  private String formatLexerOutput(List<Token> tokens) {
-    return tokens.stream()
-        .filter(t -> t.type() != TokenType.EOF)
-        .map(Token::toString)
         .collect(Collectors.joining(System.lineSeparator()));
   }
 
