@@ -26,7 +26,7 @@ public class Pipeline {
   }
 
   /** Run. */
-  public void run() throws IOException {
+  public void run() {
     try {
       String sourceCode = Files.readString(Paths.get(CompilerConfig.SOURCE_FILE));
       String output = run(sourceCode, CompilerConfig.CURRENT_HOMEWORK);
