@@ -9,10 +9,10 @@ import java.util.List;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import top.tsxb.compiler.config.CompilerConfig;
+import top.tsxb.compiler.frontend.cst.CstNode;
+import top.tsxb.compiler.frontend.cst.TokenStream;
 import top.tsxb.compiler.frontend.lexer.Lexer;
 import top.tsxb.compiler.frontend.parser.Parser;
-import top.tsxb.compiler.frontend.parser.SyntaxWriter;
-import top.tsxb.compiler.frontend.token.TokenStream;
 
 /** The type Pipeline. */
 public class Pipeline {
@@ -64,15 +64,14 @@ public class Pipeline {
       }
     }
 
-    SyntaxWriter syntaxWriter = new SyntaxWriter();
-    Parser parser = new Parser(tokenStream, errorReporter, syntaxWriter);
-    parser.parse();
+    Parser parser = new Parser(tokenStream, errorReporter);
+    CstNode compUnit = parser.parse();
 
     if ("parser".equals(stage)) {
       if (errorReporter.hasErrors()) {
         return formatErrors(errorReporter.getErrors());
       } else {
-        return syntaxWriter.getOutput();
+        return compUnit.toString().trim();
       }
     }
 

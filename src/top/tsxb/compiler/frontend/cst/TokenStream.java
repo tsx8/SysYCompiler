@@ -1,4 +1,4 @@
-package top.tsxb.compiler.frontend.token;
+package top.tsxb.compiler.frontend.cst;
 
 import java.util.List;
 import java.util.stream.Collectors;

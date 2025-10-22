@@ -1,4 +1,4 @@
-package top.tsxb.compiler.frontend.token;
+package top.tsxb.compiler.frontend.cst;
 
 /** The enum Token type, including all token types in the SysY Language. */
 public enum TokenType {

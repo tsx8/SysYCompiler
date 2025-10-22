@@ -8,9 +8,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import top.tsxb.compiler.common.ErrorReporter;
 import top.tsxb.compiler.common.ErrorType;
-import top.tsxb.compiler.frontend.token.Token;
-import top.tsxb.compiler.frontend.token.TokenStream;
-import top.tsxb.compiler.frontend.token.TokenType;
+import top.tsxb.compiler.frontend.cst.Token;
+import top.tsxb.compiler.frontend.cst.TokenStream;
+import top.tsxb.compiler.frontend.cst.TokenType;
 
 /** The type Lexer. Scans the source code and produces tokens. */
 public class Lexer {
@@ -107,8 +107,7 @@ public class Lexer {
       String groupName = findMatchedGroup(matcher);
 
       switch (groupName) {
-        case "WHITESPACE" -> {}
-        case "COMMENT" -> line += countNewlines(lexeme);
+        case "WHITESPACE", "COMMENT" -> line += countNewlines(lexeme);
         case "IDENFR" -> addToken(KEYWORDS.getOrDefault(lexeme, TokenType.IDENFR), lexeme);
         case "INTCON" -> addToken(TokenType.INTCON, lexeme);
         case "ILLEGALAND" -> {
