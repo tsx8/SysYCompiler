@@ -26,7 +26,7 @@ public class TokenStream {
     return tokens.stream()
            .filter(t -> t.type() != TokenType.EOF)
            .map(Token::toString)
-           .collect(Collectors.joining(System.lineSeparator()));
+           .collect(Collectors.joining());
   }
 
   /**
