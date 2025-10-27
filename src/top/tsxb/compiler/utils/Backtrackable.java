@@ -6,17 +6,17 @@ package top.tsxb.compiler.utils;
  * @param <T> the type parameter
  */
 public interface Backtrackable<T> {
-  /**
-   * Save t.
-   *
-   * @return the t
-   */
-  T save();
+    /**
+     * Save t.
+     *
+     * @return the t
+     */
+    T save();
 
-  /**
-   * Restore.
-   *
-   * @param memento the memento
-   */
-  void restore(T memento);
+    /**
+     * Restore.
+     *
+     * @param memento the memento
+     */
+    void restore(T memento);
 }

@@ -1,24 +1,22 @@
 package top.tsxb.compiler.config;
 
-/** The type Compiler config. */
+/**
+ * The type Compiler config.
+ */
 public final class CompilerConfig {
-  private CompilerConfig() {}
+    public static final boolean DEBUG = true;
+    public static final String CURRENT_HOMEWORK = "parser";
+    public static final String SOURCE_FILE = "testfile.txt";
+    public static final String ERROR_FILE = "error.txt";
+    public static final String OUTPUT_FILE = determineOutputFile();
 
-  public static final boolean DEBUG = true;
+    private CompilerConfig() {}
 
-  public static final String CURRENT_HOMEWORK = "parser";
-
-  public static final String SOURCE_FILE = "testfile.txt";
-
-  public static final String ERROR_FILE = "error.txt";
-
-  public static final String OUTPUT_FILE = determineOutputFile();
-
-  private static String determineOutputFile() {
-    return switch (CURRENT_HOMEWORK) {
-      case "lexer" -> "lexer.txt";
-      case "parser" -> "parser.txt";
-      default -> "output.txt";
-    };
-  }
+    private static String determineOutputFile() {
+        return switch (CURRENT_HOMEWORK) {
+            case "lexer" -> "lexer.txt";
+            case "parser" -> "parser.txt";
+            default -> "output.txt";
+        };
+    }
 }
