@@ -3,9 +3,10 @@ package top.tsxb.compiler.common;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import top.tsxb.compiler.utils.Backtrackable;
 
 /** The type Error reporter. */
-public class ErrorReporter {
+public class ErrorReporter implements Backtrackable<Integer> {
   private final List<ErrorEntry> errors;
 
   /** Instantiates a new Error reporter. */
@@ -42,5 +43,28 @@ public class ErrorReporter {
   public List<ErrorEntry> getErrors() {
     Collections.sort(errors);
     return Collections.unmodifiableList(errors);
+  }
+
+  /**
+   * Save int.
+   *
+   * @return the int
+   */
+  public Integer save() {
+    return errors.size();
+  }
+
+  /**
+   * Restore.
+   *
+   * @param size the size
+   */
+  public void restore(Integer size) {
+    if (size < 0 || size > errors.size()) {
+      return;
+    }
+    while (errors.size() > size) {
+      errors.remove(errors.size() - 1);
+    }
   }
 }

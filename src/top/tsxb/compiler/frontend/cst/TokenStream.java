@@ -2,9 +2,10 @@ package top.tsxb.compiler.frontend.cst;
 
 import java.util.List;
 import java.util.stream.Collectors;
+import top.tsxb.compiler.utils.Backtrackable;
 
 /** The type Token stream. */
-public class TokenStream {
+public class TokenStream implements Backtrackable<Integer> {
   private final List<Token> tokens;
   private int current = 0;
 
@@ -24,9 +25,27 @@ public class TokenStream {
    */
   public String getOutput() {
     return tokens.stream()
-           .filter(t -> t.type() != TokenType.EOF)
-           .map(Token::toString)
-           .collect(Collectors.joining());
+        .filter(t -> t.type() != TokenType.EOF)
+        .map(Token::toString)
+        .collect(Collectors.joining());
+  }
+
+  /**
+   * Save int.
+   *
+   * @return the int
+   */
+  public Integer save() {
+    return current;
+  }
+
+  /**
+   * Restore.
+   *
+   * @param pos the pos
+   */
+  public void restore(Integer pos) {
+    current = pos;
   }
 
   /**

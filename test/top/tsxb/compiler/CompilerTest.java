@@ -68,13 +68,13 @@ public class CompilerTest {
     List<Path> testDirs = findTestDirectories();
 
     for (Path testDir : testDirs) {
-      System.out.printf("--- Running test: %-20s ... ", testDir.getFileName());
+      System.out.printf("--- Running test: %s ---\n", testDir.getFileName());
       boolean result = runTestCase(testDir, runLogDir);
       if (result) {
-        System.out.println("\u001B[32m[PASSED]\u001B[0m");
+        System.out.println("result: \u001B[32m[PASSED]\u001B[0m");
         passed++;
       } else {
-        System.out.println("\u001B[31m[FAILED]\u001B[0m");
+        System.out.println("result: \u001B[31m[FAILED]\u001B[0m");
         failed++;
       }
     }

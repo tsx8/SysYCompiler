@@ -4,6 +4,8 @@ package top.tsxb.compiler.config;
 public final class CompilerConfig {
   private CompilerConfig() {}
 
+  public static final boolean DEBUG = true;
+
   public static final String CURRENT_HOMEWORK = "parser";
 
   public static final String SOURCE_FILE = "testfile.txt";
