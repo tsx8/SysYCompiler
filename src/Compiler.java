@@ -1,4 +1,4 @@
-import top.tsxb.compiler.common.Pipeline;
+import top.tsxb.compiler.Pipeline;
 
 /**
  * The type Compiler.
