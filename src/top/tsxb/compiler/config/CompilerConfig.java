@@ -4,7 +4,7 @@ package top.tsxb.compiler.config;
  * The type Compiler config.
  */
 public final class CompilerConfig {
-    public static final boolean DEBUG = true;
+    public static final boolean DEBUG = false;
     public static final String CURRENT_HOMEWORK = "parser";
     public static final String SOURCE_FILE = "testfile.txt";
     public static final String ERROR_FILE = "error.txt";

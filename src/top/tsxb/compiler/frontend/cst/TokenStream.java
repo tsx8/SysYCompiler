@@ -28,7 +28,7 @@ public class TokenStream implements Backtrackable<Integer> {
      */
     public String getOutput() {
         return tokens.stream().filter(t -> t.type() != TokenType.EOF).map(Token::toString)
-            .collect(Collectors.joining());
+            .collect(Collectors.joining(System.lineSeparator()));
     }
 
     /**

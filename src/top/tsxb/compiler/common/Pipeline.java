@@ -14,6 +14,7 @@ import top.tsxb.compiler.frontend.cst.CstNode;
 import top.tsxb.compiler.frontend.cst.TokenStream;
 import top.tsxb.compiler.frontend.lexer.Lexer;
 import top.tsxb.compiler.frontend.parser.Parser;
+import top.tsxb.compiler.frontend.visitor.SyntaxPrinter;
 
 /**
  * The type Pipeline.
@@ -76,7 +77,7 @@ public class Pipeline {
             if (errorReporter.hasErrors()) {
                 return formatErrors(errorReporter.getErrors());
             } else {
-                return compUnit.toString().trim();
+                return compUnit.accept(new SyntaxPrinter());
             }
         }
 

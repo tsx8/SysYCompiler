@@ -39,8 +39,17 @@ public class Token extends CstNode {
         return line;
     }
 
+    public String lexeme() {
+        return lexeme;
+    }
+
+    @Override
+    public <T> T accept(CstVisitor<T> visitor) {
+        return visitor.visit(this);
+    }
+
     @Override
     public String toString() {
-        return type.name() + " " + lexeme + System.lineSeparator();
+        return type.name() + " " + lexeme;
     }
 }

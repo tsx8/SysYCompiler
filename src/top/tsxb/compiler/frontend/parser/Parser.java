@@ -15,10 +15,10 @@ import top.tsxb.compiler.config.CompilerConfig;
 import top.tsxb.compiler.frontend.cst.CstNode;
 import top.tsxb.compiler.frontend.cst.CstType;
 import top.tsxb.compiler.frontend.cst.NonTerm;
+import top.tsxb.compiler.frontend.cst.Token;
 import top.tsxb.compiler.frontend.cst.TokenStream;
 import top.tsxb.compiler.frontend.cst.TokenType;
 import top.tsxb.compiler.utils.BacktrackMgr;
-import top.tsxb.compiler.utils.Backtrackable;
 
 /**
  * The type Parser.
@@ -28,7 +28,7 @@ public class Parser {
     private final TokenStream tokens;
     private final ErrorReporter reporter;
     private final BacktrackMgr backtrackMgr = new BacktrackMgr();
-    private final List<String> logs = new ArrayList<>();
+    private final DebugLogger logger = new DebugLogger();
     private final Map<CstType, ParserCombinator> rules = new EnumMap<>(CstType.class);
 
     /**
@@ -42,22 +42,36 @@ public class Parser {
         this.reporter = reporter;
         backtrackMgr.register(this.tokens);
         backtrackMgr.register(this.reporter);
-        backtrackMgr.register(new Backtrackable<Integer>() {
-            @Override
-            public Integer save() {
-                return logs.size();
-            }
+        initializeRules();
+    }
 
-            @Override
-            public void restore(Integer pos) {
-                if (pos >= 0 && pos <= logs.size()) {
-                    while (logs.size() > pos) {
-                        logs.remove(logs.size() - 1);
-                    }
+    private static class DebugLogger {
+        private final List<String> logs = new ArrayList<>();
+        private int indentLevel = 0;
+
+        private int save() {
+            return logs.size();
+        }
+
+        private void restore(int pos) {
+            if (pos >= 0 && pos <= logs.size()) {
+                while (logs.size() > pos) {
+                    logs.remove(logs.size() - 1);
                 }
             }
-        });
-        initializeRules();
+        }
+
+        private void log(String message) {
+            logs.add("  ".repeat(indentLevel) + message);
+        }
+
+        private void indent() {
+            indentLevel++;
+        }
+
+        private void dedent() {
+            indentLevel--;
+        }
     }
 
     /**
@@ -67,7 +81,7 @@ public class Parser {
         Optional<List<CstNode>> result = rule(CompUnit).parse(this);
 
         if (CompilerConfig.DEBUG) {
-            for (String log : logs) {
+            for (String log : logger.logs) {
                 System.out.println(log);
             }
         }
@@ -80,7 +94,8 @@ public class Parser {
 
     private void initializeRules() {
         // 编译单元 CompUnit → {Decl} {FuncDef} MainFuncDef EOF
-        define(CompUnit, seq(many(rule(Decl)), many(rule(FuncDef)), rule(MainFuncDef)));
+        // 修改为 CompUnit -> { Decl | FuncDef } MainFuncDef
+        define(CompUnit, seq(many(or(rule(FuncDef), rule(Decl))), rule(MainFuncDef)));
         // 声明 Decl → ConstDecl | VarDecl
         define(Decl, or(rule(ConstDecl), rule(VarDecl)));
         // 常量声明 ConstDecl → 'const' BType ConstDef { ',' ConstDef } ';' // i
@@ -121,23 +136,26 @@ public class Parser {
         // 语句块项 BlockItem → Decl | Stmt
         define(BlockItem, or(rule(Decl), rule(Stmt)));
         // 语句 Stmt → LVal '=' Exp ';' // i
-        // | [Exp] ';' // i
         // | Block
         // | 'if' '(' Cond ')' Stmt [ 'else' Stmt ] // j
         // | 'for' '(' [ForStmt] ';' [Cond] ';' [ForStmt] ')' Stmt
-        // | 'break' ';' | 'continue' ';' // i
+        // | 'break' ';' // i
+        // | 'continue' ';' // i
         // | 'return' [Exp] ';' // i
         // | 'printf' '(' StringConst { ',' Exp } ')' ';' // i j
-        define(Stmt,
-            or(seq(rule(LVal), term(ASSIGN), rule(Exp), term(SEMICN, "i")), seq(opt(rule(Exp)), term(SEMICN, "i")),
-                rule(Block),
-                seq(term(IFTK), term(LPARENT), rule(Cond), term(RPARENT, "j"), rule(Stmt),
-                    opt(seq(term(ELSETK), rule(Stmt)))),
-                seq(term(FORTK), term(LPARENT), opt(rule(ForStmt)), term(SEMICN), opt(rule(Cond)), term(SEMICN),
-                    opt(rule(ForStmt)), term(RPARENT), rule(Stmt)),
-                or(seq(term(BREAKTK), term(SEMICN, "i")), seq(term(CONTINUETK), term(SEMICN, "i"))),
-                seq(term(RETURNTK), opt(rule(Exp)), term(SEMICN, "i")), seq(term(PRINTFTK), term(LPARENT), term(STRCON),
-                    many(seq(term(COMMA), rule(Exp))), term(RPARENT, "j"), term(SEMICN, "i"))));
+        // | [Exp] ';' // i
+        define(Stmt, or(seq(rule(LVal), term(ASSIGN), rule(Exp), term(SEMICN, "i")), // AssignStmt
+            rule(Block), // BlockStmt
+            seq(term(IFTK), term(LPARENT), rule(Cond), term(RPARENT, "j"), rule(Stmt),
+                opt(seq(term(ELSETK), rule(Stmt)))), // IfStmt
+            seq(term(FORTK), term(LPARENT), opt(rule(ForStmt)), term(SEMICN), opt(rule(Cond)), term(SEMICN),
+                opt(rule(ForStmt)), term(RPARENT), rule(Stmt)), // ForLoopStmt
+            seq(term(BREAKTK), term(SEMICN, "i")), // BreakStmt
+            seq(term(CONTINUETK), term(SEMICN, "i")), // ContinueStmt
+            seq(term(RETURNTK), opt(rule(Exp)), term(SEMICN, "i")), // ReturnStmt
+            seq(term(PRINTFTK), term(LPARENT), term(STRCON), many(seq(term(COMMA), rule(Exp))), term(RPARENT, "j"),
+                term(SEMICN, "i")), // PrintfStmt
+            or(term(SEMICN), seq(rule(Exp), term(SEMICN, "i"))))); // ExpStmt
         // 语句 ForStmt → LVal '=' Exp { ',' LVal '=' Exp }
         define(ForStmt,
             seq(rule(LVal), term(ASSIGN), rule(Exp), many(seq(term(COMMA), rule(LVal), term(ASSIGN), rule(Exp)))));
@@ -151,10 +169,9 @@ public class Parser {
         define(PrimaryExp, or(seq(term(LPARENT), rule(Exp), term(RPARENT, "j")), rule(LVal), rule(Number)));
         // 数值 Number → IntConst
         define(Number, term(INTCON));
-        // 一元表达式 UnaryExp → PrimaryExp | Ident '(' [FuncRParams] ')' | UnaryOp UnaryExp
-        // // j
+        // 一元表达式 UnaryExp → Ident '(' [FuncRParams] ')' | PrimaryExp | UnaryOp UnaryExp // j
         define(UnaryExp, or(seq(term(IDENFR), term(LPARENT), opt(rule(FuncRParams)), term(RPARENT, "j")),
-            seq(rule(UnaryOp), rule(UnaryExp)), rule(PrimaryExp)));
+            rule(PrimaryExp), seq(rule(UnaryOp), rule(UnaryExp))));
         // 单目运算符 UnaryOp → '+' | '−' | '!' 注：'!'仅出现在条件表达式中
         define(UnaryOp, or(term(PLUS), term(MINU), term(NOT)));
         // 函数实参表 FuncRParams → Exp { ',' Exp }
@@ -192,11 +209,21 @@ public class Parser {
             }
             if (errorCode != null && !errorCode.isEmpty()) {
                 try {
-                    reporter.report(tokens.peek(-1).line(), ErrorType.fromCode(errorCode), type.name());
+                    int line = tokens.peek(-1).line();
+                    reporter.report(line, ErrorType.fromCode(errorCode), type.name());
+                    String lexeme = switch (type) {
+                        case SEMICN -> ";";
+                        case RPARENT -> ")";
+                        case RBRACK -> "]";
+                        default -> "";
+                    };
+                    Token token = new Token(type, lexeme, line);
+                    return Optional.of(List.of(token));
                 } catch (IllegalArgumentException e) {
                     throw new SyntacticException("Unknown error code: " + errorCode);
                 }
             }
+            log("✗ Match failed for terminal: " + type + ". Found: " + tokens.peek(0).type());
             return Optional.empty();
         };
     }
@@ -206,13 +233,18 @@ public class Parser {
     }
 
     private void log(String msg) {
-        logs.add(msg);
+        Token current = tokens.peek(0);
+        String info = String.format("[line %d, pos %d, token: %s '%s']", current.line(), tokens.save(), current.type(),
+            current.lexeme());
+        logger.log(msg + " @ " + info);
     }
 
     private ParserCombinator nonTerm(CstType type, ParserCombinator rule) {
         return parser -> {
             log("-> Enter " + type);
+            logger.indent();
             Optional<List<CstNode>> res = rule.parse(parser);
+            logger.dedent();
             if (res.isPresent()) {
                 log("<- Success " + type);
                 NonTerm node = new NonTerm(type);
@@ -236,27 +268,33 @@ public class Parser {
 
     private ParserCombinator seq(ParserCombinator... combinators) {
         return parser -> {
-            int backup = parser.tokens.save();
+            final int logs = logger.save();
             List<CstNode> results = new ArrayList<>();
             for (ParserCombinator combinator : combinators) {
+                logger.indent();
                 Optional<List<CstNode>> result = combinator.parse(parser);
+                logger.dedent();
                 if (result.isEmpty()) {
-                    parser.tokens.restore(backup);
                     return Optional.empty();
                 }
                 results.addAll(result.get());
             }
+            logger.restore(logs);
             return Optional.of(results);
         };
     }
 
     private ParserCombinator or(ParserCombinator... combinators) {
         return parser -> {
-            BacktrackMgr.Snapshot snapshot = backtrackMgr.save();
+            final BacktrackMgr.Snapshot snapshot = backtrackMgr.save();
+            final int logs = logger.save();
 
             for (ParserCombinator combinator : combinators) {
+                logger.indent();
                 Optional<List<CstNode>> result = combinator.parse(parser);
+                logger.dedent();
                 if (result.isPresent()) {
+                    logger.restore(logs);
                     return result;
                 }
                 backtrackMgr.restore(snapshot);
@@ -269,8 +307,10 @@ public class Parser {
         return parser -> {
             List<CstNode> results = new ArrayList<>();
             while (true) {
+                final BacktrackMgr.Snapshot snapshot = backtrackMgr.save();
                 Optional<List<CstNode>> result = combinator.parse(parser);
                 if (result.isEmpty()) {
+                    backtrackMgr.restore(snapshot);
                     break;
                 }
                 results.addAll(result.get());
@@ -281,8 +321,13 @@ public class Parser {
 
     private ParserCombinator opt(ParserCombinator combinator) {
         return parser -> {
+            final BacktrackMgr.Snapshot snapshot = backtrackMgr.save();
             Optional<List<CstNode>> result = combinator.parse(parser);
-            return result.or(() -> Optional.of(new ArrayList<>()));
+            if (result.isEmpty()) {
+                backtrackMgr.restore(snapshot);
+                return Optional.of(new ArrayList<>());
+            }
+            return result;
         };
     }
 
