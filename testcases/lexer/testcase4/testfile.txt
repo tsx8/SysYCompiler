@@ -1,52 +1,51 @@
-/*
-多重背包的二进制优化
-取自ACWing第5题
-*/
+/* 质因数分解 */
 
-// #include<stdio.h>
-
-const int maxn = 200004;
-int N, V;
-int sum = 1;
-int dp[2003];
-
-int max(int a, int b) {
-	if(a > b) return a;
-	return b;
+int isPrime(int x) {
+	int i = 2;
+	for (; i * i <= x; i = i + 1) {
+		if (x % i == 0) return 0;
+	}
+	return 1;
 }
 
 int main() {
-	N = getint();
-	V = getint();
-	int i,j;
-	int v[maxn], w[maxn];
+	int n = getint();
+	int last = 0;
+	int pow = 1;
 
-	for (i = 1; i <= N; i = i + 1) {
-		int a = getint(); // 体积
-		int b = getint(); // 价值
-		int c = getint(); // 数量
-
-		// 二进制优化
-		for(j = 1; j <= c; j = j * 2){
-			v[sum] = j * a;
-			w[sum] = j * b;
-			sum = sum + 1;
-			c = c - j;
+	for(;n>1;){
+		if (isPrime(n)) {
+			if(n == last){
+				printf("%d^%d", last, pow + 1);
+			} else if (pow > 1 && last != 0) {
+				printf("%d^%d * %d", last, pow, n);
+			} else if(pow == 1 && last != 0){
+				printf("%d * %d", last, n);
+			} else if(last == 0){
+				printf("%d",n);
+			}
+			return 0;
 		}
 
-		if(c){ // 剩余
-			v[sum] = c * a;
-			w[sum] = c * b;
-			sum = sum + 1;
+		int i = 2;
+		for (; i * i <= n; i = i + 1) {
+			if (n % i == 0) {
+				if (last == i) {
+					pow = pow + 1;
+				} else {
+					if (pow > 1 && last != 0) {
+						printf("%d^%d * ", last, pow);
+					} else if(pow == 1 && last != 0){
+						printf("%d * ", last);
+					}
+					last = i;
+					pow = 1;
+				}
+				n = n / i;
+				break;
+			}
 		}
+
 	}
-
-	for (i = 1; i <= sum; i = i + 1 ) {
-		for (j = V; j >= v[i]; j = j - 1) {
-			dp[j] = max(dp[j], dp[j - v[i]] + w[i]);
-		}
-	}
-
-	printf("%d", dp[V]);
 	return 0;
 }

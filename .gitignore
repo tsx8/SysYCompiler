@@ -2,3 +2,5 @@
 out/
 *.class
 /*.txt
+/*.zip
+/*.xml

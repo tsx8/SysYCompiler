@@ -48,11 +48,11 @@ int main()
 	if (0 && func()){
 		;
 	}
-	printf("%d",global_var);
+	printf("%d",global_var); // 输出 0
 	if (1 || func()) {
 		;
 	}
-	printf("%d",global_var);
+	printf("%d",global_var); // 输出 0
 
 	i = 1;
 	if (i == 1)

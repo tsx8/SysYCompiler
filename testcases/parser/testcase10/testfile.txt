@@ -1,43 +1,52 @@
-int arr[105] = {10, 25, -3, 2, 4, 0, 0, 0, 0, 0, 0};
+/*
+多重背包的二进制优化
+取自ACWing第5题
+*/
 
-//测试数组在函数形参中
-int getSum(int a[], int len) {
-	int i = 0, sum = 0;
-	for (; i < len; i = i + 1) {
-		if (a[i] > 100)
-			continue;
-		sum = sum + a[i];
-	}
-	return sum;
-}
+// #include<stdio.h>
 
-void testArray(int a[]) {
-	int b[105] = {0, 0, 0, 0, 0, 0, 0, 0}, i = 0, j = 0;
-	for (; i < 10;) {
-		if (!a[i]) {
-			i = i + 1;
-			continue;
-		}
-		b[j] = a[i];
-		i = i + 1;
-		j = j + 1;
-	}
-	int k;
-	for (k = 0;; k = k + 1) {
-		if (k == j)
-			break;
-		printf("%d ", b[k]);
-	}
-	return;
+const int maxn = 200004;
+int N, V;
+int sum = 1;
+int dp[2003];
+
+int max(int a, int b) {
+	if(a > b) return a;
+	return b;
 }
 
 int main() {
-	printf("23371008\n");
-	int a[5] = {0, -2, 50, 123, 3};
-	printf("%d\n", getSum(a, 5));
-	printf("%d\n", arr[0]);
-	printf("%d\n", arr[5]);
-	testArray(arr);
-	printf("\nTest is over.");
+	N = getint();
+	V = getint();
+	int i,j;
+	int v[maxn], w[maxn];
+
+	for (i = 1; i <= N; i = i + 1) {
+		int a = getint(); // 体积
+		int b = getint(); // 价值
+		int c = getint(); // 数量
+
+		// 二进制优化
+		for(j = 1; j <= c; j = j * 2){
+			v[sum] = j * a;
+			w[sum] = j * b;
+			sum = sum + 1;
+			c = c - j;
+		}
+
+		if(c){ // 剩余
+			v[sum] = c * a;
+			w[sum] = c * b;
+			sum = sum + 1;
+		}
+	}
+
+	for (i = 1; i <= sum; i = i + 1 ) {
+		for (j = V; j >= v[i]; j = j - 1) {
+			dp[j] = max(dp[j], dp[j - v[i]] + w[i]);
+		}
+	}
+
+	printf("%d", dp[V]);
 	return 0;
 }

@@ -1,6 +1,34 @@
 int i;
 int ii = 0;
+void func1()
+{
+    printf("crsb\n");
+    return;
+}
 
+int func2(int a)
+{
+    printf("%d crsb\n", a);
+    return a;
+}
+
+void func3(int a[])
+{
+    printf("%d crsb\n", a[0]);
+    return;
+}
+
+int func4(int a, int b)
+{
+    printf("%d %d crsb\n", a, b);
+    return b;
+}
+
+void func5(int a[], int b)
+{
+    printf("%d %d crsb\n", a[0], b);
+    return;
+}
 int main()
 {
     printf("22373340\n");
@@ -78,8 +106,8 @@ int main()
     int c2;
     int ii3, ii4;
     int cc3, cc4;
-    int ia2[5];
-    int ca2[5];
+    int ia2[5] = {1, 2, 3, 4, 5};
+    int ca2[5] = {1, 2, 3, 4};
 
 	i2 = 1+1;
 	i2 = 1*1;
@@ -89,5 +117,10 @@ int main()
 	i2 = (1+1)*i2;
 	i2 = (114+3)/(1+1);
 
+    func1();
+    func2(i1);
+    func3(ia2);
+    func4(i1, c1);
+    func5(ca2,i1);
     return 0;
 }

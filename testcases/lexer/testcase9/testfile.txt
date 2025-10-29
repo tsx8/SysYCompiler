@@ -1,46 +1,43 @@
-/*
-求[a,b](5≤a<b≤100,000,000)（一亿）间的所有回文质数
-来自洛谷 https://www.luogu.com.cn/problem/P1217
- */
+int arr[105] = {10, 25, -3, 2, 4, 0, 0, 0, 0, 0, 0};
 
-// #include<stdio.h>
-
-int isSymmetry(int x) {
-	int copy = x, res = 0;
-	for(; copy!= 0;){
-        res = res * 10 + copy % 10;
-        copy = copy / 10;
+//测试数组在函数形参中
+int getSum(int a[], int len) {
+	int i = 0, sum = 0;
+	for (; i < len; i = i + 1) {
+		if (a[i] > 100)
+			continue;
+		sum = sum + a[i];
 	}
-	if (res == x) return 1;
-	return 0;
+	return sum;
 }
 
-int isPrime(int x) {
-    int i = 2;
-	for (; i * i <= x; i = i + 1) {
-		if (x % i == 0) {
-			return 0;
+void testArray(int a[]) {
+	int b[105] = {0, 0, 0, 0, 0, 0, 0, 0}, i = 0, j = 0;
+	for (; i < 10;) {
+		if (!a[i]) {
+			i = i + 1;
+			continue;
 		}
+		b[j] = a[i];
+		i = i + 1;
+		j = j + 1;
 	}
-	return 1;
+	int k;
+	for (k = 0;; k = k + 1) {
+		if (k == j)
+			break;
+		printf("%d ", b[k]);
+	}
+	return;
 }
 
 int main() {
-    int a = getint();
-    int b = getint();
-    int i = a;
-
-	for (; i <= b; i = i + 1) {
-		if (i == 2) { // 2 是回文质数
-			printf("2\n");
-			continue;
-		} else if (i % 2 == 0) { // 偶数不是回文质数
-			continue;
-		} else if(isSymmetry(i)) {
-			if (isPrime(i)) {
-				printf("%d\n", i);
-			}
-		}
-	}
+	printf("23371008\n");
+	int a[5] = {0, -2, 50, 123, 3};
+	printf("%d\n", getSum(a, 5));
+	printf("%d\n", arr[0]);
+	printf("%d\n", arr[5]);
+	testArray(arr);
+	printf("\nTest is over.");
 	return 0;
 }
