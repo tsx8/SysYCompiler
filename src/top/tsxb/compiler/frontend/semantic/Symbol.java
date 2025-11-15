@@ -24,7 +24,7 @@ public record Symbol(String name, Type type, int scopeLevel, boolean isConst, bo
                 return "StaticInt";
             return "Int";
         }
-        if (type instanceof ArrayType) {
+        if (type instanceof ArrayType || type instanceof PointerType) {
             if (isConst)
                 return "ConstIntArray";
             if (isStatic)

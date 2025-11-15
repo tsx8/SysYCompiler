@@ -23,7 +23,7 @@ public class SymbolTable {
         this.currentScope = rootScope;
         FunctionType getintType = new FunctionType(IntegerType.getInstance(), Collections.emptyList());
         Symbol getintSymbol = new Symbol("getint", getintType, 1, false, false, Collections.emptyList(), null);
-        this.define(getintSymbol);
+        this.rootScope.define(getintSymbol);
     }
 
     public void enterScope(AstNode node) {
@@ -68,7 +68,7 @@ public class SymbolTable {
     }
 
     public String getOutput() {
-        return symbols.stream().sorted(Comparator.comparingInt(Symbol::scopeLevel).thenComparing(s -> 0))
+        return symbols.stream().sorted(Comparator.comparingInt(Symbol::scopeLevel))
             .map(Symbol::toString).collect(Collectors.joining(System.lineSeparator()));
     }
 }

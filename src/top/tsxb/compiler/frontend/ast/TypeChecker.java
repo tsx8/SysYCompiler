@@ -168,12 +168,10 @@ public class TypeChecker implements AstVisitor<Type> {
     @Override
     public Type visit(ReturnStmt node) {
         Type rt = currentFuncDef.funcType;
-        if (rt instanceof VoidType) {
-            if (node.retVal != null) {
+        if (node.retVal != null) {
+            if (rt instanceof VoidType) {
                 errorReporter.report(node.lineNumber, ErrorType.VOID_FUNC_WITH_RETURN_VALUE, currentFuncDef.name);
-            }
-        } else if (rt instanceof IntegerType) {
-            if (node.retVal != null) {
+            } else if (rt instanceof IntegerType) {
                 node.retVal.accept(this);
             }
         }
