@@ -5,6 +5,8 @@ package top.tsxb.compiler.driver;
  */
 public final class CompilerConfig {
     public static final boolean DEBUG = false;
+    public static final String PROGRAMMING_LANGUAGE = "java";
+    public static final String OBJECT_CODE = "mips";
     public static final String CURRENT_HOMEWORK = "semantic";
     public static final String SOURCE_FILE = "testfile.txt";
     public static final String ERROR_FILE = "error.txt";

@@ -1,5 +1,7 @@
 package top.tsxb.compiler.common;
 
+import top.tsxb.compiler.driver.CompilerConfig;
+
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -7,8 +9,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -44,16 +44,19 @@ public class Packaging {
         String zipFileName = String.format("homework_%s.zip", timestamp);
         Path zipFilePath = targetDir.resolve(zipFileName);
 
-        Map<String, String> configData = new HashMap<>();
-        configData.put("programming language", "java");
-        configData.put("object code", "mips");
-        String configJson = createConfigJson(configData);
+        String bootstrap = createBootstrap();
+        String configJson = createConfigJson();
 
         try (FileOutputStream fos = new FileOutputStream(zipFilePath.toFile());
             ZipOutputStream zos = new ZipOutputStream(fos)) {
             ZipEntry configEntry = new ZipEntry("config.json");
             zos.putNextEntry(configEntry);
             zos.write(configJson.getBytes());
+            zos.closeEntry();
+
+            ZipEntry compilerEntry = new ZipEntry("Compiler.java");
+            zos.putNextEntry(compilerEntry);
+            zos.write(bootstrap.getBytes());
             zos.closeEntry();
 
             try (Stream<Path> paths = Files.walk(sourceDir)) {
@@ -77,8 +80,19 @@ public class Packaging {
         }
     }
 
-    private static String createConfigJson(Map<String, String> configData) {
-        return "{\n" + "  \"programming language\": \"" + configData.get("programming language") + "\",\n"
-            + "  \"object code\": \"" + configData.get("object code") + "\"\n" + "}";
+    private static String createConfigJson() {
+        return "{\n" + "  \"programming language\": \"" + CompilerConfig.PROGRAMMING_LANGUAGE + "\",\n"
+            + "  \"object code\": \"" + CompilerConfig.OBJECT_CODE + "\"\n" + "}";
+    }
+
+    private static String createBootstrap() {
+        return """
+            public class Compiler {
+                public static void main(String[] args) {
+                    // 调用实际的、带有包路径的主类
+                    top.tsxb.compiler.driver.Compiler.main(args);
+                }
+            }
+            """;
     }
 }
