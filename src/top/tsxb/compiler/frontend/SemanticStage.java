@@ -18,9 +18,6 @@ public class SemanticStage implements CompilerStage<CstNode, AstNode> {
 
         SymbolTable symbolTable = new SymbolTable();
 
-        SymbolCollector symbolCollector = new SymbolCollector(symbolTable, errorReporter);
-        astRoot.accept(symbolCollector);
-
         TypeChecker typeChecker = new TypeChecker(symbolTable, errorReporter);
         astRoot.accept(typeChecker);
 

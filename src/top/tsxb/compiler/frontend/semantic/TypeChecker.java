@@ -1,9 +1,10 @@
 package top.tsxb.compiler.frontend.semantic;
 
+import java.util.List;
+
 import top.tsxb.compiler.common.ErrorReporter;
 import top.tsxb.compiler.common.ErrorType;
 import top.tsxb.compiler.ir.ast.*;
-import top.tsxb.compiler.ir.symtab.Scope;
 import top.tsxb.compiler.ir.symtab.Symbol;
 import top.tsxb.compiler.ir.symtab.SymbolTable;
 import top.tsxb.compiler.ir.type.ArrayType;
@@ -16,15 +17,15 @@ import top.tsxb.compiler.ir.type.VoidType;
 public class TypeChecker implements AstVisitor<Type> {
     private final SymbolTable symbolTable;
     private final ErrorReporter errorReporter;
+    private final SymbolCollector symbolCollector;
 
     private FuncDef currentFuncDef = null;
     private int loopDepth = 0;
-    private Scope currentScope;
 
     public TypeChecker(SymbolTable symbolTable, ErrorReporter errorReporter) {
         this.symbolTable = symbolTable;
         this.errorReporter = errorReporter;
-        this.currentScope = symbolTable.getRootScope();
+        this.symbolCollector = new SymbolCollector(symbolTable);
     }
 
     @Override
@@ -37,10 +38,14 @@ public class TypeChecker implements AstVisitor<Type> {
 
     @Override
     public Type visit(FuncDef node) {
+        Symbol funcSymbol = (Symbol)symbolCollector.visit(node);
+        if (funcSymbol != null && !symbolTable.define(funcSymbol)) {
+            errorReporter.report(node.lineNumber, ErrorType.fromCode("b"), node.name);
+        }
+
         FuncDef previousFuncDef = currentFuncDef;
         this.currentFuncDef = node;
-        Scope previousScope = currentScope;
-        this.currentScope = symbolTable.getScope(node);
+        symbolTable.enterScope(node);
         try {
             if (node.params != null) {
                 for (FuncParam param : node.params) {
@@ -63,22 +68,33 @@ public class TypeChecker implements AstVisitor<Type> {
                 }
             }
         } finally {
+            symbolTable.exitScope();
             currentFuncDef = previousFuncDef;
-            currentScope = previousScope;
         }
         return null;
     }
 
     @Override
     public Type visit(FuncParam node) {
+        Symbol paramSymbol = (Symbol)symbolCollector.visit(node);
+        if (paramSymbol != null && !symbolTable.define(paramSymbol)) {
+            errorReporter.report(node.lineNumber, ErrorType.fromCode("b"), node.name);
+        }
         return node.type;
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public Type visit(VarDecl node) {
-        if (node.varSpecs != null) {
-            for (VarSpec varSpec : node.varSpecs) {
-                varSpec.accept(this);
+        List<Symbol> symbols = (List<Symbol>)symbolCollector.visit(node);
+        if (symbols != null) {
+            for (int i = 0; i < symbols.size(); i++) {
+                Symbol symbol = symbols.get(i);
+                VarSpec spec = node.varSpecs.get(i);
+                if (!symbolTable.define(symbol)) {
+                    errorReporter.report(spec.lineNumber, ErrorType.fromCode("b"), spec.name);
+                }
+                spec.accept(this);
             }
         }
         return null;
@@ -86,6 +102,11 @@ public class TypeChecker implements AstVisitor<Type> {
 
     @Override
     public Type visit(VarSpec node) {
+        if (node.dims != null) {
+            for (Expr expr : node.dims) {
+                expr.accept(this);
+            }
+        }
         if (node.initVal != null) {
             node.initVal.accept(this);
         }
@@ -94,12 +115,14 @@ public class TypeChecker implements AstVisitor<Type> {
 
     @Override
     public Type visit(BlockStmt node) {
-        Scope previousScope = currentScope;
-        currentScope = symbolTable.getScope(node);
-        for (AstNode item : node.items) {
-            item.accept(this);
+        symbolTable.enterScope(node);
+        try {
+            for (AstNode item : node.items) {
+                item.accept(this);
+            }
+        } finally {
+            symbolTable.exitScope();
         }
-        currentScope = previousScope;
         return null;
     }
 
@@ -218,7 +241,7 @@ public class TypeChecker implements AstVisitor<Type> {
 
     @Override
     public Type visit(FuncCall node) {
-        Symbol symbol = currentScope.lookup(node.name);
+        Symbol symbol = symbolTable.lookup(node.name);
         if (symbol == null) {
             errorReporter.report(node.lineNumber, ErrorType.fromCode("c"), node.name);
             node.type = IntegerType.getInstance();
@@ -254,7 +277,7 @@ public class TypeChecker implements AstVisitor<Type> {
 
     @Override
     public Type visit(LVal node) {
-        Symbol symbol = currentScope.lookup(node.name);
+        Symbol symbol = symbolTable.lookup(node.name);
         if (symbol == null) {
             errorReporter.report(node.lineNumber, ErrorType.fromCode("c"), node.name);
             node.type = IntegerType.getInstance();
