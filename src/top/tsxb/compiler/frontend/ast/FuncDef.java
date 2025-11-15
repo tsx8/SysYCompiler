@@ -8,12 +8,12 @@ import top.tsxb.compiler.frontend.semantic.Type;
 public class FuncDef extends Decl {
     public final Type funcType;
     public final String name;
-    public final List<VarDecl> params;
+    public final List<FuncParam> params;
     public final BlockStmt body;
 
     public Symbol symbol;
 
-    public FuncDef(Type funcType, String name, List<VarDecl> params, BlockStmt body) {
+    public FuncDef(Type funcType, String name, List<FuncParam> params, BlockStmt body) {
         this.funcType = funcType;
         this.name = name;
         this.params = params;

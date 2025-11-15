@@ -3,6 +3,7 @@ package top.tsxb.compiler.frontend.ast;
 public interface AstVisitor<T> {
     T visit(CompUnit node);
     T visit(FuncDef node);
+    T visit(FuncParam node);
     T visit(VarDecl node);
     T visit(VarSpec node);
 

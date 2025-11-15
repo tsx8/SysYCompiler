@@ -86,8 +86,8 @@ public class AstBuilder implements CstVisitor<Object> {
     private FuncDef buildFuncDef(NonTerm node) {
         Type funcType = Cst.build(node, CstType.FuncType, n -> (Type)n.accept(this));
         String name = Cst.lexeme(node, TokenType.IDENFR);
-        List<VarDecl> params =
-            Cst.buildOpt(node, CstType.FuncFParams, n -> (List<VarDecl>)n.accept(this)).orElse(Collections.emptyList());
+        List<FuncParam> params =
+            Cst.buildOpt(node, CstType.FuncFParams, n -> (List<FuncParam>)n.accept(this)).orElse(Collections.emptyList());
         BlockStmt body = Cst.build(node, CstType.Block, n -> (BlockStmt)n.accept(this));
         FuncDef funcDef = new FuncDef(funcType, name, params, body);
         Cst.find(node, TokenType.IDENFR).ifPresent(token -> funcDef.lineNumber = token.line());
@@ -101,17 +101,17 @@ public class AstBuilder implements CstVisitor<Object> {
         return funcDef;
     }
 
-    private List<VarDecl> buildFuncFParams(NonTerm node) {
-        return Cst.buildAll(node, CstType.FuncFParam, n -> (VarDecl)n.accept(this));
+    private List<FuncParam> buildFuncFParams(NonTerm node) {
+        return Cst.buildAll(node, CstType.FuncFParam, n -> (FuncParam) n.accept(this));
     }
 
-    private VarDecl buildFuncFParam(NonTerm node) {
+    private FuncParam buildFuncFParam(NonTerm node) {
         Type type = Cst.build(node, CstType.BType, n -> (Type)n.accept(this));
         String name = Cst.lexeme(node, TokenType.IDENFR);
         boolean isArray = Cst.has(node, TokenType.LBRACK);
-        VarDecl varDecl = new VarDecl(type, name, isArray);
-        Cst.find(node, TokenType.IDENFR).ifPresent(token -> varDecl.lineNumber = token.line());
-        return varDecl;
+        FuncParam funcParam = new FuncParam(type, name, isArray);
+        Cst.find(node, TokenType.IDENFR).ifPresent(token -> funcParam.lineNumber = token.line());
+        return funcParam;
     }
 
     private VarDecl buildVarDecl(NonTerm node) {

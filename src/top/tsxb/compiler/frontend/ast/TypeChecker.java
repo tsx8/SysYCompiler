@@ -42,8 +42,8 @@ public class TypeChecker implements AstVisitor<Type> {
         this.currentScope = symbolTable.getScope(node);
         try {
             if (node.params != null) {
-                for (VarDecl varDecl : node.params) {
-                    varDecl.accept(this);
+                for (FuncParam param : node.params) {
+                    param.accept(this);
                 }
             }
             for (AstNode item : node.body.items) {
@@ -66,6 +66,11 @@ public class TypeChecker implements AstVisitor<Type> {
             currentScope = previousScope;
         }
         return null;
+    }
+
+    @Override
+    public Type visit(FuncParam node) {
+        return node.type;
     }
 
     @Override

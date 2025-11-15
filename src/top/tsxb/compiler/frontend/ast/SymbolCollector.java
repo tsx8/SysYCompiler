@@ -38,8 +38,8 @@ public class SymbolCollector implements AstVisitor<Void> {
         if (!node.name.equals("main")) {
             List<Type> paramTypes = new ArrayList<>();
             if (node.params != null) {
-                for (VarDecl param : node.params) {
-                    if (param.isParamArray) {
+                for (FuncParam param : node.params) {
+                    if (param.isArray) {
                         paramTypes.add(new PointerType(param.type));
                     } else {
                         paramTypes.add(param.type);
@@ -48,8 +48,8 @@ public class SymbolCollector implements AstVisitor<Void> {
             }
             FunctionType funcType = new FunctionType(node.funcType, paramTypes);
 
-            Symbol funcSym =
-                new Symbol(node.name, funcType, symbolTable.getCurrentScopeId(), false, false, Collections.emptyList(), null);
+            Symbol funcSym = new Symbol(node.name, funcType, symbolTable.getCurrentScopeId(), false, false,
+                Collections.emptyList(), null);
             if (!symbolTable.define(funcSym)) {
                 errorReporter.report(node.lineNumber, ErrorType.fromCode("b"), node.name);
             }
@@ -57,7 +57,7 @@ public class SymbolCollector implements AstVisitor<Void> {
         }
         symbolTable.enterScope(node);
         if (node.params != null) {
-            for (VarDecl param : node.params) {
+            for (FuncParam param : node.params) {
                 param.accept(this);
             }
         }
@@ -70,20 +70,6 @@ public class SymbolCollector implements AstVisitor<Void> {
 
     @Override
     public Void visit(VarDecl node) {
-        if (node.varSpecs == null) {
-            if (node.paramName != null) {
-                Type paramType = node.type;
-                if (node.isParamArray) {
-                    paramType = new PointerType(paramType);
-                }
-                Symbol paramSym =
-                    new Symbol(node.paramName, paramType, symbolTable.getCurrentScopeId(), false, false, null, null);
-                if (!symbolTable.define(paramSym)) {
-                    errorReporter.report(node.lineNumber, ErrorType.fromCode("b"), node.paramName);
-                }
-            }
-            return null;
-        }
         for (VarSpec spec : node.varSpecs) {
             List<Integer> dims = new ArrayList<>();
             Type finalType = node.type;
@@ -103,13 +89,28 @@ public class SymbolCollector implements AstVisitor<Void> {
                 constValue = constEvaluator.evaluate(spec.initVal).orElse(null);
             }
 
-            Symbol symbol =
-                new Symbol(spec.name, finalType, symbolTable.getCurrentScopeId(), node.isConst, node.isStatic, dims, constValue);
+            Symbol symbol = new Symbol(spec.name, finalType, symbolTable.getCurrentScopeId(), node.isConst,
+                node.isStatic, dims, constValue);
             if (!symbolTable.define(symbol)) {
                 errorReporter.report(spec.lineNumber, ErrorType.fromCode("b"), spec.name);
             }
             spec.symbol = symbol;
         }
+        return null;
+    }
+
+    @Override
+    public Void visit(FuncParam node) {
+        Type paramType = node.type;
+        if (node.isArray) {
+            paramType = new PointerType(paramType);
+        }
+        Symbol paramSym = new Symbol(node.name, paramType, symbolTable.getCurrentScopeId(), false, false,
+            Collections.emptyList(), null);
+        if (!symbolTable.define(paramSym)) {
+            errorReporter.report(node.lineNumber, ErrorType.fromCode("b"), node.name);
+        }
+        node.symbol = paramSym;
         return null;
     }
 

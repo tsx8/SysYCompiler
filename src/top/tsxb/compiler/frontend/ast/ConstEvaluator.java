@@ -19,7 +19,8 @@ public record ConstEvaluator(SymbolTable symbolTable) implements AstVisitor<Opti
         return Optional.of(node.value);
     }
 
-    @Override public Optional<Integer> visit(ArrayInitializer node) {
+    @Override
+    public Optional<Integer> visit(ArrayInitializer node) {
         return Optional.empty();
     }
 
@@ -53,59 +54,78 @@ public record ConstEvaluator(SymbolTable symbolTable) implements AstVisitor<Opti
         };
     }
 
-    @Override public Optional<Integer> visit(FuncCall node) {
+    @Override
+    public Optional<Integer> visit(FuncParam node) {
         return Optional.empty();
     }
 
-    @Override public Optional<Integer> visit(CompUnit node) {
+    @Override
+    public Optional<Integer> visit(FuncCall node) {
         return Optional.empty();
     }
 
-    @Override public Optional<Integer> visit(FuncDef node) {
+    @Override
+    public Optional<Integer> visit(CompUnit node) {
         return Optional.empty();
     }
 
-    @Override public Optional<Integer> visit(VarDecl node) {
+    @Override
+    public Optional<Integer> visit(FuncDef node) {
         return Optional.empty();
     }
 
-    @Override public Optional<Integer> visit(VarSpec node) {
+    @Override
+    public Optional<Integer> visit(VarDecl node) {
         return Optional.empty();
     }
 
-    @Override public Optional<Integer> visit(BlockStmt node) {
+    @Override
+    public Optional<Integer> visit(VarSpec node) {
         return Optional.empty();
     }
 
-    @Override public Optional<Integer> visit(AssignStmt node) {
+    @Override
+    public Optional<Integer> visit(BlockStmt node) {
         return Optional.empty();
     }
 
-    @Override public Optional<Integer> visit(ExprStmt node) {
+    @Override
+    public Optional<Integer> visit(AssignStmt node) {
         return Optional.empty();
     }
 
-    @Override public Optional<Integer> visit(IfStmt node) {
+    @Override
+    public Optional<Integer> visit(ExprStmt node) {
         return Optional.empty();
     }
 
-    @Override public Optional<Integer> visit(ForLoopStmt node) {
+    @Override
+    public Optional<Integer> visit(IfStmt node) {
         return Optional.empty();
     }
 
-    @Override public Optional<Integer> visit(BreakStmt node) {
+    @Override
+    public Optional<Integer> visit(ForLoopStmt node) {
         return Optional.empty();
     }
 
-    @Override public Optional<Integer> visit(ContinueStmt node) {
+    @Override
+    public Optional<Integer> visit(BreakStmt node) {
         return Optional.empty();
     }
 
-    @Override public Optional<Integer> visit(ReturnStmt node) {
+    @Override
+    public Optional<Integer> visit(ContinueStmt node) {
         return Optional.empty();
     }
 
-    @Override public Optional<Integer> visit(PrintfStmt node) {
+    @Override
+    public Optional<Integer> visit(ReturnStmt node) {
+        return Optional.empty();
+    }
+
+    @Override
+    public Optional<Integer> visit(PrintfStmt node) {
         return Optional.empty();
     }
 
