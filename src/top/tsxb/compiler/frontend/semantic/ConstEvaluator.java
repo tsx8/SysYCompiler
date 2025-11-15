@@ -2,13 +2,11 @@ package top.tsxb.compiler.frontend.semantic;
 
 import java.util.Optional;
 
-import top.tsxb.compiler.common.ErrorReporter;
-import top.tsxb.compiler.common.ErrorType;
 import top.tsxb.compiler.ir.ast.*;
 import top.tsxb.compiler.ir.symtab.Symbol;
 import top.tsxb.compiler.ir.symtab.SymbolTable;
 
-public record ConstEvaluator(SymbolTable symbolTable, ErrorReporter errorReporter) implements AstVisitor<Optional<Integer>> {
+public record ConstEvaluator(SymbolTable symbolTable) implements AstVisitor<Optional<Integer>> {
 
     public Optional<Integer> evaluate(Expr node) {
         if (node == null) {
@@ -34,12 +32,8 @@ public record ConstEvaluator(SymbolTable symbolTable, ErrorReporter errorReporte
         }
 
         Symbol symbol = symbolTable.lookup(node.name);
-        if (symbol == null) {
-            errorReporter.report(node.lineNumber, ErrorType.fromCode("c"), node.name);
-            return Optional.empty();
-        }
 
-        if (symbol.isConst() && symbol.constValue() != null) {
+        if (symbol != null && symbol.isConst() && symbol.constValue() != null) {
             return Optional.of(symbol.constValue());
         }
 

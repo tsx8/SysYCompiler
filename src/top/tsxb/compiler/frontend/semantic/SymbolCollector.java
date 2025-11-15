@@ -5,8 +5,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
-import top.tsxb.compiler.common.ErrorReporter;
-import top.tsxb.compiler.common.ErrorType;
 import top.tsxb.compiler.ir.ast.*;
 import top.tsxb.compiler.ir.symtab.Symbol;
 import top.tsxb.compiler.ir.symtab.SymbolTable;
@@ -15,62 +13,46 @@ import top.tsxb.compiler.ir.type.FunctionType;
 import top.tsxb.compiler.ir.type.PointerType;
 import top.tsxb.compiler.ir.type.Type;
 
-public class SymbolCollector implements AstVisitor<Void> {
+public class SymbolCollector implements AstVisitor<Object> {
     private final SymbolTable symbolTable;
-    private final ErrorReporter errorReporter;
     private final ConstEvaluator constEvaluator;
 
-    public SymbolCollector(SymbolTable symbolTable, ErrorReporter errorReporter) {
+    public SymbolCollector(SymbolTable symbolTable) {
         this.symbolTable = symbolTable;
-        this.errorReporter = errorReporter;
-        this.constEvaluator = new ConstEvaluator(symbolTable, errorReporter);
+        this.constEvaluator = new ConstEvaluator(symbolTable);
     }
 
     @Override
-    public Void visit(CompUnit node) {
-        for (Decl decl : node.decls) {
-            decl.accept(this);
-        }
+    public Object visit(CompUnit node) {
         return null;
     }
 
     @Override
-    public Void visit(FuncDef node) {
-        if (!node.name.equals("main")) {
-            List<Type> paramTypes = new ArrayList<>();
-            if (node.params != null) {
-                for (FuncParam param : node.params) {
-                    if (param.isArray) {
-                        paramTypes.add(new PointerType(param.type));
-                    } else {
-                        paramTypes.add(param.type);
-                    }
-                }
-            }
-            FunctionType funcType = new FunctionType(node.funcType, paramTypes);
-
-            Symbol funcSym = new Symbol(node.name, funcType, symbolTable.getCurrentScopeId(), false, false,
-                Collections.emptyList(), null);
-            if (!symbolTable.define(funcSym)) {
-                errorReporter.report(node.lineNumber, ErrorType.fromCode("b"), node.name);
-            }
-            node.symbol = funcSym;
+    public Object visit(FuncDef node) {
+        if (node.name.equals("main")) {
+            return null;
         }
-        symbolTable.enterScope(node);
+        List<Type> paramTypes = new ArrayList<>();
         if (node.params != null) {
             for (FuncParam param : node.params) {
-                param.accept(this);
+                if (param.isArray) {
+                    paramTypes.add(new PointerType(param.type));
+                } else {
+                    paramTypes.add(param.type);
+                }
             }
         }
-        for (AstNode item : node.body.items) {
-            item.accept(this);
-        }
-        symbolTable.exitScope();
-        return null;
+        FunctionType funcType = new FunctionType(node.funcType, paramTypes);
+
+        Symbol funcSym = new Symbol(node.name, funcType, symbolTable.getCurrentScopeId(), false, false,
+            Collections.emptyList(), null);
+        node.symbol = funcSym;
+        return funcSym;
     }
 
     @Override
-    public Void visit(VarDecl node) {
+    public Object visit(VarDecl node) {
+        List<Symbol> symbols = new ArrayList<>();
         for (VarSpec spec : node.varSpecs) {
             List<Integer> dims = new ArrayList<>();
             Type finalType = node.type;
@@ -92,120 +74,101 @@ public class SymbolCollector implements AstVisitor<Void> {
 
             Symbol symbol = new Symbol(spec.name, finalType, symbolTable.getCurrentScopeId(), node.isConst,
                 node.isStatic, dims, constValue);
-            if (!symbolTable.define(symbol)) {
-                errorReporter.report(spec.lineNumber, ErrorType.fromCode("b"), spec.name);
-            }
             spec.symbol = symbol;
+            symbols.add(symbol);
         }
-        return null;
+        return symbols;
     }
 
     @Override
-    public Void visit(FuncParam node) {
+    public Object visit(FuncParam node) {
         Type paramType = node.type;
         if (node.isArray) {
             paramType = new PointerType(paramType);
         }
         Symbol paramSym = new Symbol(node.name, paramType, symbolTable.getCurrentScopeId(), false, false,
             Collections.emptyList(), null);
-        if (!symbolTable.define(paramSym)) {
-            errorReporter.report(node.lineNumber, ErrorType.fromCode("b"), node.name);
-        }
         node.symbol = paramSym;
+        return paramSym;
+    }
+
+    @Override
+    public Object visit(BlockStmt node) {
         return null;
     }
 
     @Override
-    public Void visit(BlockStmt node) {
-        symbolTable.enterScope(node);
-        for (AstNode item : node.items) {
-            item.accept(this);
-        }
-        symbolTable.exitScope();
+    public Object visit(IfStmt node) {
         return null;
     }
 
     @Override
-    public Void visit(IfStmt node) {
-        if (node.then != null) {
-            node.then.accept(this);
-        }
-        if (node.elseStmt != null) {
-            node.elseStmt.accept(this);
-        }
+    public Object visit(ForLoopStmt node) {
         return null;
     }
 
     @Override
-    public Void visit(ForLoopStmt node) {
-        if (node.body != null) {
-            node.body.accept(this);
-        }
+    public Object visit(VarSpec node) {
         return null;
     }
 
     @Override
-    public Void visit(VarSpec node) {
+    public Object visit(AssignStmt node) {
         return null;
     }
 
     @Override
-    public Void visit(AssignStmt node) {
+    public Object visit(ExprStmt node) {
         return null;
     }
 
     @Override
-    public Void visit(ExprStmt node) {
+    public Object visit(BreakStmt node) {
         return null;
     }
 
     @Override
-    public Void visit(BreakStmt node) {
+    public Object visit(ContinueStmt node) {
         return null;
     }
 
     @Override
-    public Void visit(ContinueStmt node) {
+    public Object visit(ReturnStmt node) {
         return null;
     }
 
     @Override
-    public Void visit(ReturnStmt node) {
+    public Object visit(PrintfStmt node) {
         return null;
     }
 
     @Override
-    public Void visit(PrintfStmt node) {
+    public Object visit(BinaryExpr node) {
         return null;
     }
 
     @Override
-    public Void visit(BinaryExpr node) {
+    public Object visit(UnaryExpr node) {
         return null;
     }
 
     @Override
-    public Void visit(UnaryExpr node) {
+    public Object visit(FuncCall node) {
         return null;
     }
 
     @Override
-    public Void visit(FuncCall node) {
+    public Object visit(LVal node) {
         return null;
     }
 
     @Override
-    public Void visit(LVal node) {
+    public Object visit(IntLiteral node) {
         return null;
     }
 
     @Override
-    public Void visit(IntLiteral node) {
-        return null;
-    }
-
-    @Override
-    public Void visit(ArrayInitializer node) {
+    public Object visit(ArrayInitializer node) {
         return null;
     }
 }
