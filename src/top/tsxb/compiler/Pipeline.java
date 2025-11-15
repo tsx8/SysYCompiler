@@ -12,6 +12,7 @@ import top.tsxb.compiler.common.ErrorReporter;
 import top.tsxb.compiler.config.CompilerConfig;
 import top.tsxb.compiler.frontend.LexerStage;
 import top.tsxb.compiler.frontend.ParserStage;
+import top.tsxb.compiler.frontend.SemanticStage;
 
 /**
  * The type Pipeline.
@@ -26,6 +27,7 @@ public class Pipeline {
     public Pipeline() {
         stages.put("lexer", new LexerStage());
         stages.put("parser", new ParserStage());
+        stages.put("semantic", new SemanticStage());
     }
 
     /**

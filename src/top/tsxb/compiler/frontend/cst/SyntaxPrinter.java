@@ -1,17 +1,13 @@
-package top.tsxb.compiler.frontend.visitor;
+package top.tsxb.compiler.frontend.cst;
+
+import static top.tsxb.compiler.frontend.cst.CstType.*;
 
 import java.util.Set;
 
-import top.tsxb.compiler.frontend.cst.CstNode;
-import top.tsxb.compiler.frontend.cst.CstType;
-import top.tsxb.compiler.frontend.cst.CstVisitor;
-import top.tsxb.compiler.frontend.cst.NonTerm;
-import top.tsxb.compiler.frontend.cst.Token;
-
 public class SyntaxPrinter implements CstVisitor<String> {
-    private static final Set<CstType> OMITTED_NON_TERMINALS = Set.of(CstType.BlockItem, CstType.Decl, CstType.BType);
-    private static final Set<CstType> BINARY_TYPES =
-        Set.of(CstType.MulExp, CstType.AddExp, CstType.RelExp, CstType.EqExp, CstType.LAndExp, CstType.LOrExp);
+    private static final Set<CstType> OMITTED_NON_TERMINALS = Set.of(BlockItem, Decl, BType, AssignStmt, IfStmt,
+        ForLoopStmt, BreakStmt, ContinueStmt, ReturnStmt, PrintfStmt, ExpStmt, FuncCall);
+    private static final Set<CstType> BINARY_TYPES = Set.of(MulExp, AddExp, RelExp, EqExp, LAndExp, LOrExp);
 
     @Override
     public String visit(Token node) {

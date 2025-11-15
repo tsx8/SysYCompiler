@@ -138,25 +138,34 @@ public class Parser {
         // 语句 Stmt → LVal '=' Exp ';' // i
         // | Block
         // | 'if' '(' Cond ')' Stmt [ 'else' Stmt ] // j
-        // | 'for' '(' [ForStmt] ';' [Cond] ';' [ForStmt] ')' Stmt
+        // | 'for' '(' [ForLoopStmt] ';' [Cond] ';' [ForLoopStmt] ')' Stmt
         // | 'break' ';' // i
         // | 'continue' ';' // i
         // | 'return' [Exp] ';' // i
         // | 'printf' '(' StringConst { ',' Exp } ')' ';' // i j
         // | [Exp] ';' // i
-        define(Stmt, or(seq(rule(LVal), term(ASSIGN), rule(Exp), term(SEMICN, "i")), // AssignStmt
-            rule(Block), // BlockStmt
-            seq(term(IFTK), term(LPARENT), rule(Cond), term(RPARENT, "j"), rule(Stmt),
-                opt(seq(term(ELSETK), rule(Stmt)))), // IfStmt
-            seq(term(FORTK), term(LPARENT), opt(rule(ForStmt)), term(SEMICN), opt(rule(Cond)), term(SEMICN),
-                opt(rule(ForStmt)), term(RPARENT), rule(Stmt)), // ForLoopStmt
-            seq(term(BREAKTK), term(SEMICN, "i")), // BreakStmt
-            seq(term(CONTINUETK), term(SEMICN, "i")), // ContinueStmt
-            seq(term(RETURNTK), opt(rule(Exp)), term(SEMICN, "i")), // ReturnStmt
-            seq(term(PRINTFTK), term(LPARENT), term(STRCON), many(seq(term(COMMA), rule(Exp))), term(RPARENT, "j"),
-                term(SEMICN, "i")), // PrintfStmt
-            or(term(SEMICN), seq(rule(Exp), term(SEMICN, "i"))))); // ExpStmt
-        // 语句 ForStmt → LVal '=' Exp { ',' LVal '=' Exp }
+        define(Stmt, or(rule(AssignStmt), rule(Block), rule(IfStmt), rule(ForLoopStmt), rule(BreakStmt),
+            rule(ContinueStmt), rule(ReturnStmt), rule(PrintfStmt), rule(ExpStmt)));
+        // AssignStmt
+        define(AssignStmt, seq(rule(LVal), term(ASSIGN), rule(Exp), term(SEMICN, "i")));
+        // IfStmt
+        define(IfStmt, seq(term(IFTK), term(LPARENT), rule(Cond), term(RPARENT, "j"), rule(Stmt),
+            opt(seq(term(ELSETK), rule(Stmt)))));
+        // ForLoopStmt
+        define(ForLoopStmt, seq(term(FORTK), term(LPARENT), opt(rule(ForStmt)), term(SEMICN), opt(rule(Cond)),
+            term(SEMICN), opt(rule(ForStmt)), term(RPARENT), rule(Stmt)));
+        // BreakStmt
+        define(BreakStmt, seq(term(BREAKTK), term(SEMICN, "i")));
+        // ContinueStmt
+        define(ContinueStmt, seq(term(CONTINUETK), term(SEMICN, "i")));
+        // ReturnStmt
+        define(ReturnStmt, seq(term(RETURNTK), opt(rule(Exp)), term(SEMICN, "i")));
+        // PrintfStmt
+        define(PrintfStmt, seq(term(PRINTFTK), term(LPARENT), term(STRCON), many(seq(term(COMMA), rule(Exp))),
+            term(RPARENT, "j"), term(SEMICN, "i")));
+        // ExpStmt
+        define(ExpStmt, or(term(SEMICN), seq(rule(Exp), term(SEMICN, "i"))));
+        // 语句 ForLoopStmt → LVal '=' Exp { ',' LVal '=' Exp }
         define(ForStmt,
             seq(rule(LVal), term(ASSIGN), rule(Exp), many(seq(term(COMMA), rule(LVal), term(ASSIGN), rule(Exp)))));
         // 表达式 Exp → AddExp
@@ -170,8 +179,9 @@ public class Parser {
         // 数值 Number → IntConst
         define(Number, term(INTCON));
         // 一元表达式 UnaryExp → Ident '(' [FuncRParams] ')' | PrimaryExp | UnaryOp UnaryExp // j
-        define(UnaryExp, or(seq(term(IDENFR), term(LPARENT), opt(rule(FuncRParams)), term(RPARENT, "j")),
-            rule(PrimaryExp), seq(rule(UnaryOp), rule(UnaryExp))));
+        define(UnaryExp, or(rule(FuncCall), rule(PrimaryExp), seq(rule(UnaryOp), rule(UnaryExp))));
+        // FuncCall
+        define(FuncCall, seq(term(IDENFR), term(LPARENT), opt(rule(FuncRParams)), term(RPARENT, "j")));
         // 单目运算符 UnaryOp → '+' | '−' | '!' 注：'!'仅出现在条件表达式中
         define(UnaryOp, or(term(PLUS), term(MINU), term(NOT)));
         // 函数实参表 FuncRParams → Exp { ',' Exp }

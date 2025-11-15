@@ -28,14 +28,14 @@ stmt: lVal ASSIGN exp SEMICN
     | exp? SEMICN
     | block
     | IFTK LPARENT cond RPARENT stmt (ELSETK stmt)?
-    | FORTK LPARENT forStmt? SEMICN cond? SEMICN forStmt? RPARENT stmt
+    | FORTK LPARENT forLoopStmt? SEMICN cond? SEMICN forLoopStmt? RPARENT stmt
     | BREAKTK SEMICN
     | CONTINUETK SEMICN
     | RETURNTK exp? SEMICN
     | PRINTFTK LPARENT STRCON (COMMA exp)* RPARENT SEMICN
     ;
 
-forStmt: lVal ASSIGN exp (COMMA lVal ASSIGN exp)*;
+forLoopStmt: lVal ASSIGN exp (COMMA lVal ASSIGN exp)*;
 exp: addExp;
 cond: lOrExp;
 lVal: IDENFR (LBRACK exp RBRACK)?;
