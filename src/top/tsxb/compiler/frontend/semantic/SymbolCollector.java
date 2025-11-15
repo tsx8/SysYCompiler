@@ -23,7 +23,7 @@ public class SymbolCollector implements AstVisitor<Void> {
     public SymbolCollector(SymbolTable symbolTable, ErrorReporter errorReporter) {
         this.symbolTable = symbolTable;
         this.errorReporter = errorReporter;
-        this.constEvaluator = new ConstEvaluator(symbolTable);
+        this.constEvaluator = new ConstEvaluator(symbolTable, errorReporter);
     }
 
     @Override
