@@ -19,7 +19,7 @@ import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
-import top.tsxb.compiler.config.CompilerConfig;
+import top.tsxb.compiler.driver.CompilerConfig;
 
 public class TestcasesImporter {
     private static final String ANS_FILE = "ans.txt";

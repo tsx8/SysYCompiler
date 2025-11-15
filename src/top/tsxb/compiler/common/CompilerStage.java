@@ -4,9 +4,6 @@ import java.util.stream.Collectors;
 
 @FunctionalInterface
 public interface CompilerStage<I, A> {
-    record StageResult<A>(A artefact, String report) {
-    }
-
     StageResult<A> process(I input, ErrorReporter errorReporter);
 
     default String report(String output, ErrorReporter errorReporter) {
@@ -16,5 +13,8 @@ public interface CompilerStage<I, A> {
         } else {
             return output;
         }
+    }
+
+    record StageResult<A>(A artefact, String report) {
     }
 }

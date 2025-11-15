@@ -9,9 +9,9 @@ import java.util.regex.Pattern;
 
 import top.tsxb.compiler.common.ErrorReporter;
 import top.tsxb.compiler.common.ErrorType;
-import top.tsxb.compiler.frontend.cst.Token;
-import top.tsxb.compiler.frontend.cst.TokenStream;
-import top.tsxb.compiler.frontend.cst.TokenType;
+import top.tsxb.compiler.ir.cst.Token;
+import top.tsxb.compiler.ir.cst.TokenStream;
+import top.tsxb.compiler.ir.cst.TokenType;
 
 /**
  * The type Lexer. Scans the source code and produces tokens.

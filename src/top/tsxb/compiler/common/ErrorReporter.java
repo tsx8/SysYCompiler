@@ -4,8 +4,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-import top.tsxb.compiler.utils.Backtrackable;
-
 /**
  * The type Error reporter.
  */

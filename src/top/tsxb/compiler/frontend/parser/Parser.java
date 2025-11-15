@@ -1,7 +1,7 @@
 package top.tsxb.compiler.frontend.parser;
 
-import static top.tsxb.compiler.frontend.cst.CstType.*;
-import static top.tsxb.compiler.frontend.cst.TokenType.*;
+import static top.tsxb.compiler.ir.cst.CstType.*;
+import static top.tsxb.compiler.ir.cst.TokenType.*;
 
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -9,16 +9,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import top.tsxb.compiler.common.BacktrackMgr;
 import top.tsxb.compiler.common.ErrorReporter;
 import top.tsxb.compiler.common.ErrorType;
-import top.tsxb.compiler.config.CompilerConfig;
-import top.tsxb.compiler.frontend.cst.CstNode;
-import top.tsxb.compiler.frontend.cst.CstType;
-import top.tsxb.compiler.frontend.cst.NonTerm;
-import top.tsxb.compiler.frontend.cst.Token;
-import top.tsxb.compiler.frontend.cst.TokenStream;
-import top.tsxb.compiler.frontend.cst.TokenType;
-import top.tsxb.compiler.utils.BacktrackMgr;
+import top.tsxb.compiler.driver.CompilerConfig;
+import top.tsxb.compiler.ir.cst.CstNode;
+import top.tsxb.compiler.ir.cst.CstType;
+import top.tsxb.compiler.ir.cst.NonTerm;
+import top.tsxb.compiler.ir.cst.Token;
+import top.tsxb.compiler.ir.cst.TokenStream;
+import top.tsxb.compiler.ir.cst.TokenType;
 
 /**
  * The type Parser.
@@ -43,35 +43,6 @@ public class Parser {
         backtrackMgr.register(this.tokens);
         backtrackMgr.register(this.reporter);
         initializeRules();
-    }
-
-    private static class DebugLogger {
-        private final List<String> logs = new ArrayList<>();
-        private int indentLevel = 0;
-
-        private int save() {
-            return logs.size();
-        }
-
-        private void restore(int pos) {
-            if (pos >= 0 && pos <= logs.size()) {
-                while (logs.size() > pos) {
-                    logs.remove(logs.size() - 1);
-                }
-            }
-        }
-
-        private void log(String message) {
-            logs.add("  ".repeat(indentLevel) + message);
-        }
-
-        private void indent() {
-            indentLevel++;
-        }
-
-        private void dedent() {
-            indentLevel--;
-        }
     }
 
     /**
@@ -344,5 +315,34 @@ public class Parser {
     @FunctionalInterface
     interface ParserCombinator {
         Optional<List<CstNode>> parse(Parser parser);
+    }
+
+    private static class DebugLogger {
+        private final List<String> logs = new ArrayList<>();
+        private int indentLevel = 0;
+
+        private int save() {
+            return logs.size();
+        }
+
+        private void restore(int pos) {
+            if (pos >= 0 && pos <= logs.size()) {
+                while (logs.size() > pos) {
+                    logs.remove(logs.size() - 1);
+                }
+            }
+        }
+
+        private void log(String message) {
+            logs.add("  ".repeat(indentLevel) + message);
+        }
+
+        private void indent() {
+            indentLevel++;
+        }
+
+        private void dedent() {
+            indentLevel--;
+        }
     }
 }

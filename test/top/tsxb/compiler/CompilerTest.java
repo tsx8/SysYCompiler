@@ -13,7 +13,8 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Stream;
 
-import top.tsxb.compiler.config.CompilerConfig;
+import top.tsxb.compiler.driver.CompilerConfig;
+import top.tsxb.compiler.driver.Pipeline;
 import top.tsxb.compiler.frontend.lexer.LexicalException;
 import top.tsxb.compiler.frontend.parser.SyntacticException;
 
