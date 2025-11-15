@@ -1,0 +1,7 @@
+1 isPrime IntFunc
+2 x Int
+2 i Int
+4 n Int
+4 last Int
+4 pow Int
+5 i Int

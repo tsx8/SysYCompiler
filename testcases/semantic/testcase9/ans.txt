@@ -1,0 +1,13 @@
+1 arr IntArray
+1 getSum IntFunc
+1 testArray VoidFunc
+2 a IntArray
+2 len Int
+2 i Int
+2 sum Int
+4 a IntArray
+4 b IntArray
+4 i Int
+4 j Int
+4 k Int
+8 a IntArray

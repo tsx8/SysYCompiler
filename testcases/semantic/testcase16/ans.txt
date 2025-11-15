@@ -1,0 +1,10 @@
+1 isSymmetry IntFunc
+1 isPrime IntFunc
+2 x Int
+2 copy Int
+2 res Int
+4 x Int
+4 i Int
+7 a Int
+7 b Int
+7 i Int

@@ -1,0 +1,14 @@
+1 i Int
+1 ii Int
+2 i1 ConstInt
+2 c1 ConstInt
+2 ii1 ConstInt
+2 ii2 ConstInt
+2 cc1 ConstInt
+2 cc2 ConstInt
+2 i2 Int
+2 c2 Int
+2 ii3 Int
+2 ii4 Int
+2 cc3 Int
+2 cc4 Int
