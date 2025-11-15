@@ -58,7 +58,7 @@ public class TypeChecker implements AstVisitor<Type> {
                     }
                 }
                 if (!hasReturn) {
-                    errorReporter.report(node.body.endLineNumber, ErrorType.INT_FUNC_MISSING_RETURN, node.name);
+                    errorReporter.report(node.body.endLineNumber, ErrorType.fromCode("g"), node.name);
                 }
             }
         } finally {
@@ -102,7 +102,7 @@ public class TypeChecker implements AstVisitor<Type> {
         node.lVal.accept(this);
         node.rVal.accept(this);
         if (node.lVal.symbol != null && node.lVal.symbol.isConst()) {
-            errorReporter.report(node.lineNumber, ErrorType.MODIFY_CONST, node.lVal.name);
+            errorReporter.report(node.lineNumber, ErrorType.fromCode("h"), node.lVal.name);
         }
         return null;
     }
@@ -152,7 +152,7 @@ public class TypeChecker implements AstVisitor<Type> {
     @Override
     public Type visit(BreakStmt node) {
         if (loopDepth == 0) {
-            errorReporter.report(node.lineNumber, ErrorType.BREAK_CONTINUE_OUTSIDE_LOOP, "break");
+            errorReporter.report(node.lineNumber, ErrorType.fromCode("m"), "break");
         }
         return null;
     }
@@ -160,7 +160,7 @@ public class TypeChecker implements AstVisitor<Type> {
     @Override
     public Type visit(ContinueStmt node) {
         if (loopDepth == 0) {
-            errorReporter.report(node.lineNumber, ErrorType.BREAK_CONTINUE_OUTSIDE_LOOP, "continue");
+            errorReporter.report(node.lineNumber, ErrorType.fromCode("m"), "continue");
         }
         return null;
     }
@@ -170,7 +170,7 @@ public class TypeChecker implements AstVisitor<Type> {
         Type rt = currentFuncDef.funcType;
         if (node.retVal != null) {
             if (rt instanceof VoidType) {
-                errorReporter.report(node.lineNumber, ErrorType.VOID_FUNC_WITH_RETURN_VALUE, currentFuncDef.name);
+                errorReporter.report(node.lineNumber, ErrorType.fromCode("f"), currentFuncDef.name);
             } else if (rt instanceof IntegerType) {
                 node.retVal.accept(this);
             }
@@ -187,7 +187,7 @@ public class TypeChecker implements AstVisitor<Type> {
             }
         }
         if (formatSpecs != node.args.size()) {
-            errorReporter.report(node.lineNumber, ErrorType.PRINTF_ARG_COUNT_MISMATCH, node.formatStr);
+            errorReporter.report(node.lineNumber, ErrorType.fromCode("l"), node.formatStr);
         }
         for (Expr arg : node.args) {
             arg.accept(this);
@@ -214,19 +214,19 @@ public class TypeChecker implements AstVisitor<Type> {
     public Type visit(FuncCall node) {
         Symbol symbol = currentScope.lookup(node.name);
         if (symbol == null) {
-            errorReporter.report(node.lineNumber, ErrorType.NAME_NOT_DEFINED, node.name);
+            errorReporter.report(node.lineNumber, ErrorType.fromCode("c"), node.name);
             node.type = IntegerType.getInstance();
             return node.type;
         }
 
         if (!(symbol.type() instanceof FunctionType ft)) {
-            errorReporter.report(node.lineNumber, ErrorType.NAME_NOT_DEFINED, node.name);
+            errorReporter.report(node.lineNumber, ErrorType.fromCode("c"), node.name);
             node.type = IntegerType.getInstance();
             return node.type;
         }
         node.symbol = symbol;
         if (node.args.size() != ft.paramTypes().size()) {
-            errorReporter.report(node.lineNumber, ErrorType.FUNC_ARG_COUNT_MISMATCH, node.name);
+            errorReporter.report(node.lineNumber, ErrorType.fromCode("d"), node.name);
         } else {
             for (int i = 0; i < node.args.size(); i++) {
                 Type actualType = node.args.get(i).accept(this);
@@ -237,7 +237,7 @@ public class TypeChecker implements AstVisitor<Type> {
                 boolean isArgArray = actualType instanceof ArrayType || actualType instanceof PointerType;
                 boolean isParamArray = expectedType instanceof PointerType;
                 if (isArgArray != isParamArray) {
-                    errorReporter.report(node.lineNumber, ErrorType.FUNC_ARG_TYPE_MISMATCH, node.name);
+                    errorReporter.report(node.lineNumber, ErrorType.fromCode("e"), node.name);
                     break;
                 }
             }
@@ -250,7 +250,7 @@ public class TypeChecker implements AstVisitor<Type> {
     public Type visit(LVal node) {
         Symbol symbol = currentScope.lookup(node.name);
         if (symbol == null) {
-            errorReporter.report(node.lineNumber, ErrorType.NAME_NOT_DEFINED, node.name);
+            errorReporter.report(node.lineNumber, ErrorType.fromCode("c"), node.name);
             node.type = IntegerType.getInstance();
             return node.type;
         }

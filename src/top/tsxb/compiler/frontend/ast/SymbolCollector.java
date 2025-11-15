@@ -51,7 +51,7 @@ public class SymbolCollector implements AstVisitor<Void> {
             Symbol funcSym =
                 new Symbol(node.name, funcType, symbolTable.getCurrentScopeId(), false, false, Collections.emptyList(), null);
             if (!symbolTable.define(funcSym)) {
-                errorReporter.report(node.lineNumber, ErrorType.NAME_REDEFINITION, node.name);
+                errorReporter.report(node.lineNumber, ErrorType.fromCode("b"), node.name);
             }
             node.symbol = funcSym;
         }
@@ -79,7 +79,7 @@ public class SymbolCollector implements AstVisitor<Void> {
                 Symbol paramSym =
                     new Symbol(node.paramName, paramType, symbolTable.getCurrentScopeId(), false, false, null, null);
                 if (!symbolTable.define(paramSym)) {
-                    errorReporter.report(node.lineNumber, ErrorType.NAME_REDEFINITION, node.paramName);
+                    errorReporter.report(node.lineNumber, ErrorType.fromCode("b"), node.paramName);
                 }
             }
             return null;
@@ -106,7 +106,7 @@ public class SymbolCollector implements AstVisitor<Void> {
             Symbol symbol =
                 new Symbol(spec.name, finalType, symbolTable.getCurrentScopeId(), node.isConst, node.isStatic, dims, constValue);
             if (!symbolTable.define(symbol)) {
-                errorReporter.report(spec.lineNumber, ErrorType.NAME_REDEFINITION, spec.name);
+                errorReporter.report(spec.lineNumber, ErrorType.fromCode("b"), spec.name);
             }
             spec.symbol = symbol;
         }
