@@ -9,6 +9,7 @@
 
 ## CHANGELOG
 
+- [2025.11.06] Finished semantic part.
 - [2025.10.30] Finished parser part.
 - [2025.10.13] Finished lexer part.
 - [2025.10.04] Refactor from the old repo.
