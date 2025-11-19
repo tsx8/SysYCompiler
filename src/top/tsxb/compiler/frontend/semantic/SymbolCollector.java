@@ -29,9 +29,6 @@ public class SymbolCollector implements AstVisitor<Object> {
 
     @Override
     public Object visit(FuncDef node) {
-        if (node.name.equals("main")) {
-            return null;
-        }
         List<Type> paramTypes = new ArrayList<>();
         if (node.params != null) {
             for (FuncParam param : node.params) {
@@ -47,6 +44,9 @@ public class SymbolCollector implements AstVisitor<Object> {
         Symbol funcSym = new Symbol(node.name, funcType, symbolTable.getCurrentScopeId(), false, false,
             Collections.emptyList(), null);
         node.symbol = funcSym;
+        if (node.name.equals("main")) {
+            return null;
+        }
         return funcSym;
     }
 
