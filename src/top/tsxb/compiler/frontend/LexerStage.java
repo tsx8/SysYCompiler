@@ -3,7 +3,7 @@ package top.tsxb.compiler.frontend;
 import top.tsxb.compiler.common.CompilerStage;
 import top.tsxb.compiler.common.ErrorReporter;
 import top.tsxb.compiler.frontend.lexer.Lexer;
-import top.tsxb.compiler.ir.cst.TokenStream;
+import top.tsxb.compiler.frontend.parser.cst.TokenStream;
 
 public class LexerStage implements CompilerStage<String, TokenStream> {
     @Override

@@ -5,9 +5,9 @@ import top.tsxb.compiler.common.ErrorReporter;
 import top.tsxb.compiler.frontend.semantic.AstBuilder;
 import top.tsxb.compiler.frontend.semantic.SemanticResult;
 import top.tsxb.compiler.frontend.semantic.TypeChecker;
-import top.tsxb.compiler.ir.ast.CompUnit;
-import top.tsxb.compiler.ir.cst.CstNode;
-import top.tsxb.compiler.ir.symtab.SymbolTable;
+import top.tsxb.compiler.frontend.semantic.ast.CompUnit;
+import top.tsxb.compiler.frontend.parser.cst.CstNode;
+import top.tsxb.compiler.frontend.semantic.sym.SymbolTable;
 
 public class SemanticStage implements CompilerStage<CstNode, SemanticResult> {
     @Override

@@ -2,9 +2,9 @@ package top.tsxb.compiler.frontend.semantic;
 
 import java.util.Optional;
 
-import top.tsxb.compiler.ir.ast.*;
-import top.tsxb.compiler.ir.symtab.Symbol;
-import top.tsxb.compiler.ir.symtab.SymbolTable;
+import top.tsxb.compiler.frontend.semantic.ast.*;
+import top.tsxb.compiler.frontend.semantic.sym.Symbol;
+import top.tsxb.compiler.frontend.semantic.sym.SymbolTable;
 
 public record ConstEvaluator(SymbolTable symbolTable) implements AstVisitor<Optional<Integer>> {
 

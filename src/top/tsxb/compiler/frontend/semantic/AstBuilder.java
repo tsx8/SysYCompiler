@@ -6,16 +6,16 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Function;
 
-import top.tsxb.compiler.ir.ast.*;
-import top.tsxb.compiler.ir.cst.CstNode;
-import top.tsxb.compiler.ir.cst.CstType;
-import top.tsxb.compiler.ir.cst.CstVisitor;
-import top.tsxb.compiler.ir.cst.NonTerm;
-import top.tsxb.compiler.ir.cst.Token;
-import top.tsxb.compiler.ir.cst.TokenType;
-import top.tsxb.compiler.ir.type.IntegerType;
-import top.tsxb.compiler.ir.type.Type;
-import top.tsxb.compiler.ir.type.VoidType;
+import top.tsxb.compiler.frontend.semantic.ast.*;
+import top.tsxb.compiler.frontend.parser.cst.CstNode;
+import top.tsxb.compiler.frontend.parser.cst.CstType;
+import top.tsxb.compiler.frontend.parser.cst.CstVisitor;
+import top.tsxb.compiler.frontend.parser.cst.NonTerm;
+import top.tsxb.compiler.frontend.parser.cst.Token;
+import top.tsxb.compiler.frontend.parser.cst.TokenType;
+import top.tsxb.compiler.frontend.semantic.type.IntegerType;
+import top.tsxb.compiler.frontend.semantic.type.Type;
+import top.tsxb.compiler.frontend.semantic.type.VoidType;
 
 public class AstBuilder implements CstVisitor<Object> {
     public CompUnit build(CstNode node) {

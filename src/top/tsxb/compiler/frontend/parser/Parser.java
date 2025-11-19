@@ -1,8 +1,5 @@
 package top.tsxb.compiler.frontend.parser;
 
-import static top.tsxb.compiler.ir.cst.CstType.*;
-import static top.tsxb.compiler.ir.cst.TokenType.*;
-
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
@@ -13,12 +10,12 @@ import top.tsxb.compiler.common.BacktrackMgr;
 import top.tsxb.compiler.common.ErrorReporter;
 import top.tsxb.compiler.common.ErrorType;
 import top.tsxb.compiler.driver.CompilerConfig;
-import top.tsxb.compiler.ir.cst.CstNode;
-import top.tsxb.compiler.ir.cst.CstType;
-import top.tsxb.compiler.ir.cst.NonTerm;
-import top.tsxb.compiler.ir.cst.Token;
-import top.tsxb.compiler.ir.cst.TokenStream;
-import top.tsxb.compiler.ir.cst.TokenType;
+import top.tsxb.compiler.frontend.parser.cst.CstNode;
+import top.tsxb.compiler.frontend.parser.cst.CstType;
+import top.tsxb.compiler.frontend.parser.cst.NonTerm;
+import top.tsxb.compiler.frontend.parser.cst.Token;
+import top.tsxb.compiler.frontend.parser.cst.TokenStream;
+import top.tsxb.compiler.frontend.parser.cst.TokenType;
 
 /**
  * The type Parser.

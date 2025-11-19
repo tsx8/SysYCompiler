@@ -5,13 +5,13 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
-import top.tsxb.compiler.ir.ast.*;
-import top.tsxb.compiler.ir.symtab.Symbol;
-import top.tsxb.compiler.ir.symtab.SymbolTable;
-import top.tsxb.compiler.ir.type.ArrayType;
-import top.tsxb.compiler.ir.type.FunctionType;
-import top.tsxb.compiler.ir.type.PointerType;
-import top.tsxb.compiler.ir.type.Type;
+import top.tsxb.compiler.frontend.semantic.ast.*;
+import top.tsxb.compiler.frontend.semantic.sym.Symbol;
+import top.tsxb.compiler.frontend.semantic.sym.SymbolTable;
+import top.tsxb.compiler.frontend.semantic.type.ArrayType;
+import top.tsxb.compiler.frontend.semantic.type.FunctionType;
+import top.tsxb.compiler.frontend.semantic.type.PointerType;
+import top.tsxb.compiler.frontend.semantic.type.Type;
 
 public class SymbolCollector implements AstVisitor<Object> {
     private final SymbolTable symbolTable;

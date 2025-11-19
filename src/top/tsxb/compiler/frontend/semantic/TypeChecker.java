@@ -4,15 +4,15 @@ import java.util.List;
 
 import top.tsxb.compiler.common.ErrorReporter;
 import top.tsxb.compiler.common.ErrorType;
-import top.tsxb.compiler.ir.ast.*;
-import top.tsxb.compiler.ir.symtab.Symbol;
-import top.tsxb.compiler.ir.symtab.SymbolTable;
-import top.tsxb.compiler.ir.type.ArrayType;
-import top.tsxb.compiler.ir.type.FunctionType;
-import top.tsxb.compiler.ir.type.IntegerType;
-import top.tsxb.compiler.ir.type.PointerType;
-import top.tsxb.compiler.ir.type.Type;
-import top.tsxb.compiler.ir.type.VoidType;
+import top.tsxb.compiler.frontend.semantic.ast.*;
+import top.tsxb.compiler.frontend.semantic.sym.Symbol;
+import top.tsxb.compiler.frontend.semantic.sym.SymbolTable;
+import top.tsxb.compiler.frontend.semantic.type.ArrayType;
+import top.tsxb.compiler.frontend.semantic.type.FunctionType;
+import top.tsxb.compiler.frontend.semantic.type.IntegerType;
+import top.tsxb.compiler.frontend.semantic.type.PointerType;
+import top.tsxb.compiler.frontend.semantic.type.Type;
+import top.tsxb.compiler.frontend.semantic.type.VoidType;
 
 public class TypeChecker implements AstVisitor<Type> {
     private final SymbolTable symbolTable;
