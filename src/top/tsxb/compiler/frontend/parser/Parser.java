@@ -1,5 +1,8 @@
 package top.tsxb.compiler.frontend.parser;
 
+import static top.tsxb.compiler.frontend.parser.cst.CstType.*;
+import static top.tsxb.compiler.frontend.parser.cst.TokenType.*;
+
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;

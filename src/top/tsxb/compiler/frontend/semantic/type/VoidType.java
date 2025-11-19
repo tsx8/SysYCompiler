@@ -10,6 +10,16 @@ public final class VoidType implements Type {
     }
 
     @Override
+    public boolean isSame(Type other) {
+        return other instanceof VoidType;
+    }
+
+    @Override
+    public boolean isCastableTo(Type other) {
+        return false;
+    }
+
+    @Override
     public String toString() {
         return "void";
     }

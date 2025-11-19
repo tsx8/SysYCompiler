@@ -10,7 +10,17 @@ public final class IntegerType implements Type {
     }
 
     @Override
+    public boolean isSame(Type other) {
+        return other instanceof IntegerType;
+    }
+    
+    @Override
+    public boolean isCastableTo(Type other) {
+        return isSame(other);
+    }
+
+    @Override
     public String toString() {
-        return "i32";
+        return "int";
     }
 }

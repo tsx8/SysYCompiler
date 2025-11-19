@@ -254,18 +254,18 @@ public class TypeChecker implements AstVisitor<Type> {
             return node.type;
         }
         node.symbol = symbol;
-        if (node.args.size() != ft.paramTypes().size()) {
+        List<Type> formalParams = ft.paramTypes();
+        List<Expr> actualArgs = node.args;
+        if (actualArgs.size() != formalParams.size()) {
             errorReporter.report(node.lineNumber, ErrorType.fromCode("d"), node.name);
         } else {
-            for (int i = 0; i < node.args.size(); i++) {
-                Type actualType = node.args.get(i).accept(this);
-                Type expectedType = ft.paramTypes().get(i);
+            for (int i = 0; i < actualArgs.size(); i++) {
+                Type actualType = actualArgs.get(i).accept(this);
+                Type expectedType = formalParams.get(i);
                 if (actualType == null) {
                     continue;
                 }
-                boolean isArgArray = actualType instanceof ArrayType || actualType instanceof PointerType;
-                boolean isParamArray = expectedType instanceof PointerType;
-                if (isArgArray != isParamArray) {
+                if (!actualType.isCastableTo(expectedType)) {
                     errorReporter.report(node.lineNumber, ErrorType.fromCode("e"), node.name);
                     break;
                 }

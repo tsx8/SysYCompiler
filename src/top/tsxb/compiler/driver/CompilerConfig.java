@@ -7,7 +7,7 @@ public final class CompilerConfig {
     public static final boolean DEBUG = false;
     public static final String PROGRAMMING_LANGUAGE = "java";
     public static final String OBJECT_CODE = "llvm"; // "mips", "llvm"
-    public static final String CURRENT_HOMEWORK = "llvm";
+    public static final String CURRENT_HOMEWORK = "semantic";
     public static final String SOURCE_FILE = "testfile.txt";
     public static final String ERROR_FILE = "error.txt";
     public static final String OUTPUT_FILE = determineOutputFile();
