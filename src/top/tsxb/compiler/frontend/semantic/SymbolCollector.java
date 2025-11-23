@@ -3,7 +3,6 @@ package top.tsxb.compiler.frontend.semantic;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 
 import top.tsxb.compiler.frontend.semantic.ast.*;
 import top.tsxb.compiler.frontend.semantic.sym.Symbol;
@@ -13,14 +12,7 @@ import top.tsxb.compiler.frontend.semantic.type.FunctionType;
 import top.tsxb.compiler.frontend.semantic.type.PointerType;
 import top.tsxb.compiler.frontend.semantic.type.Type;
 
-public class SymbolCollector implements AstVisitor<Object> {
-    private final SymbolTable symbolTable;
-    private final ConstEvaluator constEvaluator;
-
-    public SymbolCollector(SymbolTable symbolTable) {
-        this.symbolTable = symbolTable;
-        this.constEvaluator = new ConstEvaluator(symbolTable);
-    }
+public record SymbolCollector(SymbolTable symbolTable) implements AstVisitor<Object> {
 
     @Override
     public Object visit(CompUnit node) {
@@ -29,21 +21,15 @@ public class SymbolCollector implements AstVisitor<Object> {
 
     @Override
     public Object visit(FuncDef node) {
-        List<Type> paramTypes = new ArrayList<>();
-        if (node.params != null) {
-            for (FuncParam param : node.params) {
-                if (param.isArray) {
-                    paramTypes.add(new PointerType(param.type));
-                } else {
-                    paramTypes.add(param.type);
-                }
-            }
-        }
+        List<Type> paramTypes = node.params == null ? Collections.emptyList()
+                                                    : node.params.stream().map(
+        p -> p.isArray ? new PointerType(p.type) : p.type).toList();
         FunctionType funcType = new FunctionType(node.funcType, paramTypes);
-
-        Symbol funcSym = new Symbol(node.name, funcType, symbolTable.getCurrentScopeId(), false, false,
-            Collections.emptyList(), null);
+        Symbol funcSym = new Symbol(node.name, funcType, symbolTable.getCurrentScopeId(), false,
+                                    false,
+                                    Collections.emptyList(), Collections.emptyList());
         node.symbol = funcSym;
+
         if (node.name.equals("main")) {
             return null;
         }
@@ -55,25 +41,22 @@ public class SymbolCollector implements AstVisitor<Object> {
         List<Symbol> symbols = new ArrayList<>();
         for (VarSpec spec : node.varSpecs) {
             List<Integer> dims = new ArrayList<>();
-            Type finalType = node.type;
             if (spec.dims != null) {
-                for (Expr dimExpr : spec.dims) {
-                    Optional<Integer> dimVal = constEvaluator.evaluate(dimExpr);
-                    dimVal.ifPresent(dims::add);
-                }
-                Collections.reverse(dims);
-                for (Integer dim : dims) {
-                    finalType = new ArrayType(finalType, dim);
-                }
-                Collections.reverse(dims);
+                spec.dims.forEach(dimExpr -> dims.add(evaluate(dimExpr)));
             }
-            Integer constValue = null;
-            if (node.isConst && spec.initVal != null) {
-                constValue = constEvaluator.evaluate(spec.initVal).orElse(null);
+            Type finalType = node.type;
+            for (int i = dims.size() - 1; i >= 0; i--) {
+                finalType = new ArrayType(finalType, dims.get(i));
+            }
+            List<Integer> initValues = Collections.emptyList();
+            if ((node.isConst || node.isStatic || symbolTable.getCurrentScopeId() == 1)
+                && spec.initVal != null) {
+                initValues = flattenInitVal(spec.initVal);
             }
 
-            Symbol symbol = new Symbol(spec.name, finalType, symbolTable.getCurrentScopeId(), node.isConst,
-                node.isStatic, dims, constValue);
+            Symbol symbol = new Symbol(spec.name, finalType, symbolTable.getCurrentScopeId(),
+                                       node.isConst,
+                                       node.isStatic, dims, initValues);
             spec.symbol = symbol;
             symbols.add(symbol);
         }
@@ -82,14 +65,80 @@ public class SymbolCollector implements AstVisitor<Object> {
 
     @Override
     public Object visit(FuncParam node) {
-        Type paramType = node.type;
-        if (node.isArray) {
-            paramType = new PointerType(paramType);
-        }
-        Symbol paramSym = new Symbol(node.name, paramType, symbolTable.getCurrentScopeId(), false, false,
-            Collections.emptyList(), null);
+        Type paramType = node.isArray ? new PointerType(node.type) : node.type;
+        Symbol paramSym = new Symbol(node.name, paramType, symbolTable.getCurrentScopeId(), false,
+                                     false,
+                                     Collections.emptyList(), Collections.emptyList());
         node.symbol = paramSym;
         return paramSym;
+    }
+
+    private List<Integer> flattenInitVal(Expr initVal) {
+        if (initVal instanceof ArrayInitializer arrInit) {
+            return arrInit.values.stream().flatMap(v -> flattenInitVal(v).stream()).toList();
+        } else {
+            return List.of(evaluate(initVal));
+        }
+    }
+
+    private Integer evaluate(Expr expr) {
+        if (expr instanceof IntLiteral n) {
+            return n.value;
+        }
+        if (expr instanceof UnaryExpr u) {
+            int val = evaluate(u.operand);
+            return switch (u.op) {
+                case PLUS -> val;
+                case MINU -> -val;
+                case NOT -> val == 0 ? 1 : 0;
+                default -> 0;
+            };
+        }
+        if (expr instanceof BinaryExpr b) {
+            int l = evaluate(b.left);
+            int r = evaluate(b.right);
+            return switch (b.op) {
+                case PLUS -> l + r;
+                case MINU -> l - r;
+                case MULT -> l * r;
+                case DIV -> r != 0 ? l / r : 0;
+                case MOD -> r != 0 ? l % r : 0;
+                case LSS -> l < r ? 1 : 0;
+                case LEQ -> l <= r ? 1 : 0;
+                case GRE -> l > r ? 1 : 0;
+                case GEQ -> l >= r ? 1 : 0;
+                case EQL -> l == r ? 1 : 0;
+                case NEQ -> l != r ? 1 : 0;
+                case AND -> (l != 0 && r != 0) ? 1 : 0;
+                case OR -> (l != 0 || r != 0) ? 1 : 0;
+                default -> 0;
+            };
+        }
+        if (expr instanceof LVal lVal) {
+            Symbol sym = symbolTable.lookup(lVal.name);
+            if (sym == null || !sym.isConst() || sym.initialValues().isEmpty()) {
+                return 0;
+            }
+            int offset = 0;
+            List<Integer> dims = sym.dims();
+            if (lVal.indices.size() > dims.size()) {
+                return 0;
+            }
+            for (int i = 0; i < lVal.indices.size(); i++) {
+                int idx = evaluate(lVal.indices.get(i));
+                int stride = 1;
+                for (int j = i + 1; j < dims.size(); j++) {
+                    stride *= dims.get(j);
+                }
+                offset += idx * stride;
+            }
+
+            if (offset >= 0 && offset < sym.initialValues().size()) {
+                return sym.initialValues().get(offset);
+            }
+            return 0;
+        }
+        return 0;
     }
 
     @Override

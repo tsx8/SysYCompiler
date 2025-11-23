@@ -10,16 +10,10 @@ import top.tsxb.compiler.frontend.semantic.type.PointerType;
 import top.tsxb.compiler.frontend.semantic.type.Type;
 
 public record Symbol(String name, Type type, int scopeLevel, boolean isConst, boolean isStatic, List<Integer> dims,
-    Integer constValue) {
-    public Symbol(String name, Type type, int scopeLevel, boolean isConst, boolean isStatic, List<Integer> dims,
-        Integer constValue) {
-        this.name = name;
-        this.type = type;
-        this.scopeLevel = scopeLevel;
-        this.isConst = isConst;
-        this.isStatic = isStatic;
-        this.dims = dims != null ? List.copyOf(dims) : Collections.emptyList();
-        this.constValue = constValue;
+    List<Integer> initialValues) {
+    public Symbol {
+        dims = dims != null ? List.copyOf(dims) : Collections.emptyList();
+        initialValues = initialValues != null ? List.copyOf(initialValues) : Collections.emptyList();
     }
 
     private String getSymbolTypeForOutput() {
