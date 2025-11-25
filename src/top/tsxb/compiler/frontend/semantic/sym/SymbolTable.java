@@ -24,8 +24,7 @@ public class SymbolTable {
         this.rootScope = new Scope(null, scopeCounter, null);
         this.currentScope = rootScope;
         FunctionType getintType = new FunctionType(IntegerType.getInstance(), Collections.emptyList());
-        Symbol getintSymbol = new Symbol("getint", getintType, 1, false, false,
-                                         Collections.emptyList(), Collections.emptyList());
+        Symbol getintSymbol = new Symbol("getint", getintType, 1, false, false, Collections.emptyList());
         this.rootScope.define(getintSymbol);
     }
 

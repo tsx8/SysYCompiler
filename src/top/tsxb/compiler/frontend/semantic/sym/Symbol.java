@@ -6,17 +6,14 @@ import java.util.List;
 import top.tsxb.compiler.frontend.semantic.type.ArrayType;
 import top.tsxb.compiler.frontend.semantic.type.FunctionType;
 import top.tsxb.compiler.frontend.semantic.type.IntegerType;
-import top.tsxb.compiler.frontend.semantic.type.PointerType;
 import top.tsxb.compiler.frontend.semantic.type.Type;
 
-public record Symbol(String name, Type type, int scopeLevel, boolean isConst, boolean isStatic, List<Integer> dims,
-    List<Integer> initialValues) {
+public record Symbol(String name, Type type, int scopeLevel, boolean isConst, boolean isStatic, List<Integer> initialValues) {
     public Symbol {
-        dims = dims != null ? List.copyOf(dims) : Collections.emptyList();
         initialValues = initialValues != null ? List.copyOf(initialValues) : Collections.emptyList();
     }
 
-    private String getSymbolTypeForOutput() {
+    private String typeInfo() {
         if (type instanceof IntegerType) {
             if (isConst)
                 return "ConstInt";
@@ -24,7 +21,7 @@ public record Symbol(String name, Type type, int scopeLevel, boolean isConst, bo
                 return "StaticInt";
             return "Int";
         }
-        if (type instanceof ArrayType || type instanceof PointerType) {
+        if (type instanceof ArrayType) {
             if (isConst)
                 return "ConstIntArray";
             if (isStatic)
@@ -43,6 +40,6 @@ public record Symbol(String name, Type type, int scopeLevel, boolean isConst, bo
 
     @Override
     public String toString() {
-        return String.format("%d %s %s", scopeLevel, name, getSymbolTypeForOutput());
+        return String.format("%d %s %s", scopeLevel, name, typeInfo());
     }
 }

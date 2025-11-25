@@ -1,20 +1,22 @@
 package top.tsxb.compiler.frontend.semantic.ast;
 
-import java.util.List;
-
 import top.tsxb.compiler.frontend.semantic.type.Type;
 
-public class VarDecl extends Decl {
+public final class VarDecl extends Decl {
     public final boolean isConst;
     public final boolean isStatic;
     public final Type type;
-    public final List<VarSpec> varSpecs;
+    public final String name;
+    public final Expr dim;
+    public final Expr initVal;
 
-    public VarDecl(boolean isConst, boolean isStatic, Type type, List<VarSpec> varSpecs) {
+    public VarDecl(boolean isConst, boolean isStatic, Type type, String name, Expr dim, Expr initVal) {
         this.isConst = isConst;
         this.isStatic = isStatic;
         this.type = type;
-        this.varSpecs = varSpecs;
+        this.name = name;
+        this.dim = dim;
+        this.initVal = initVal;
     }
 
     @Override

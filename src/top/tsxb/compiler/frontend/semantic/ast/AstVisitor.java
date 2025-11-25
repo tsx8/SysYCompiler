@@ -9,8 +9,6 @@ public interface AstVisitor<T> {
 
     T visit(VarDecl node);
 
-    T visit(VarSpec node);
-
     T visit(BlockStmt node);
 
     T visit(AssignStmt node);

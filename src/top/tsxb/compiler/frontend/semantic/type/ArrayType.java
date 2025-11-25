@@ -2,34 +2,45 @@ package top.tsxb.compiler.frontend.semantic.type;
 
 import java.util.Objects;
 
-public record ArrayType(Type elementType, int numElements) implements Type {
+public record ArrayType(Type elementType, int length) implements Type {
+    public static final int UNSIZED = -1;
+
     public ArrayType {
         Objects.requireNonNull(elementType);
     }
 
+    public boolean isUnsized() {
+        return UNSIZED == length;
+    }
+
     @Override
     public boolean isSame(Type other) {
-        if (other instanceof ArrayType at) {
-            return this.numElements == at.numElements && this.elementType.isSame(at.elementType);
-        }
-        return false;
+        return other instanceof ArrayType at && this.elementType.isSame(at.elementType) && this.length == at.length;
     }
 
     @Override
     public boolean isCastableTo(Type other) {
-        if (isSame(other)) {
+        if (!(other instanceof ArrayType at)) {
+            return false;
+        }
+
+        if (!this.elementType.isSame(at.elementType)) {
+            return false;
+        }
+
+        // if the target is unsized, any length is acceptable
+        if (at.isUnsized()) {
             return true;
         }
 
-        if (other instanceof PointerType ptr) {
-            return this.elementType.isSame(ptr.baseType());
-        }
-
-        return false;
+        return this.length == at.length;
     }
 
     @Override
     public String toString() {
-        return elementType.toString() + "[" + numElements + "]";
+        if (isUnsized()) {
+            return elementType.toString() + "[]";
+        }
+        return elementType.toString() + "[" + length + "]";
     }
 }

@@ -1,6 +1,5 @@
 package top.tsxb.compiler.frontend.semantic;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
@@ -9,7 +8,6 @@ import top.tsxb.compiler.frontend.semantic.sym.Symbol;
 import top.tsxb.compiler.frontend.semantic.sym.SymbolTable;
 import top.tsxb.compiler.frontend.semantic.type.ArrayType;
 import top.tsxb.compiler.frontend.semantic.type.FunctionType;
-import top.tsxb.compiler.frontend.semantic.type.PointerType;
 import top.tsxb.compiler.frontend.semantic.type.Type;
 
 public record SymbolCollector(SymbolTable symbolTable) implements AstVisitor<Object> {
@@ -22,12 +20,10 @@ public record SymbolCollector(SymbolTable symbolTable) implements AstVisitor<Obj
     @Override
     public Object visit(FuncDef node) {
         List<Type> paramTypes = node.params == null ? Collections.emptyList()
-                                                    : node.params.stream().map(
-        p -> p.isArray ? new PointerType(p.type) : p.type).toList();
+            : node.params.stream().map(p -> p.isArray ? new ArrayType(p.type, ArrayType.UNSIZED) : p.type).toList();
         FunctionType funcType = new FunctionType(node.funcType, paramTypes);
-        Symbol funcSym = new Symbol(node.name, funcType, symbolTable.getCurrentScopeId(), false,
-                                    false,
-                                    Collections.emptyList(), Collections.emptyList());
+        Symbol funcSym =
+            new Symbol(node.name, funcType, symbolTable.getCurrentScopeId(), false, false, Collections.emptyList());
         node.symbol = funcSym;
 
         if (node.name.equals("main")) {
@@ -38,37 +34,27 @@ public record SymbolCollector(SymbolTable symbolTable) implements AstVisitor<Obj
 
     @Override
     public Object visit(VarDecl node) {
-        List<Symbol> symbols = new ArrayList<>();
-        for (VarSpec spec : node.varSpecs) {
-            List<Integer> dims = new ArrayList<>();
-            if (spec.dims != null) {
-                spec.dims.forEach(dimExpr -> dims.add(evaluate(dimExpr)));
-            }
-            Type finalType = node.type;
-            for (int i = dims.size() - 1; i >= 0; i--) {
-                finalType = new ArrayType(finalType, dims.get(i));
-            }
-            List<Integer> initValues = Collections.emptyList();
-            if ((node.isConst || node.isStatic || symbolTable.getCurrentScopeId() == 1)
-                && spec.initVal != null) {
-                initValues = flattenInitVal(spec.initVal);
-            }
-
-            Symbol symbol = new Symbol(spec.name, finalType, symbolTable.getCurrentScopeId(),
-                                       node.isConst,
-                                       node.isStatic, dims, initValues);
-            spec.symbol = symbol;
-            symbols.add(symbol);
+        Type finalType = node.type;
+        if (node.dim != null) {
+            int size = evaluate(node.dim);
+            finalType = new ArrayType(finalType, size);
         }
-        return symbols;
+        List<Integer> initValues = Collections.emptyList();
+        if ((node.isConst || node.isStatic || symbolTable.getCurrentScopeId() == 1) && node.initVal != null) {
+            initValues = flattenInitVal(node.initVal);
+        }
+
+        Symbol symbol = new Symbol(node.name, finalType, symbolTable().getCurrentScopeId(), node.isConst, node.isStatic,
+            initValues);
+        node.symbol = symbol;
+        return symbol;
     }
 
     @Override
     public Object visit(FuncParam node) {
-        Type paramType = node.isArray ? new PointerType(node.type) : node.type;
-        Symbol paramSym = new Symbol(node.name, paramType, symbolTable.getCurrentScopeId(), false,
-                                     false,
-                                     Collections.emptyList(), Collections.emptyList());
+        Type paramType = node.isArray ? new ArrayType(node.type, ArrayType.UNSIZED) : node.type;
+        Symbol paramSym =
+            new Symbol(node.name, paramType, symbolTable.getCurrentScopeId(), false, false, Collections.emptyList());
         node.symbol = paramSym;
         return paramSym;
     }
@@ -119,24 +105,10 @@ public record SymbolCollector(SymbolTable symbolTable) implements AstVisitor<Obj
             if (sym == null || !sym.isConst() || sym.initialValues().isEmpty()) {
                 return 0;
             }
-            int offset = 0;
-            List<Integer> dims = sym.dims();
-            if (lVal.indices.size() > dims.size()) {
-                return 0;
-            }
-            for (int i = 0; i < lVal.indices.size(); i++) {
-                int idx = evaluate(lVal.indices.get(i));
-                int stride = 1;
-                for (int j = i + 1; j < dims.size(); j++) {
-                    stride *= dims.get(j);
-                }
-                offset += idx * stride;
-            }
-
+            int offset = !lVal.indices.isEmpty() ? evaluate(lVal.indices.get(0)) : 0;
             if (offset >= 0 && offset < sym.initialValues().size()) {
                 return sym.initialValues().get(offset);
             }
-            return 0;
         }
         return 0;
     }
@@ -153,11 +125,6 @@ public record SymbolCollector(SymbolTable symbolTable) implements AstVisitor<Obj
 
     @Override
     public Object visit(ForLoopStmt node) {
-        return null;
-    }
-
-    @Override
-    public Object visit(VarSpec node) {
         return null;
     }
 

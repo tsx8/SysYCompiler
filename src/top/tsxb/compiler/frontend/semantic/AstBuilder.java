@@ -6,13 +6,13 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Function;
 
-import top.tsxb.compiler.frontend.semantic.ast.*;
 import top.tsxb.compiler.frontend.parser.cst.CstNode;
 import top.tsxb.compiler.frontend.parser.cst.CstType;
 import top.tsxb.compiler.frontend.parser.cst.CstVisitor;
 import top.tsxb.compiler.frontend.parser.cst.NonTerm;
 import top.tsxb.compiler.frontend.parser.cst.Token;
 import top.tsxb.compiler.frontend.parser.cst.TokenType;
+import top.tsxb.compiler.frontend.semantic.ast.*;
 import top.tsxb.compiler.frontend.semantic.type.IntegerType;
 import top.tsxb.compiler.frontend.semantic.type.Type;
 import top.tsxb.compiler.frontend.semantic.type.VoidType;
@@ -35,8 +35,8 @@ public class AstBuilder implements CstVisitor<Object> {
             case FuncDef -> buildFuncDef(node);
             case MainFuncDef -> buildMainFuncDef(node);
             // Decl
-            case ConstDecl, VarDecl -> buildVarDecl(node);
-            case ConstDef, VarDef -> buildVarSpec(node);
+            case ConstDecl, VarDecl -> buildVarDecls(node);
+            case ConstDef, VarDef -> null;
             case ConstInitVal, InitVal -> buildInitVal(node);
             case FuncFParams -> buildFuncFParams(node);
             case FuncFParam -> buildFuncFParam(node);
@@ -79,8 +79,17 @@ public class AstBuilder implements CstVisitor<Object> {
         };
     }
 
+    @SuppressWarnings("unchecked")
     private CompUnit buildCompUnit(NonTerm node) {
-        List<Decl> decls = node.children().stream().map(child -> (Decl)child.accept(this)).toList();
+        List<Decl> decls = new ArrayList<>();
+        for (CstNode child : node.children()) {
+            Object result = child.accept(this);
+            if (result instanceof List<?> list) {
+                decls.addAll((List<Decl>)list);
+            } else if (result instanceof Decl decl) {
+                decls.add(decl);
+            }
+        }
         CompUnit compUnit = new CompUnit(decls);
         if (!node.children().isEmpty()) {
             Cst.findFirstToken(node.children().get(0)).ifPresent(t -> compUnit.lineNumber = t.line());
@@ -120,25 +129,28 @@ public class AstBuilder implements CstVisitor<Object> {
         return funcParam;
     }
 
-    private VarDecl buildVarDecl(NonTerm node) {
+    private List<VarDecl> buildVarDecls(NonTerm node) {
         boolean isConst = node.type() == CstType.ConstDecl;
         boolean isStatic = Cst.has(node, TokenType.STATICTK);
-        Type type = Cst.build(node, CstType.BType, n -> (Type)n.accept(this));
+        Type baseType = Cst.build(node, CstType.BType, n -> (Type)n.accept(this));
         CstType specType = isConst ? CstType.ConstDef : CstType.VarDef;
-        List<VarSpec> varSpecs = Cst.buildAll(node, specType, n -> (VarSpec)n.accept(this));
-        VarDecl varDecl = new VarDecl(isConst, isStatic, type, varSpecs);
-        Cst.findFirstToken(node).ifPresent(token -> varDecl.lineNumber = token.line());
-        return varDecl;
-    }
-
-    private VarSpec buildVarSpec(NonTerm node) {
-        String name = Cst.lexeme(node, TokenType.IDENFR);
-        List<Expr> dims = Cst.buildAll(node, CstType.ConstExp, n -> (Expr)n.accept(this));
-        Expr initVal = Cst.buildOpt(node, CstType.ConstInitVal, n -> (Expr)n.accept(this))
-            .or(() -> Cst.buildOpt(node, CstType.InitVal, n -> (Expr)n.accept(this))).orElse(null);
-        VarSpec varSpec = new VarSpec(name, dims, initVal);
-        Cst.find(node, TokenType.IDENFR).ifPresent(token -> varSpec.lineNumber = token.line());
-        return varSpec;
+        List<NonTerm> defs = Cst.findAll(node, specType);
+        List<VarDecl> decls = new ArrayList<>();
+        for (NonTerm def : defs) {
+            String name = Cst.lexeme(def, TokenType.IDENFR);
+            List<Expr> dims = Cst.buildAll(def, CstType.ConstExp, n -> (Expr)n.accept(this));
+            Expr dim = dims.isEmpty() ? null : dims.get(0);
+            Expr initVal;
+            if (isConst) {
+                initVal = Cst.build(def, CstType.ConstInitVal, n -> (Expr)n.accept(this));
+            } else {
+                initVal = Cst.buildOpt(def, CstType.InitVal, n -> (Expr)n.accept(this)).orElse(null);
+            }
+            VarDecl varDecl = new VarDecl(isConst, isStatic, baseType, name, dim, initVal);
+            Cst.find(def, TokenType.IDENFR).ifPresent(token -> varDecl.lineNumber = token.line());
+            decls.add(varDecl);
+        }
+        return decls;
     }
 
     private Expr buildInitVal(NonTerm node) {
@@ -153,8 +165,18 @@ public class AstBuilder implements CstVisitor<Object> {
         }
     }
 
+    @SuppressWarnings("unchecked")
     private BlockStmt buildBlockStmt(NonTerm node) {
-        List<AstNode> items = Cst.buildAll(node, CstType.BlockItem, n -> (AstNode)n.accept(this));
+        List<AstNode> items = new ArrayList<>();
+        for (NonTerm child : Cst.findAll(node, CstType.BlockItem)) {
+            // child is BlockItem, BlockItem has a child Decl or Stmt.
+            Object result = child.children().get(0).accept(this);
+            if (result instanceof List<?> list) {
+                items.addAll((List<AstNode>)list);
+            } else if (result instanceof AstNode item) {
+                items.add(item);
+            }
+        }
         BlockStmt blockStmt = new BlockStmt(items);
         Cst.find(node, TokenType.LBRACE).ifPresent(token -> blockStmt.lineNumber = token.line());
         Cst.find(node, TokenType.RBRACE).ifPresent(token -> blockStmt.endLineNumber = token.line());

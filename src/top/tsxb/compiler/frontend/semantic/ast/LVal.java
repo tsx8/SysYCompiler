@@ -2,12 +2,9 @@ package top.tsxb.compiler.frontend.semantic.ast;
 
 import java.util.List;
 
-import top.tsxb.compiler.frontend.semantic.sym.Symbol;
-
 public class LVal extends Expr {
     public final String name;
     public final List<Expr> indices;
-    public Symbol symbol;
 
     public LVal(String name, List<Expr> indices) {
         this.name = name;

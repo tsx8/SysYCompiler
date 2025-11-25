@@ -10,7 +10,6 @@ import top.tsxb.compiler.frontend.semantic.sym.SymbolTable;
 import top.tsxb.compiler.frontend.semantic.type.ArrayType;
 import top.tsxb.compiler.frontend.semantic.type.FunctionType;
 import top.tsxb.compiler.frontend.semantic.type.IntegerType;
-import top.tsxb.compiler.frontend.semantic.type.PointerType;
 import top.tsxb.compiler.frontend.semantic.type.Type;
 import top.tsxb.compiler.frontend.semantic.type.VoidType;
 
@@ -77,35 +76,20 @@ public class TypeChecker implements AstVisitor<Type> {
     @Override
     public Type visit(FuncParam node) {
         Symbol paramSymbol = (Symbol)symbolCollector.visit(node);
-        if (paramSymbol != null && !symbolTable.define(paramSymbol)) {
+        if (!symbolTable.define(paramSymbol)) {
             errorReporter.report(node.lineNumber, ErrorType.fromCode("b"), node.name);
         }
         return node.type;
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public Type visit(VarDecl node) {
-        List<Symbol> symbols = (List<Symbol>)symbolCollector.visit(node);
-        if (symbols != null) {
-            for (int i = 0; i < symbols.size(); i++) {
-                Symbol symbol = symbols.get(i);
-                VarSpec spec = node.varSpecs.get(i);
-                if (!symbolTable.define(symbol)) {
-                    errorReporter.report(spec.lineNumber, ErrorType.fromCode("b"), spec.name);
-                }
-                spec.accept(this);
-            }
+        Symbol symbol = (Symbol)symbolCollector.visit(node);
+        if (!symbolTable.define(symbol)) {
+            errorReporter.report(node.lineNumber, ErrorType.fromCode("b"), node.name);
         }
-        return null;
-    }
-
-    @Override
-    public Type visit(VarSpec node) {
-        if (node.dims != null) {
-            for (Expr expr : node.dims) {
-                expr.accept(this);
-            }
+        if (node.dim != null) {
+            node.dim.accept(this);
         }
         if (node.initVal != null) {
             node.initVal.accept(this);
@@ -289,8 +273,6 @@ public class TypeChecker implements AstVisitor<Type> {
             index.accept(this);
             if (type instanceof ArrayType at) {
                 type = at.elementType();
-            } else if (type instanceof PointerType pt) {
-                type = pt.baseType();
             }
         }
         node.type = type;

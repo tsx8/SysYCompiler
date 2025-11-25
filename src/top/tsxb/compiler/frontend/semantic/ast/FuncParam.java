@@ -1,14 +1,11 @@
 package top.tsxb.compiler.frontend.semantic.ast;
 
-import top.tsxb.compiler.frontend.semantic.sym.Symbol;
 import top.tsxb.compiler.frontend.semantic.type.Type;
 
 public class FuncParam extends AstNode {
     public final Type type;
     public final String name;
     public final boolean isArray;
-
-    public Symbol symbol;
 
     public FuncParam(Type type, String name, boolean isArray) {
         this.type = type;
