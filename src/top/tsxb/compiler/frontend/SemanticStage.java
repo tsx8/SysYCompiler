@@ -2,16 +2,16 @@ package top.tsxb.compiler.frontend;
 
 import top.tsxb.compiler.common.CompilerStage;
 import top.tsxb.compiler.common.ErrorReporter;
-import top.tsxb.compiler.frontend.semantic.AstBuilder;
-import top.tsxb.compiler.frontend.semantic.SemanticResult;
-import top.tsxb.compiler.frontend.semantic.TypeChecker;
-import top.tsxb.compiler.frontend.semantic.ast.CompUnit;
 import top.tsxb.compiler.frontend.parser.cst.CstNode;
+import top.tsxb.compiler.frontend.semantic.AstBuilder;
+import top.tsxb.compiler.frontend.semantic.TypeChecker;
+import top.tsxb.compiler.frontend.semantic.ast.AstNode;
+import top.tsxb.compiler.frontend.semantic.ast.CompUnit;
 import top.tsxb.compiler.frontend.semantic.sym.SymbolTable;
 
-public class SemanticStage implements CompilerStage<CstNode, SemanticResult> {
+public class SemanticStage implements CompilerStage<CstNode, AstNode> {
     @Override
-    public StageResult<SemanticResult> process(CstNode cstRoot, ErrorReporter errorReporter) {
+    public StageResult<AstNode> process(CstNode cstRoot, ErrorReporter errorReporter) {
         AstBuilder astBuilder = new AstBuilder();
         CompUnit astRoot = astBuilder.build(cstRoot);
 
@@ -22,8 +22,6 @@ public class SemanticStage implements CompilerStage<CstNode, SemanticResult> {
 
         String report = report(symbolTable.getOutput(), errorReporter);
 
-        SemanticResult semanticResult = new SemanticResult(astRoot, symbolTable);
-
-        return new StageResult<>(semanticResult, report);
+        return new StageResult<>(astRoot, report);
     }
 }
