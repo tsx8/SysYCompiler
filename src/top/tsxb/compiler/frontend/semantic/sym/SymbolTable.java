@@ -21,7 +21,7 @@ public class SymbolTable {
 
     public SymbolTable() {
         scopeCounter++;
-        this.rootScope = new Scope(null, scopeCounter, null);
+        this.rootScope = new Scope(null, scopeCounter);
         this.currentScope = rootScope;
         FunctionType getintType = new FunctionType(IntegerType.getInstance(), Collections.emptyList());
         Symbol getintSymbol = new Symbol("getint", getintType, 1, false, false, Collections.emptyList());
@@ -30,8 +30,7 @@ public class SymbolTable {
 
     public void enterScope(AstNode node) {
         scopeCounter++;
-        Scope newScope = new Scope(currentScope, scopeCounter, node);
-        currentScope.addChild(newScope);
+        Scope newScope = new Scope(currentScope, scopeCounter);
         currentScope = newScope;
         nodeToScopeMap.put(node, newScope);
     }

@@ -1,23 +1,16 @@
 package top.tsxb.compiler.frontend.semantic.sym;
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-
-import top.tsxb.compiler.frontend.semantic.ast.AstNode;
 
 public class Scope {
     private final Scope parent;
-    private final List<Scope> children = new ArrayList<>();
     private final Map<String, Symbol> symbols = new HashMap<>();
     private final int id;
-    private final AstNode owner;
 
-    public Scope(Scope parent, int id, AstNode owner) {
+    public Scope(Scope parent, int id) {
         this.parent = parent;
         this.id = id;
-        this.owner = owner;
     }
 
     public boolean define(Symbol symbol) {
@@ -37,10 +30,6 @@ public class Scope {
             return parent.lookup(name);
         }
         return null;
-    }
-
-    public void addChild(Scope child) {
-        this.children.add(child);
     }
 
     public Scope getParent() {
