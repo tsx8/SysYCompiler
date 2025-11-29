@@ -7,6 +7,7 @@ import java.nio.file.Paths;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import top.tsxb.compiler.backend.IrGenStage;
 import top.tsxb.compiler.common.CompilerStage;
 import top.tsxb.compiler.common.ErrorReporter;
 import top.tsxb.compiler.frontend.LexerStage;
@@ -27,6 +28,7 @@ public class Pipeline {
         stages.put("lexer", new LexerStage());
         stages.put("parser", new ParserStage());
         stages.put("semantic", new SemanticStage());
+        stages.put("llvm", new IrGenStage());
     }
 
     /**
