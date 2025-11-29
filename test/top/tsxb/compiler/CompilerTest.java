@@ -1,8 +1,6 @@
 package top.tsxb.compiler;
 
 import java.io.IOException;
-import java.io.PrintWriter;
-import java.io.StringWriter;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -15,31 +13,19 @@ import java.util.stream.Stream;
 
 import top.tsxb.compiler.driver.CompilerConfig;
 import top.tsxb.compiler.driver.Pipeline;
-import top.tsxb.compiler.frontend.lexer.LexicalException;
-import top.tsxb.compiler.frontend.parser.SyntacticException;
+import top.tsxb.compiler.model.TestCase;
+import top.tsxb.compiler.model.TestResult;
+import top.tsxb.compiler.runner.ProcessExecutor;
+import top.tsxb.compiler.runner.TestLogger;
+import top.tsxb.compiler.strategy.IrExecutionStrategy;
+import top.tsxb.compiler.strategy.LegacyFileCompareStrategy;
+import top.tsxb.compiler.strategy.TestStrategy;
 
-/**
- * A unified test harness for the SysY compiler. It runs test cases for the compiler stage defined in
- * {@link CompilerConfig}.
- *
- * <p>
- * This test harness creates a detailed, structured log for each test run, with each test case's artifacts stored in a
- * separate subdirectory.
- */
 public class CompilerTest {
-
-    private static final Pipeline compilerPipeline = new Pipeline();
-
     private static final Path TEST_CASES_ROOT = Paths.get("testcases", CompilerConfig.CURRENT_HOMEWORK);
+    private static final Path LOGS_ROOT =
+        Paths.get("out", "logs", LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")));
 
-    // Base directory for storing all test run logs.
-    private static final Path RUNS_LOG_DIR = Paths.get("out", "logs");
-
-    /**
-     * The entry point of application.
-     *
-     * @param args the input arguments
-     */
     public static void main(String[] args) {
         System.out.println("========================================");
         System.out.printf("  Running SysY Compiler Tests for: %s%n", CompilerConfig.CURRENT_HOMEWORK);
@@ -47,49 +33,116 @@ public class CompilerTest {
 
         if (!Files.isDirectory(TEST_CASES_ROOT)) {
             System.err.println("ERROR: Test cases directory not found: " + TEST_CASES_ROOT.toAbsolutePath());
-            System.err.println("HINT: Check the value of 'CURRENT_HOMEWORK' in CompilerConfig.java.");
             System.exit(1);
         }
 
-        // Create a unique directory for this specific test run.
-        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
-        Path runLogDir = RUNS_LOG_DIR.resolve(String.format("run_%s", timestamp));
         try {
-            Files.createDirectories(runLogDir);
+            prepareLogDirectory();
         } catch (IOException e) {
-            System.err.println("ERROR: Could not create run log directory: " + runLogDir.toAbsolutePath());
+            System.err.println("FATAL: Could not prepare log directory: " + LOGS_ROOT.toAbsolutePath());
             e.printStackTrace(System.err);
             System.exit(1);
         }
 
+        TestStrategy strategy = createStrategy();
         int passed = 0;
         int failed = 0;
-        List<Path> testDirs = findTestDirectories();
 
-        for (Path testDir : testDirs) {
-            System.out.printf("--- Running test: %s ---\n", testDir.getFileName());
-            boolean result = runTestCase(testDir, runLogDir);
-            if (result) {
-                System.out.println("result: \u001B[32m[PASSED]\u001B[0m");
-                passed++;
-            } else {
-                System.out.println("result: \u001B[31m[FAILED]\u001B[0m");
-                failed++;
+        try {
+            strategy.prepare();
+            List<Path> testDirs = findTestDirectories();
+            for (Path testDir : testDirs) {
+                System.out.printf("--- Running test: %-15s ", testDir.getFileName());
+                TestCase testCase = new TestCase(testDir.getFileName().toString(), testDir.resolve("testfile.txt"),
+                    testDir.resolve("ans.txt"), testDir.resolve("in.txt"));
+                Path caseLogDir = LOGS_ROOT.resolve(testCase.name());
+                TestLogger logger = new TestLogger(caseLogDir);
+                logInitialArtifacts(testCase, logger);
+                TestResult result = strategy.execute(testCase, logger);
+                logFinalResult(result, logger);
+                if (result instanceof TestResult.Passed p) {
+                    System.out.println("\u001B[32m[PASSED]\u001B[0m");
+                    passed++;
+                } else if (result instanceof TestResult.Failed f) {
+                    System.out.println("\u001B[31m[FAILED]\u001B[0m - " + f.reason());
+                    System.err.println("Expected:\n---\n" + f.expectedOutput().trim() + "\n---");
+                    System.err.println("Actual:\n---\n" + f.actualOutput().trim() + "\n---");
+                    failed++;
+                } else if (result instanceof TestResult.ExecutionError e) {
+                    System.out.println("\u001B[31m[ERROR]\u001B[0m - " + e.summary());
+                    System.err.println("Command: " + e.command());
+                    System.err.println("Stderr:\n---\n" + e.stderr().trim() + "\n---");
+                    failed++;
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("\nFATAL ERROR during test execution: " + e.getMessage());
+            e.printStackTrace(System.err);
+            failed++;
+        } finally {
+            try {
+                strategy.cleanup();
+            } catch (IOException e) {
+                System.err.println("ERROR during test cleanup: " + e.getMessage());
             }
         }
-
-        String summary = String.format("Stage: %s | Total: %d, Passed: %d, Failed: %d", CompilerConfig.CURRENT_HOMEWORK,
-            (passed + failed), passed, failed);
-
-        System.out.println("\n========================================");
-        System.out.println("  Test Summary");
-        System.out.println("========================================");
-        System.out.println(summary);
-        System.out.println("\nDetailed logs available in: " + runLogDir.toAbsolutePath());
-
+        printSummary(passed, failed);
         if (failed > 0) {
             System.exit(1);
         }
+    }
+
+    private static void prepareLogDirectory() throws IOException {
+        if (Files.exists(LOGS_ROOT)) {
+            try (Stream<Path> walk = Files.walk(LOGS_ROOT)) {
+                walk.sorted(Comparator.reverseOrder()).forEach(path -> {
+                    try {
+                        Files.delete(path);
+                    } catch (IOException e) {
+                        throw new UncheckedIOException(e);
+                    }
+                });
+            }
+        }
+        Files.createDirectories(LOGS_ROOT);
+        System.out.println("Clean log directory created at: " + LOGS_ROOT.toAbsolutePath());
+    }
+
+    private static void logInitialArtifacts(TestCase testCase, TestLogger logger) {
+        try {
+            logger.log("source.sysy", Files.readString(testCase.sourceFile()));
+            logger.log("expected.txt", Files.readString(testCase.expectedOutputFile()));
+        } catch (IOException e) {
+            System.err.println("Warning: Could not log initial artifacts for " + testCase.name());
+        }
+    }
+
+    private static void logFinalResult(TestResult result, TestLogger logger) {
+        if (result instanceof TestResult.Passed p) {
+            logger.log("output.log", p.actualOutput());
+        } else if (result instanceof TestResult.Failed f) {
+            logger.log("output.log", f.actualOutput());
+            String errorDetails = "Reason: " + f.reason() + "\n\n--- EXPECTED ---\n" + f.expectedOutput()
+                + "\n\n--- ACTUAL ---\n" + f.actualOutput();
+            logger.log("error.log", errorDetails);
+        } else if (result instanceof TestResult.ExecutionError e) {
+            String errorDetails =
+                "Summary: " + e.summary() + "\nCommand: " + e.command() + "\n\n--- STDERR ---\n" + e.stderr();
+            logger.log("error.log", errorDetails);
+        }
+    }
+
+    private static TestStrategy createStrategy() {
+        var pipeline = new Pipeline();
+        var executor = new ProcessExecutor();
+
+        return switch (CompilerConfig.CURRENT_HOMEWORK) {
+            case "lexer", "parser", "semantic" ->
+                new LegacyFileCompareStrategy(pipeline, CompilerConfig.CURRENT_HOMEWORK);
+            case "llvm" -> new IrExecutionStrategy(pipeline, executor);
+            default -> throw new IllegalStateException(
+                "No test strategy available for stage: " + CompilerConfig.CURRENT_HOMEWORK);
+        };
     }
 
     private static List<Path> findTestDirectories() {
@@ -102,71 +155,12 @@ public class CompilerTest {
         }
     }
 
-    private static boolean runTestCase(Path testDir, Path runLogDir) {
-        Path caseLogDir = runLogDir.resolve(testDir.getFileName());
-        try {
-            Files.createDirectories(caseLogDir);
-        } catch (IOException e) {
-            System.err.println("ERROR: Could not create log directory for " + testDir.getFileName());
-            e.printStackTrace(System.err);
-            return false;
-        }
-
-        Path inputFile = testDir.resolve("testfile.txt");
-        Path expectedFile = testDir.resolve("ans.txt");
-
-        if (!Files.exists(inputFile) || !Files.exists(expectedFile)) {
-            writeLog(caseLogDir, "err.log", "SKIPPED: Missing testfile.txt or ans.txt");
-            return false;
-        }
-
-        try {
-            String sourceCode = Files.readString(inputFile);
-            String expectedOutput = Files.readString(expectedFile);
-            writeLog(caseLogDir, "ans.log", expectedOutput);
-
-            String actualOutput = compilerPipeline.run(sourceCode, CompilerConfig.CURRENT_HOMEWORK);
-            writeLog(caseLogDir, "usr.log", actualOutput);
-
-            String normalizedExpected = expectedOutput.replaceAll("\\r\\n", "\n").trim();
-            String normalizedActual = actualOutput.replaceAll("\\r\\n", "\n").trim();
-
-            if (normalizedExpected.equals(normalizedActual)) {
-                return true; // PASSED
-            } else {
-                String diffMessage = """
-                    FAILED: Output mismatch.
-                    See ans.log (expected) and usr.log (actual) for details.
-                    """;
-                writeLog(caseLogDir, "err.log", diffMessage);
-                return false;
-            }
-        } catch (IOException e) {
-            writeLog(caseLogDir, "err.log",
-                "FAILED: I/O Exception during test execution.\n" + getStackTraceAsString(e));
-            throw new UncheckedIOException("Failed to read test files in " + testDir, e);
-        } catch (LexicalException | SyntacticException e) {
-            String errorMessage = String.format("FAILED: Unhandled %s.\n\n", e.getClass().getSimpleName());
-            writeLog(caseLogDir, "err.log", errorMessage + getStackTraceAsString(e));
-            return false;
-        }
-    }
-
-    private static void writeLog(Path dir, String fileName, String content) {
-        try {
-            Files.writeString(dir.resolve(fileName), content);
-        } catch (IOException e) {
-            // Log writing errors are critical and should be visible on the console.
-            System.err.printf("%nERROR: Failed to write log file %s in %s%n", fileName, dir.toAbsolutePath());
-            e.printStackTrace(System.err);
-        }
-    }
-
-    private static String getStackTraceAsString(Throwable throwable) {
-        StringWriter stringWriter = new StringWriter();
-        try (PrintWriter printWriter = new PrintWriter(stringWriter)) {
-            throwable.printStackTrace(printWriter);
-        }
-        return stringWriter.toString();
+    private static void printSummary(int passed, int failed) {
+        System.out.println("\n=========================================");
+        System.out.println("  Test Summary");
+        System.out.println("=========================================");
+        String summary = String.format("Stage: %s | Total: %d, Passed: %d, Failed: %d", CompilerConfig.CURRENT_HOMEWORK,
+            (passed + failed), passed, failed);
+        System.out.println(summary);
     }
 }
