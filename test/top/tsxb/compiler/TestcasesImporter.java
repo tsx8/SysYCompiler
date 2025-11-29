@@ -24,6 +24,7 @@ import top.tsxb.compiler.driver.CompilerConfig;
 public class TestcasesImporter {
     private static final String ANS_FILE = "ans.txt";
     private static final String TEST_FILE = "testfile.txt";
+    private static final String INPUT_FILE = "in.txt";
     private static final Path ZIP_PATH = Paths.get(CompilerConfig.CURRENT_HOMEWORK + ".zip");
     private static final Path DEST_DIR = Paths.get("testcases/" + CompilerConfig.CURRENT_HOMEWORK);
 
@@ -85,6 +86,7 @@ public class TestcasesImporter {
                     // 提取文件
                     extractFile(zipFile, dirPath + ANS_FILE, destinationDir.resolve(ANS_FILE));
                     extractFile(zipFile, dirPath + TEST_FILE, destinationDir.resolve(TEST_FILE));
+                    extractFile(zipFile, dirPath + INPUT_FILE, destinationDir.resolve(INPUT_FILE));
                 }
             }
         }

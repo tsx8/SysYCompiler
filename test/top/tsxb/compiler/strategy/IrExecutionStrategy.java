@@ -31,8 +31,8 @@ public class IrExecutionStrategy implements TestStrategy {
     public void prepare() throws IOException {
         System.out.println("Prepareing SysY runtime library...");
         Path libDir = CompilerConfig.LIBSYSY_DIR;
-        Path libSource = libDir.resolve("libsysy.c");
-        this.precompiledLibIr = libDir.resolve("lib.ll");
+        Path libSource = libDir.resolve("libsysy.c").toAbsolutePath();
+        this.precompiledLibIr = libDir.resolve("lib.ll").toAbsolutePath();
         var command = new ProcessExecutor.Command(CompilerConfig.CLANG_PATH,
             List.of("-S", "-emit-llvm", libSource.toString(), "-o", precompiledLibIr.toString()), libDir,
             Optional.empty());
