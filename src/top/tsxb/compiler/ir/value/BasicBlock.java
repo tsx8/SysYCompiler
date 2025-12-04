@@ -10,6 +10,10 @@ public class BasicBlock extends Value {
     private final Function parent;
     private final List<Instruction> instructions = new LinkedList<>();
 
+    public BasicBlock(Function parent) {
+        this("", parent);
+    }
+
     public BasicBlock(String name, Function parent) {
         super(NoneType.VOID, name);
         this.parent = parent;

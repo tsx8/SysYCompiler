@@ -122,7 +122,7 @@ public class IrBuilder implements AstVisitor<Value> {
         module.addFunction(func);
         context.registerSymbol(node.symbol, func);
         context.currentFunction = func;
-        context.currentBlock = module.createBlock("entry", func);
+        context.currentBlock = new BasicBlock("entry", func);
         var args = func.getArguments();
         int size = (node.params != null) ? Math.min(node.params.size(), args.size()) : 0;
         for (int i = 0; i < size; i++) {
@@ -150,8 +150,8 @@ public class IrBuilder implements AstVisitor<Value> {
             AllocaInst resultAddr = new AllocaInst(IntType.I1, "", null);
             entry.addFirst(resultAddr);
 
-            BasicBlock rhs = module.createBlock("rhs", context.currentFunction);
-            BasicBlock merge = module.createBlock("merge", context.currentFunction);
+            BasicBlock rhs = new BasicBlock("rhs", context.currentFunction);
+            BasicBlock merge = new BasicBlock("merge", context.currentFunction);
 
             Value lVal = node.left.accept(this);
             if (lVal.getType() instanceof IntType it && it.getBitWidth() == 32) {
@@ -270,9 +270,9 @@ public class IrBuilder implements AstVisitor<Value> {
 
     @Override
     public Value visit(IfStmt node) {
-        BasicBlock thenBlock = module.createBlock("if_then", context.currentFunction);
-        BasicBlock elseBlock = (node.elseStmt != null) ? module.createBlock("if_else", context.currentFunction) : null;
-        BasicBlock nextBlock = module.createBlock("if_next", context.currentFunction);
+        BasicBlock thenBlock = new BasicBlock("if_then", context.currentFunction);
+        BasicBlock elseBlock = (node.elseStmt != null) ? new BasicBlock("if_else", context.currentFunction) : null;
+        BasicBlock nextBlock = new BasicBlock("if_next", context.currentFunction);
         Value condVal = node.cond.accept(this);
         Value boolVal = condVal;
         if (condVal.getType() instanceof IntType it && it.getBitWidth() == 32) {
@@ -296,10 +296,10 @@ public class IrBuilder implements AstVisitor<Value> {
         if (node.init != null) {
             node.init.forEach(stmt -> stmt.accept(this));
         }
-        BasicBlock cond = module.createBlock("for_cond", context.currentFunction);
-        BasicBlock body = module.createBlock("for_body", context.currentFunction);
-        BasicBlock step = module.createBlock("for_step", context.currentFunction);
-        BasicBlock exit = module.createBlock("for_exit", context.currentFunction);
+        BasicBlock cond = new BasicBlock("for_cond", context.currentFunction);
+        BasicBlock body = new BasicBlock("for_body", context.currentFunction);
+        BasicBlock step = new BasicBlock("for_step", context.currentFunction);
+        BasicBlock exit = new BasicBlock("for_exit", context.currentFunction);
         context.jump(cond);
         context.currentBlock = cond;
         if (node.cond != null) {

@@ -15,9 +15,8 @@ public class Function extends User {
     public Function(String name, FuncType type, boolean builtin) {
         super(type, name);
         isBuiltin = builtin;
-        List<IrType> paramTypes = type.getParamTypes();
-        for (int i = 0; i < paramTypes.size(); i++) {
-            Argument arg = new Argument(paramTypes.get(i), "arg" + i, this);
+        for (IrType paramType : type.getParamTypes()) {
+            Argument arg = new Argument(paramType, "arg", this);
             arguments.add(arg);
         }
     }
