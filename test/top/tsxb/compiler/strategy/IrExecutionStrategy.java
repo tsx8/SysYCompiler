@@ -56,10 +56,6 @@ public class IrExecutionStrategy implements TestStrategy {
             logger.log("input.txt", stdinContent);
             String sourceCode = Files.readString(testCase.sourceFile());
             String mainIr = pipeline.run(sourceCode, "llvm");
-            if (mainIr.matches("(?s).*\\d+ [a-m].*")) {
-                logger.log("compiler_errors.log", mainIr);
-                return new TestResult.ExecutionError("Compiler reported errors", "SysY->LLVM", mainIr);
-            }
             logger.log("generated.ll", mainIr);
             Files.writeString(tmpDir.resolve("main.ll"), mainIr);
             Files.copy(precompiledLibIr, tmpDir.resolve("lib.ll"), StandardCopyOption.REPLACE_EXISTING);
@@ -70,6 +66,7 @@ public class IrExecutionStrategy implements TestStrategy {
                 return new TestResult.ExecutionError("llvm-link failed", linkCommand.toCommandLineString(),
                     linkResult.stderr());
             }
+            logger.log("out.ll", tmpDir.resolve("out.ll"));
             var lliCommand = new ProcessExecutor.Command(CompilerConfig.LLI_PATH, List.of("out.ll"), tmpDir,
                 Optional.of(stdinContent));
             var lliResult = executor.execute(lliCommand);

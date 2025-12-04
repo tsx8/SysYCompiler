@@ -45,16 +45,24 @@ public class CompilerTest {
         }
 
         TestStrategy strategy = createStrategy();
-        int passed = 0;
-        int failed = 0;
 
         try {
             strategy.prepare();
-            List<Path> testDirs = findTestDirectories();
-            for (Path testDir : testDirs) {
-                System.out.printf("--- Running test: %-15s ", testDir.getFileName());
+        } catch (Exception e) {
+            System.err.println("\nFATAL: Strategy preparation failed: " + e.getMessage());
+            e.printStackTrace(System.err);
+            System.exit(1);
+        }
+
+        int passed = 0;
+        int failed = 0;
+
+        List<Path> testDirs = findTestDirectories();
+        for (Path testDir : testDirs) {
+            System.out.printf("--- Running test: %-15s ", testDir.getFileName());
+            try {
                 TestCase testCase = new TestCase(testDir.getFileName().toString(), testDir.resolve("testfile.txt"),
-                    testDir.resolve("ans.txt"), testDir.resolve("in.txt"));
+                                                 testDir.resolve("ans.txt"), testDir.resolve("in.txt"));
                 Path caseLogDir = LOGS_ROOT.resolve(testCase.name());
                 TestLogger logger = new TestLogger(caseLogDir);
                 logInitialArtifacts(testCase, logger);
@@ -74,18 +82,19 @@ public class CompilerTest {
                     System.err.println("Stderr:\n---\n" + e.stderr().trim() + "\n---");
                     failed++;
                 }
-            }
-        } catch (Exception e) {
-            System.err.println("\nFATAL ERROR during test execution: " + e.getMessage());
-            e.printStackTrace(System.err);
-            failed++;
-        } finally {
-            try {
-                strategy.cleanup();
-            } catch (IOException e) {
-                System.err.println("ERROR during test cleanup: " + e.getMessage());
+            } catch (Exception e) {
+                System.out.println("\u001B[31m[CRASH]\u001B[0m - " + e.getClass().getSimpleName());
+                System.err.println("  Reason: " + e.getMessage());
+                failed++;
             }
         }
+
+        try {
+            strategy.cleanup();
+        } catch (IOException e) {
+            System.err.println("ERROR during test cleanup: " + e.getMessage());
+        }
+
         printSummary(passed, failed);
         if (failed > 0) {
             System.exit(1);
