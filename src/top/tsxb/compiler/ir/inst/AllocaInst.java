@@ -8,16 +8,12 @@ public class AllocaInst extends Instruction {
     private final IrType allocatedType;
 
     public AllocaInst(IrType allocatedType, String name, BasicBlock parent) {
-        super(new PtrType(allocatedType), OpCode.ALLOCA, name == null ? "" : name, parent);
+        super(new PtrType(allocatedType), OpCode.ALLOCA, name, parent);
         this.allocatedType = allocatedType;
-    }
-
-    public IrType getAllocatedType() {
-        return allocatedType;
     }
 
     @Override
     public String toString() {
-        return String.format("%s = alloca %s", name, allocatedType.toString());
+        return String.format("%s = alloca %s", getRef(), allocatedType);
     }
 }

@@ -39,8 +39,8 @@ public record ArrayType(Type elementType, int length) implements Type {
     @Override
     public String toString() {
         if (isUnsized()) {
-            return elementType.toString() + "[]";
+            return elementType + "[]";
         }
-        return elementType.toString() + "[" + length + "]";
+        return elementType + "[" + length + "]";
     }
 }

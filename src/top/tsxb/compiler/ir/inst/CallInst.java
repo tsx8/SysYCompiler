@@ -2,10 +2,11 @@ package top.tsxb.compiler.ir.inst;
 
 import java.util.List;
 
-import top.tsxb.compiler.ir.value.Value;
 import top.tsxb.compiler.ir.type.FuncType;
+import top.tsxb.compiler.ir.type.NoneType;
 import top.tsxb.compiler.ir.value.BasicBlock;
 import top.tsxb.compiler.ir.value.Function;
+import top.tsxb.compiler.ir.value.Value;
 
 public class CallInst extends Instruction {
     public CallInst(Function func, List<Value> args, BasicBlock parent) {
@@ -20,17 +21,13 @@ public class CallInst extends Instruction {
     public String toString() {
         Function func = (Function)getOperand(0);
         StringBuilder sb = new StringBuilder();
-        if (!type.isVoid()) {
-            sb.append(name).append(" = ");
+        if (!(type instanceof NoneType)) {
+            sb.append(getRef()).append(" = ");
         }
-        sb.append("call ").append(type).append(" ").append(func.getName()).append("(");
-        for (int i = 1; i < getNumOperands(); i++) {
-            Value arg = getOperand(i);
-            sb.append(arg.getType().toString()).append(" ").append(arg.getName());
-            if (i < getNumOperands() - 1) {
-                sb.append(", ");
-            }
-        }
+        sb.append("call ").append(type).append(" ").append(func.getRef()).append("(");
+        List<String> args =
+            operands.subList(1, operands.size()).stream().map(arg -> arg.getType() + " " + arg.getRef()).toList();
+        sb.append(String.join(", ", args));
         sb.append(")");
         return sb.toString();
     }

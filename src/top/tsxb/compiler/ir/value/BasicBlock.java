@@ -37,11 +37,16 @@ public class BasicBlock extends Value {
     }
 
     @Override
+    public String getRef() {
+        return "%" + getName();
+    }
+
+    @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
         sb.append(name).append(":").append(System.lineSeparator());
         for (Instruction instruction : instructions) {
-            sb.append("  ").append(instruction.toString()).append(System.lineSeparator());
+            sb.append("  ").append(instruction).append(System.lineSeparator());
         }
         return sb.toString();
     }

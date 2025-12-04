@@ -13,7 +13,7 @@ public final class IntegerType implements Type {
     public boolean isSame(Type other) {
         return other instanceof IntegerType;
     }
-    
+
     @Override
     public boolean isCastableTo(Type other) {
         return isSame(other);

@@ -13,6 +13,6 @@ public class PtrType extends IrType {
 
     @Override
     public String toString() {
-        return pointeeType.toString() + "*";
+        return pointeeType + "*";
     }
 }

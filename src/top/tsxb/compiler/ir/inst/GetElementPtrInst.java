@@ -2,11 +2,11 @@ package top.tsxb.compiler.ir.inst;
 
 import java.util.List;
 
-import top.tsxb.compiler.ir.value.Value;
 import top.tsxb.compiler.ir.type.ArrType;
 import top.tsxb.compiler.ir.type.IrType;
 import top.tsxb.compiler.ir.type.PtrType;
 import top.tsxb.compiler.ir.value.BasicBlock;
+import top.tsxb.compiler.ir.value.Value;
 
 public class GetElementPtrInst extends Instruction {
     private final IrType sourceElementType;
@@ -34,14 +34,14 @@ public class GetElementPtrInst extends Instruction {
     public String toString() {
         Value base = getOperand(0);
         StringBuilder sb = new StringBuilder();
-        sb.append(name).append(" = getelementptr ");
-        sb.append(sourceElementType.toString()).append(", ");
-        sb.append(base.getType().toString()).append(" ").append(base.getName());
+        sb.append(getRef()).append(" = getelementptr ");
+        sb.append(sourceElementType).append(", ");
+        sb.append(base.getType()).append(" ").append(base.getRef());
 
         for (int i = 1; i < getNumOperands(); i++) {
             sb.append(", ");
             Value idx = getOperand(i);
-            sb.append(idx.getType().toString()).append(" ").append(idx.getName());
+            sb.append(idx.getType()).append(" ").append(idx.getRef());
         }
 
         return sb.toString();

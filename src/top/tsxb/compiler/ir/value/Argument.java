@@ -4,24 +4,23 @@ import top.tsxb.compiler.ir.type.IrType;
 
 public class Argument extends Value {
     private final Function parent;
-    private final int argNo;
 
-    public Argument(IrType type, String name, Function parent, int argNo) {
+    public Argument(IrType type, String name, Function parent) {
         super(type, name);
         this.parent = parent;
-        this.argNo = argNo;
     }
 
     public Function getParent() {
         return parent;
     }
 
-    public int getArgNo() {
-        return argNo;
+    @Override
+    public String getRef() {
+        return "%" + getName();
     }
 
     @Override
     public String toString() {
-        return getName();
+        return getType() + " " + getRef();
     }
 }

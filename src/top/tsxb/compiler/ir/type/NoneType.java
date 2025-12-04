@@ -9,9 +9,4 @@ public class NoneType extends IrType {
     public String toString() {
         return "void";
     }
-
-    @Override
-    public boolean isVoid() {
-        return true;
-    }
 }

@@ -70,8 +70,8 @@ public class IrExecutionStrategy implements TestStrategy {
                 return new TestResult.ExecutionError("llvm-link failed", linkCommand.toCommandLineString(),
                     linkResult.stderr());
             }
-            var lliCommand =
-                new ProcessExecutor.Command(CompilerConfig.LLI_PATH, List.of("out.ll"), tmpDir, Optional.of(stdinContent));
+            var lliCommand = new ProcessExecutor.Command(CompilerConfig.LLI_PATH, List.of("out.ll"), tmpDir,
+                Optional.of(stdinContent));
             var lliResult = executor.execute(lliCommand);
             if (lliResult.exitCode() != 0) {
                 return new TestResult.ExecutionError("lli execution failed", lliCommand.toCommandLineString(),

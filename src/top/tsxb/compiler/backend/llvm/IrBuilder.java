@@ -67,7 +67,7 @@ public class IrBuilder implements AstVisitor<Value> {
             }
             GlobalVariable gv;
             if (node.symbol.isStatic()) {
-                gv = new GlobalVariable(context.currentFunction.getRawName() + "." + node.name, irType,
+                gv = new GlobalVariable(context.currentFunction.getName() + "." + node.name, irType,
                     node.symbol.isConst(), initVal, GlobalVariable.Linkage.INTERNAL);
             } else {
                 gv = new GlobalVariable(node.name, irType, node.symbol.isConst(), initVal);
@@ -118,7 +118,7 @@ public class IrBuilder implements AstVisitor<Value> {
         List<IrType> paramTypes = node.params != null ? node.params.stream()
             .map(p -> p.isArray ? new ArrayType(p.type, ArrayType.UNSIZED) : p.type).map(this::translate).toList()
             : List.of();
-        Function func = new Function("@" + node.name, new FuncType(retType, paramTypes), false);
+        Function func = new Function(node.name, new FuncType(retType, paramTypes), false);
         module.addFunction(func);
         context.registerSymbol(node.symbol, func);
         context.currentFunction = func;

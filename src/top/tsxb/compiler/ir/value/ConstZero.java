@@ -8,7 +8,7 @@ public class ConstZero extends Constant {
     }
 
     @Override
-    public String toString() {
+    public String getRef() {
         return "zeroinitializer";
     }
 }

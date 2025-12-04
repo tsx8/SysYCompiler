@@ -8,7 +8,8 @@ import top.tsxb.compiler.frontend.semantic.type.FunctionType;
 import top.tsxb.compiler.frontend.semantic.type.IntegerType;
 import top.tsxb.compiler.frontend.semantic.type.Type;
 
-public record Symbol(String name, Type type, int scopeLevel, boolean isConst, boolean isStatic, List<Integer> initialValues) {
+public record Symbol(String name, Type type, int scopeLevel, boolean isConst, boolean isStatic,
+    List<Integer> initialValues) {
     public Symbol {
         initialValues = initialValues != null ? List.copyOf(initialValues) : Collections.emptyList();
     }

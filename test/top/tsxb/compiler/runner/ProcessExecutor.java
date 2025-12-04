@@ -13,17 +13,6 @@ import java.util.stream.Collectors;
 public final class ProcessExecutor {
     private static final long TIMEOUT_SECONDS = 10;
 
-    public record Command(String executablePath, List<String> arguments, Path workingDirectory,
-        Optional<String> stdinContent) {
-        public String toCommandLineString() {
-            return executablePath + " " + String.join(" ", arguments);
-        }
-    }
-
-    public record ProcessResult(int exitCode, String stdout, String stderr) {
-
-    }
-
     public ProcessResult execute(Command cmd) {
         try {
             var commandList = new ArrayList<String>();
@@ -54,5 +43,16 @@ public final class ProcessExecutor {
             Thread.currentThread().interrupt();
             throw new RuntimeException("Process execution was interrupted" + cmd.toCommandLineString(), e);
         }
+    }
+
+    public record Command(String executablePath, List<String> arguments, Path workingDirectory,
+        Optional<String> stdinContent) {
+        public String toCommandLineString() {
+            return executablePath + " " + String.join(" ", arguments);
+        }
+    }
+
+    public record ProcessResult(int exitCode, String stdout, String stderr) {
+
     }
 }

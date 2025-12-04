@@ -39,9 +39,6 @@ public class IrBuilderContext {
         return builtins.values();
     }
 
-    public record LoopInfo(BasicBlock step, BasicBlock exit) {
-    }
-
     public void registerSymbol(Symbol symbol, Value value) {
         symValMap.put(symbol, value);
     }
@@ -95,7 +92,10 @@ public class IrBuilderContext {
     }
 
     private void addBuiltin(String name, IrType retType, List<IrType> paramTypes) {
-        Function func = new Function("@" + name, new FuncType(retType, paramTypes), true);
+        Function func = new Function(name, new FuncType(retType, paramTypes), true);
         builtins.put(name, func);
+    }
+
+    public record LoopInfo(BasicBlock step, BasicBlock exit) {
     }
 }

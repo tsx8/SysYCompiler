@@ -37,6 +37,6 @@ public record FunctionType(Type returnType, List<Type> paramTypes) implements Ty
     @Override
     public String toString() {
         String params = paramTypes.stream().map(Type::toString).collect(Collectors.joining(", "));
-        return String.format("%s (%s)", returnType.toString(), params);
+        return String.format("%s (%s)", returnType, params);
     }
 }

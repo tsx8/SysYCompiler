@@ -6,4 +6,14 @@ public abstract class Constant extends User {
     public Constant(IrType type, String name) {
         super(type, name);
     }
+
+    @Override
+    public String getName() {
+        return getRef();
+    }
+
+    @Override
+    public String toString() {
+        return getRef();
+    }
 }

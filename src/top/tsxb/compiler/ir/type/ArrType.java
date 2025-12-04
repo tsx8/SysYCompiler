@@ -17,19 +17,8 @@ public class ArrType extends IrType {
         return numElements;
     }
 
-    public int countScalars() {
-        return countScalars(elementType);
-    }
-
-    private int countScalars(IrType it) {
-        if (it instanceof ArrType at) {
-            return at.getNumElements() * countScalars(at.getElementType());
-        }
-        return 1;
-    }
-
     @Override
     public String toString() {
-        return "[" + numElements + " x " + elementType.toString() + "]";
+        return "[" + numElements + " x " + elementType + "]";
     }
 }

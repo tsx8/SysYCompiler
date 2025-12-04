@@ -1,8 +1,8 @@
 package top.tsxb.compiler.ir.inst;
 
-import top.tsxb.compiler.ir.value.Value;
 import top.tsxb.compiler.ir.type.NoneType;
 import top.tsxb.compiler.ir.value.BasicBlock;
+import top.tsxb.compiler.ir.value.Value;
 
 public class ReturnInst extends Instruction {
     public ReturnInst(Value retVal, BasicBlock parent) {
@@ -20,6 +20,6 @@ public class ReturnInst extends Instruction {
             return "ret void";
         }
         Value retVal = getOperand(0);
-        return String.format("ret %s %s", retVal.getType().toString(), retVal.getName());
+        return String.format("ret %s %s", retVal.getType(), retVal.getRef());
     }
 }

@@ -1,7 +1,5 @@
 package top.tsxb.compiler.common;
 
-import top.tsxb.compiler.driver.CompilerConfig;
-
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -12,6 +10,8 @@ import java.time.format.DateTimeFormatter;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
+
+import top.tsxb.compiler.driver.CompilerConfig;
 
 /**
  * The type Packaging.

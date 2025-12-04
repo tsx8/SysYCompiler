@@ -24,6 +24,6 @@ public class FuncType extends IrType {
     @Override
     public String toString() {
         String params = paramTypes.stream().map(IrType::toString).collect(Collectors.joining(", "));
-        return returnType.toString() + "(" + params + ")";
+        return returnType + "(" + params + ")";
     }
 }

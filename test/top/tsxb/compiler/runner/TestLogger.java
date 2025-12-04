@@ -19,8 +19,7 @@ public record TestLogger(Path logDirectory) {
         try {
             Files.writeString(logDirectory.resolve(fileName), content);
         } catch (IOException e) {
-            System.err.println(
-            "ERROR: Failed to write log file '" + fileName + "' in " + logDirectory);
+            System.err.println("ERROR: Failed to write log file '" + fileName + "' in " + logDirectory);
             e.printStackTrace(System.err);
         }
     }

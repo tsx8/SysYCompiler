@@ -8,9 +8,8 @@ import top.tsxb.compiler.ir.type.IrType;
 
 public abstract class Value {
     protected final IrType type;
-    protected String name;
-
     private final List<Use> useList = new ArrayList<>();
+    protected String name;
 
     public Value(IrType type, String name) {
         this.type = type;
@@ -32,4 +31,9 @@ public abstract class Value {
     public void addUse(Use use) {
         useList.add(use);
     }
+
+    public abstract String getRef();
+
+    @Override
+    public abstract String toString();
 }

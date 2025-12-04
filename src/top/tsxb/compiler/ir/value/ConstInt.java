@@ -3,12 +3,11 @@ package top.tsxb.compiler.ir.value;
 import top.tsxb.compiler.ir.type.IntType;
 
 public class ConstInt extends Constant {
+    public static final ConstInt ZERO = new ConstInt(IntType.I32, 0);
     private final int value;
 
-    public static final ConstInt ZERO = new ConstInt(IntType.I32, 0);
-
     public ConstInt(IntType type, int value) {
-        super(type, String.valueOf(value)); // name 暂时以数值字符串代替？
+        super(type, "");
         this.value = value;
     }
 
@@ -17,7 +16,7 @@ public class ConstInt extends Constant {
     }
 
     @Override
-    public String toString() {
+    public String getRef() {
         return String.valueOf(value);
     }
 }
