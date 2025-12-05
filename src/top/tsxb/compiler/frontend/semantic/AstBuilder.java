@@ -202,11 +202,22 @@ public class AstBuilder implements CstVisitor<Object> {
 
     @SuppressWarnings("unchecked")
     private Stmt buildForLoopStmt(NonTerm node) {
-        List<AssignStmt> init =
-            Cst.buildNthOpt(node, CstType.ForStmt, 0, n -> (List<AssignStmt>)n.accept(this)).orElse(null);
+        int semi0Idx = Cst.indexOf(node, TokenType.SEMICN, 0);
+        int semi1Idx = Cst.indexOf(node, TokenType.SEMICN, 1);
+        int forStmt0Idx = Cst.indexOf(node, CstType.ForStmt, 0);
+        int forStmt1Idx = Cst.indexOf(node, CstType.ForStmt, 1);
+        List<AssignStmt> init = null;
+        if (forStmt0Idx != -1 && forStmt0Idx < semi0Idx) {
+            init = (List<AssignStmt>)node.children().get(forStmt0Idx).accept(this);
+        }
+        List<AssignStmt> post = null;
+        if (forStmt1Idx != -1) {
+            post = (List<AssignStmt>)node.children().get(forStmt1Idx).accept(this);
+        } else if (forStmt0Idx != -1 && forStmt0Idx > semi1Idx) {
+            post = (List<AssignStmt>)node.children().get(forStmt0Idx).accept(this);
+        }
+
         Expr cond = Cst.build(node, CstType.Cond, n -> (Expr)n.accept(this));
-        List<AssignStmt> post =
-            Cst.buildNthOpt(node, CstType.ForStmt, 1, n -> (List<AssignStmt>)n.accept(this)).orElse(null);
         Stmt body = Cst.build(node, CstType.Stmt, n -> (Stmt)n.accept(this));
         ForLoopStmt forLoopStmt = new ForLoopStmt(init, cond, post, body);
         Cst.find(node, TokenType.FORTK).ifPresent(token -> forLoopStmt.lineNumber = token.line());
@@ -389,6 +400,37 @@ public class AstBuilder implements CstVisitor<Object> {
                 node = nt.children().get(0);
             }
             return node;
+        }
+
+        public static int indexOf(NonTerm node, TokenType type, int nth) {
+            List<CstNode> children = node.children();
+            int count = 0;
+            for (int i = 0; i < children.size(); i++) {
+                CstNode child = children.get(i);
+                CstNode peeled = peel(child);
+                if (peeled instanceof Token t && t.type() == type) {
+                    if (count == nth) {
+                        return i;
+                    }
+                    count++;
+                }
+            }
+            return -1;
+        }
+
+        public static int indexOf(NonTerm node, CstType type, int nth) {
+            List<CstNode> children = node.children();
+            int count = 0;
+            for (int i = 0; i < children.size(); i++) {
+                CstNode child = children.get(i);
+                if (child instanceof NonTerm nt && nt.type() == type) {
+                    if (count == nth) {
+                        return i;
+                    }
+                    count++;
+                }
+            }
+            return -1;
         }
     }
 }
