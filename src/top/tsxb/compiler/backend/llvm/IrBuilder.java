@@ -333,6 +333,10 @@ public class IrBuilder implements AstVisitor<Value> {
 
     @Override
     public Value visit(PrintfStmt node) {
+        List<Value> evaluatedArgs = new ArrayList<>();
+        for (Expr arg : node.args) {
+            evaluatedArgs.add(arg.accept(this));
+        }
         String rawFmt = node.formatStr.substring(1, node.formatStr.length() - 1);
         int argIdx = 0;
         int len = rawFmt.length();
@@ -356,8 +360,8 @@ public class IrBuilder implements AstVisitor<Value> {
                 var putstr = context.lookupBuiltin("putstr");
                 putstr.ifPresent(p -> new CallInst(p, List.of(strPtr), context.currentBlock));
             }
-            if (hasSpec && argIdx < node.args.size()) {
-                Value val = node.args.get(argIdx++).accept(this);
+            if (hasSpec && argIdx < evaluatedArgs.size()) {
+                Value val = evaluatedArgs.get(argIdx++);
                 var putint = context.lookupBuiltin("putint");
                 putint.ifPresent(p -> new CallInst(p, List.of(val), context.currentBlock));
             }
