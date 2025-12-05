@@ -17,7 +17,7 @@ public final class CompilerConfig {
     public static final String CLANG_PATH = "clang";
     public static final String LLVM_LINK_PATH = "llvm-link";
     public static final String LLI_PATH = "lli";
-    public static final Path LIBSYSY_DIR = Paths.get("testcases/libsysy");
+    public static final Path LIBSYSY_DIR = Paths.get("assets/libsysy");
 
     private CompilerConfig() {}
 
