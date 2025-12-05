@@ -9,14 +9,17 @@ import java.util.Stack;
 
 import top.tsxb.compiler.frontend.semantic.sym.Symbol;
 import top.tsxb.compiler.ir.inst.BrInst;
+import top.tsxb.compiler.ir.inst.IcmpInst;
 import top.tsxb.compiler.ir.inst.Instruction;
 import top.tsxb.compiler.ir.inst.OpCode;
+import top.tsxb.compiler.ir.inst.ZextInst;
 import top.tsxb.compiler.ir.type.FuncType;
 import top.tsxb.compiler.ir.type.IntType;
 import top.tsxb.compiler.ir.type.IrType;
 import top.tsxb.compiler.ir.type.NoneType;
 import top.tsxb.compiler.ir.type.PtrType;
 import top.tsxb.compiler.ir.value.BasicBlock;
+import top.tsxb.compiler.ir.value.ConstInt;
 import top.tsxb.compiler.ir.value.Function;
 import top.tsxb.compiler.ir.value.Value;
 
@@ -33,6 +36,20 @@ public class IrBuilderContext {
         addBuiltin("putint", NoneType.VOID, List.of(IntType.I32));
         addBuiltin("putch", NoneType.VOID, List.of(IntType.I32));
         addBuiltin("putstr", NoneType.VOID, List.of(new PtrType(IntType.I8)));
+    }
+
+    public Value ensureI1(Value val) {
+        if (val.getType() instanceof IntType it && it.getBitWidth() == 32) {
+            return new IcmpInst(IcmpInst.CondCode.NE, val, ConstInt.ZERO, currentBlock);
+        }
+        return val;
+    }
+
+    public Value ensureI32(Value val) {
+        if (val.getType() instanceof IntType it && it.getBitWidth() == 1) {
+            return new ZextInst(val, IntType.I32, currentBlock);
+        }
+        return val;
     }
 
     public Collection<Function> getBuiltins() {
@@ -78,7 +95,7 @@ public class IrBuilderContext {
 
     public void condJump(Value cond, BasicBlock trueBlock, BasicBlock falseBlock) {
         if (currentBlock != null && !blockTerminated()) {
-            new BrInst(cond, trueBlock, falseBlock, currentBlock);
+            new BrInst(ensureI1(cond), trueBlock, falseBlock, currentBlock);
         }
     }
 

@@ -154,9 +154,7 @@ public class IrBuilder implements AstVisitor<Value> {
             BasicBlock merge = new BasicBlock("merge", context.currentFunction);
 
             Value lVal = node.left.accept(this);
-            if (lVal.getType() instanceof IntType it && it.getBitWidth() == 32) {
-                lVal = new IcmpInst(IcmpInst.CondCode.NE, lVal, ConstInt.ZERO, context.currentBlock);
-            }
+
             if (node.op == TokenType.AND) {
                 new StoreInst(new ConstInt(IntType.I1, 0), resultAddr, context.currentBlock);
                 context.condJump(lVal, rhs, merge);
@@ -166,9 +164,8 @@ public class IrBuilder implements AstVisitor<Value> {
             }
             context.currentBlock = rhs;
             Value rVal = node.right.accept(this);
-            if (rVal.getType() instanceof IntType it && it.getBitWidth() == 32) {
-                rVal = new IcmpInst(IcmpInst.CondCode.NE, rVal, ConstInt.ZERO, context.currentBlock);
-            }
+            rVal = context.ensureI1(rVal);
+
             new StoreInst(rVal, resultAddr, context.currentBlock);
             context.jump(merge);
             context.currentBlock = merge;
@@ -176,6 +173,8 @@ public class IrBuilder implements AstVisitor<Value> {
         }
         Value left = node.left.accept(this);
         Value right = node.right.accept(this);
+        left = context.ensureI32(left);
+        right = context.ensureI32(right);
         return switch (node.op) {
             case PLUS -> new BinaryInst(OpCode.ADD, left, right, context.currentBlock);
             case MINU -> new BinaryInst(OpCode.SUB, left, right, context.currentBlock);
@@ -274,11 +273,7 @@ public class IrBuilder implements AstVisitor<Value> {
         BasicBlock elseBlock = (node.elseStmt != null) ? new BasicBlock("if_else", context.currentFunction) : null;
         BasicBlock nextBlock = new BasicBlock("if_next", context.currentFunction);
         Value condVal = node.cond.accept(this);
-        Value boolVal = condVal;
-        if (condVal.getType() instanceof IntType it && it.getBitWidth() == 32) {
-            boolVal = new IcmpInst(IcmpInst.CondCode.NE, condVal, ConstInt.ZERO, context.currentBlock);
-        }
-        context.condJump(boolVal, thenBlock, Objects.requireNonNullElse(elseBlock, nextBlock));
+        context.condJump(condVal, thenBlock, Objects.requireNonNullElse(elseBlock, nextBlock));
         context.currentBlock = thenBlock;
         node.then.accept(this);
         context.jump(nextBlock);
@@ -304,11 +299,7 @@ public class IrBuilder implements AstVisitor<Value> {
         context.currentBlock = cond;
         if (node.cond != null) {
             Value condVal = node.cond.accept(this);
-            Value boolVal = condVal;
-            if (condVal.getType() instanceof IntType it && it.getBitWidth() == 32) {
-                boolVal = new IcmpInst(IcmpInst.CondCode.NE, condVal, ConstInt.ZERO, context.currentBlock);
-            }
-            context.condJump(boolVal, body, exit);
+            context.condJump(condVal, body, exit);
         } else {
             context.jump(body);
         }

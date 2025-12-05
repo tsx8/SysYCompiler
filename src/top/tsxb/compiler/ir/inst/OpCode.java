@@ -9,6 +9,8 @@ public enum OpCode {
     ICMP("icmp"),
     // Memory
     ALLOCA("alloca"), LOAD("load"), STORE("store"), GEP("getelementptr"),
+    // Cast
+    ZEXT("zext"),
     // Other
     CALL("call");
 
