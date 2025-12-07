@@ -5,8 +5,8 @@ import java.util.List;
 import top.tsxb.compiler.ir.type.ArrType;
 import top.tsxb.compiler.ir.type.IrType;
 import top.tsxb.compiler.ir.type.PtrType;
-import top.tsxb.compiler.ir.value.BasicBlock;
-import top.tsxb.compiler.ir.value.Value;
+import top.tsxb.compiler.ir.structure.BasicBlock;
+import top.tsxb.compiler.ir.base.Value;
 
 public class GetElementPtrInst extends Instruction {
     private final IrType sourceElementType;

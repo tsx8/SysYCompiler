@@ -4,7 +4,7 @@ import top.tsxb.compiler.backend.llvm.IrBuilder;
 import top.tsxb.compiler.common.CompilerStage;
 import top.tsxb.compiler.common.ErrorReporter;
 import top.tsxb.compiler.frontend.semantic.ast.AstNode;
-import top.tsxb.compiler.ir.Module;
+import top.tsxb.compiler.ir.structure.Module;
 
 public class IrGenStage implements CompilerStage<AstNode, Module> {
     @Override

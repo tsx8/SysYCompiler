@@ -2,7 +2,7 @@ package top.tsxb.compiler.ir.inst;
 
 import top.tsxb.compiler.ir.type.IrType;
 import top.tsxb.compiler.ir.type.PtrType;
-import top.tsxb.compiler.ir.value.BasicBlock;
+import top.tsxb.compiler.ir.structure.BasicBlock;
 
 public class AllocaInst extends Instruction {
     private final IrType allocatedType;

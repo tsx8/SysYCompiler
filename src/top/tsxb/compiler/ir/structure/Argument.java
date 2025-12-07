@@ -1,6 +1,7 @@
-package top.tsxb.compiler.ir.value;
+package top.tsxb.compiler.ir.structure;
 
 import top.tsxb.compiler.ir.type.IrType;
+import top.tsxb.compiler.ir.base.Value;
 
 public class Argument extends Value {
     private final Function parent;

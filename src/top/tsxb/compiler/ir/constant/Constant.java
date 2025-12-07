@@ -1,6 +1,7 @@
-package top.tsxb.compiler.ir.value;
+package top.tsxb.compiler.ir.constant;
 
 import top.tsxb.compiler.ir.type.IrType;
+import top.tsxb.compiler.ir.base.User;
 
 public abstract class Constant extends User {
     public Constant(IrType type, String name) {

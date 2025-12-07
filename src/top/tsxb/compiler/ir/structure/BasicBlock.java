@@ -1,10 +1,11 @@
-package top.tsxb.compiler.ir.value;
+package top.tsxb.compiler.ir.structure;
 
 import java.util.LinkedList;
 import java.util.List;
 
 import top.tsxb.compiler.ir.inst.Instruction;
 import top.tsxb.compiler.ir.type.NoneType;
+import top.tsxb.compiler.ir.base.Value;
 
 public class BasicBlock extends Value {
     private final Function parent;

@@ -1,9 +1,8 @@
-package top.tsxb.compiler.ir.value;
+package top.tsxb.compiler.ir.base;
 
 import java.util.ArrayList;
 import java.util.List;
 
-import top.tsxb.compiler.ir.Use;
 import top.tsxb.compiler.ir.type.IrType;
 
 public abstract class User extends Value {

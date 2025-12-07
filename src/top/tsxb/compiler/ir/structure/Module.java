@@ -1,15 +1,12 @@
-package top.tsxb.compiler.ir;
+package top.tsxb.compiler.ir.structure;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import top.tsxb.compiler.ir.value.ConstString;
-import top.tsxb.compiler.ir.value.Function;
-import top.tsxb.compiler.ir.value.GlobalValue;
-import top.tsxb.compiler.ir.value.GlobalVariable;
-import top.tsxb.compiler.ir.value.Value;
+import top.tsxb.compiler.ir.constant.ConstString;
+import top.tsxb.compiler.ir.base.Value;
 
 public class Module {
     private final List<GlobalVariable> globalList = new ArrayList<>();

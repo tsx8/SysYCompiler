@@ -1,4 +1,4 @@
-package top.tsxb.compiler.ir.value;
+package top.tsxb.compiler.ir.constant;
 
 import java.util.List;
 import java.util.stream.Collectors;

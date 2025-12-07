@@ -4,9 +4,9 @@ import java.util.List;
 
 import top.tsxb.compiler.ir.type.FuncType;
 import top.tsxb.compiler.ir.type.NoneType;
-import top.tsxb.compiler.ir.value.BasicBlock;
-import top.tsxb.compiler.ir.value.Function;
-import top.tsxb.compiler.ir.value.Value;
+import top.tsxb.compiler.ir.structure.BasicBlock;
+import top.tsxb.compiler.ir.structure.Function;
+import top.tsxb.compiler.ir.base.Value;
 
 public class CallInst extends Instruction {
     public CallInst(Function func, List<Value> args, BasicBlock parent) {

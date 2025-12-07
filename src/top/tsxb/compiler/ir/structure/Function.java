@@ -1,4 +1,4 @@
-package top.tsxb.compiler.ir.value;
+package top.tsxb.compiler.ir.structure;
 
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -9,6 +9,7 @@ import java.util.stream.Collectors;
 import top.tsxb.compiler.ir.type.FuncType;
 import top.tsxb.compiler.ir.type.IrType;
 import top.tsxb.compiler.ir.type.NoneType;
+import top.tsxb.compiler.ir.base.Value;
 
 public class Function extends GlobalValue {
     private final List<BasicBlock> basicBlocks = new LinkedList<>();

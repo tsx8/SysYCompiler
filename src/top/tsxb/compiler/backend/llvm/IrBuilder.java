@@ -11,7 +11,17 @@ import top.tsxb.compiler.frontend.semantic.type.FunctionType;
 import top.tsxb.compiler.frontend.semantic.type.IntegerType;
 import top.tsxb.compiler.frontend.semantic.type.Type;
 import top.tsxb.compiler.frontend.semantic.type.VoidType;
-import top.tsxb.compiler.ir.Module;
+import top.tsxb.compiler.ir.base.Value;
+import top.tsxb.compiler.ir.constant.ConstArray;
+import top.tsxb.compiler.ir.constant.ConstInt;
+import top.tsxb.compiler.ir.constant.ConstZero;
+import top.tsxb.compiler.ir.constant.Constant;
+import top.tsxb.compiler.ir.structure.Argument;
+import top.tsxb.compiler.ir.structure.BasicBlock;
+import top.tsxb.compiler.ir.structure.Function;
+import top.tsxb.compiler.ir.structure.GlobalValue;
+import top.tsxb.compiler.ir.structure.GlobalVariable;
+import top.tsxb.compiler.ir.structure.Module;
 import top.tsxb.compiler.ir.inst.*;
 import top.tsxb.compiler.ir.type.ArrType;
 import top.tsxb.compiler.ir.type.FuncType;
@@ -19,7 +29,6 @@ import top.tsxb.compiler.ir.type.IntType;
 import top.tsxb.compiler.ir.type.IrType;
 import top.tsxb.compiler.ir.type.NoneType;
 import top.tsxb.compiler.ir.type.PtrType;
-import top.tsxb.compiler.ir.value.*;
 
 public class IrBuilder implements AstVisitor<Value> {
     private final Module module;

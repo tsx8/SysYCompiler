@@ -1,8 +1,8 @@
 package top.tsxb.compiler.ir.inst;
 
 import top.tsxb.compiler.ir.type.IrType;
-import top.tsxb.compiler.ir.value.BasicBlock;
-import top.tsxb.compiler.ir.value.User;
+import top.tsxb.compiler.ir.structure.BasicBlock;
+import top.tsxb.compiler.ir.base.User;
 
 public abstract class Instruction extends User {
     private final OpCode opCode;

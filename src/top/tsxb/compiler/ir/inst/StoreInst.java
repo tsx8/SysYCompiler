@@ -1,8 +1,8 @@
 package top.tsxb.compiler.ir.inst;
 
 import top.tsxb.compiler.ir.type.NoneType;
-import top.tsxb.compiler.ir.value.BasicBlock;
-import top.tsxb.compiler.ir.value.Value;
+import top.tsxb.compiler.ir.structure.BasicBlock;
+import top.tsxb.compiler.ir.base.Value;
 
 public class StoreInst extends Instruction {
     public StoreInst(Value value, Value ptr, BasicBlock parent) {

@@ -1,29 +1,23 @@
 package top.tsxb.compiler.backend.llvm;
 
-import java.util.Collection;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Stack;
 
 import top.tsxb.compiler.frontend.semantic.sym.Symbol;
-import top.tsxb.compiler.ir.Module;
+import top.tsxb.compiler.ir.structure.Module;
 import top.tsxb.compiler.ir.inst.BrInst;
 import top.tsxb.compiler.ir.inst.IcmpInst;
 import top.tsxb.compiler.ir.inst.Instruction;
 import top.tsxb.compiler.ir.inst.OpCode;
 import top.tsxb.compiler.ir.inst.ZextInst;
-import top.tsxb.compiler.ir.type.FuncType;
 import top.tsxb.compiler.ir.type.IntType;
-import top.tsxb.compiler.ir.type.IrType;
-import top.tsxb.compiler.ir.type.NoneType;
-import top.tsxb.compiler.ir.type.PtrType;
-import top.tsxb.compiler.ir.value.BasicBlock;
-import top.tsxb.compiler.ir.value.ConstInt;
-import top.tsxb.compiler.ir.value.Function;
-import top.tsxb.compiler.ir.value.GlobalValue;
-import top.tsxb.compiler.ir.value.Value;
+import top.tsxb.compiler.ir.structure.BasicBlock;
+import top.tsxb.compiler.ir.constant.ConstInt;
+import top.tsxb.compiler.ir.structure.Function;
+import top.tsxb.compiler.ir.structure.GlobalValue;
+import top.tsxb.compiler.ir.base.Value;
 
 public class IrBuilderContext {
     private final Module module;

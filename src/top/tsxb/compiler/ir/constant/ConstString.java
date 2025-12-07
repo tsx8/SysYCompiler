@@ -1,4 +1,4 @@
-package top.tsxb.compiler.ir.value;
+package top.tsxb.compiler.ir.constant;
 
 import top.tsxb.compiler.ir.type.ArrType;
 import top.tsxb.compiler.ir.type.IntType;
