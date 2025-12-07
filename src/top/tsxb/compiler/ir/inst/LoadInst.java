@@ -6,7 +6,7 @@ import top.tsxb.compiler.ir.value.Value;
 
 public class LoadInst extends Instruction {
     public LoadInst(Value ptr, BasicBlock parent) {
-        super(((PtrType)ptr.getType()).getPointeeType(), OpCode.LOAD, "", parent);
+        super(((PtrType)ptr.getType()).getPointeeType(), OpCode.LOAD, "load", parent);
         addOperand(ptr);
     }
 

@@ -25,11 +25,17 @@ public class BasicBlock extends Value {
     public void addInstruction(Instruction instruction) {
         instructions.add(instruction);
         instruction.setParent(this);
+        if (parent != null) {
+            parent.resolveName(instruction);
+        }
     }
 
     public void addFirst(Instruction instruction) {
         instructions.add(0, instruction);
         instruction.setParent(this);
+        if (parent != null) {
+            parent.resolveName(instruction);
+        }
     }
 
     public List<Instruction> getInstructions() {

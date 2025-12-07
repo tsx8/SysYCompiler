@@ -5,7 +5,7 @@ import top.tsxb.compiler.ir.value.Value;
 
 public class BinaryInst extends Instruction {
     public BinaryInst(OpCode op, Value left, Value right, BasicBlock parent) {
-        super(left.getType(), op, "", parent);
+        super(left.getType(), op, op.toString().toLowerCase(), parent);
         addOperand(left);
         addOperand(right);
     }

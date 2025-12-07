@@ -12,7 +12,7 @@ public class GetElementPtrInst extends Instruction {
     private final IrType sourceElementType;
 
     public GetElementPtrInst(Value basePtr, List<Value> indices, BasicBlock parent) {
-        super(computeResultType(basePtr, indices), OpCode.GEP, "", parent);
+        super(computeResultType(basePtr, indices), OpCode.GEP, "gep", parent);
         sourceElementType = ((PtrType)basePtr.getType()).getPointeeType();
         addOperand(basePtr);
         for (Value index : indices) {

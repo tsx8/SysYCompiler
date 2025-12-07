@@ -4,10 +4,6 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-import top.tsxb.compiler.ir.inst.Instruction;
-import top.tsxb.compiler.ir.type.NoneType;
-import top.tsxb.compiler.ir.value.Argument;
-import top.tsxb.compiler.ir.value.BasicBlock;
 import top.tsxb.compiler.ir.value.ConstString;
 import top.tsxb.compiler.ir.value.Function;
 import top.tsxb.compiler.ir.value.GlobalVariable;
@@ -17,15 +13,15 @@ public class Module {
     private final Map<String, GlobalVariable> globalVariables = new LinkedHashMap<>();
     private final Map<String, Function> functions = new LinkedHashMap<>();
     private final Map<String, GlobalVariable> stringPool = new LinkedHashMap<>();
+    private final Map<String, Integer> globalNameMap = new HashMap<>();
 
     public void addFunction(Function function) {
+        resolveGlobalName(function);
         functions.put(function.getName(), function);
     }
 
     public void addGlobalVariable(GlobalVariable gv) {
-        while (globalVariables.containsKey(gv.getName())) {
-            gv.setName(gv.getName() + "_1");
-        }
+        resolveGlobalName(gv);
         globalVariables.put(gv.getName(), gv);
     }
 
@@ -36,57 +32,28 @@ public class Module {
         ConstString constString = new ConstString(literal);
         GlobalVariable gv =
             new GlobalVariable(".str", constString.getType(), true, constString);
+        resolveGlobalName(gv);
         stringPool.put(literal, gv);
         return gv;
     }
 
-    private void renameValue(Value v, Map<String, Integer> counterMap) {
-        String originalName = v.getName();
-        if (originalName == null) {
-            originalName = "";
+    private void resolveGlobalName(Value value) {
+        String originalName = value.getName();
+        if (originalName == null || originalName.isEmpty()) {
+            originalName = "anonymous";
+            value.setName(originalName);
         }
-        int cnt = counterMap.getOrDefault(originalName, 0);
-
-        String newName;
-        if (originalName.isEmpty()) {
-            newName = String.valueOf(cnt);
+        if (globalNameMap.containsKey(originalName)) {
+            int count = globalNameMap.get(originalName);
+            value.setName(originalName + "." + count);
+            globalNameMap.put(originalName, count + 1);
         } else {
-            newName = originalName + "_" + cnt;
-        }
-
-        v.setName(newName);
-        counterMap.put(originalName, cnt + 1);
-    }
-
-    private void renameValues() {
-        int strIdx = 0;
-        for (GlobalVariable gv : stringPool.values()) {
-            gv.setName(".str." + (++strIdx));
-        }
-        for (Function func : functions.values()) {
-            if (func.isBuiltin) {
-                continue;
-            }
-            Map<String, Integer> localNameMap = new HashMap<>();
-            for (Argument arg : func.getArguments()) {
-                renameValue(arg, localNameMap);
-            }
-            for (BasicBlock bb : func.getBasicBlocks()) {
-                renameValue(bb, localNameMap);
-                for (Instruction inst : bb.getInstructions()) {
-                    if (inst.getType() instanceof NoneType) {
-                        continue;
-                    }
-                    renameValue(inst, localNameMap);
-                }
-            }
+            globalNameMap.put(originalName, 1);
         }
     }
 
     @Override
     public String toString() {
-        renameValues();
-
         StringBuilder sb = new StringBuilder();
 
         for (GlobalVariable str : stringPool.values()) {

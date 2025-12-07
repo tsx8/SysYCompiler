@@ -8,7 +8,7 @@ public class ZextInst extends Instruction {
     private final IrType destType;
 
     public ZextInst(Value v, IrType t, BasicBlock p) {
-        super(t, OpCode.ZEXT, "", p);
+        super(t, OpCode.ZEXT, "zext", p);
         this.destType = t;
         addOperand(v);
     }

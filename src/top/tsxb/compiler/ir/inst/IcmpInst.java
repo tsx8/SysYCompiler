@@ -8,7 +8,7 @@ public class IcmpInst extends Instruction {
     private final CondCode predicate;
 
     public IcmpInst(CondCode predicate, Value lhs, Value rhs, BasicBlock parent) {
-        super(IntType.I1, OpCode.ICMP, "", parent);
+        super(IntType.I1, OpCode.ICMP, "icmp", parent);
         this.predicate = predicate;
         addOperand(lhs);
         addOperand(rhs);
