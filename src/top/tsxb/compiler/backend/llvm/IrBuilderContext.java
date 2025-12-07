@@ -8,6 +8,7 @@ import java.util.Optional;
 import java.util.Stack;
 
 import top.tsxb.compiler.frontend.semantic.sym.Symbol;
+import top.tsxb.compiler.ir.Module;
 import top.tsxb.compiler.ir.inst.BrInst;
 import top.tsxb.compiler.ir.inst.IcmpInst;
 import top.tsxb.compiler.ir.inst.Instruction;
@@ -21,21 +22,19 @@ import top.tsxb.compiler.ir.type.PtrType;
 import top.tsxb.compiler.ir.value.BasicBlock;
 import top.tsxb.compiler.ir.value.ConstInt;
 import top.tsxb.compiler.ir.value.Function;
+import top.tsxb.compiler.ir.value.GlobalValue;
 import top.tsxb.compiler.ir.value.Value;
 
 public class IrBuilderContext {
+    private final Module module;
     private final Map<Symbol, Value> symValMap = new LinkedHashMap<>();
-    private final Map<String, Function> builtins = new LinkedHashMap<>();
     private final Stack<LoopInfo> loopStack = new Stack<>();
 
     public Function currentFunction;
     public BasicBlock currentBlock;
 
-    public IrBuilderContext() {
-        addBuiltin("getint", IntType.I32, List.of());
-        addBuiltin("putint", NoneType.VOID, List.of(IntType.I32));
-        addBuiltin("putch", NoneType.VOID, List.of(IntType.I32));
-        addBuiltin("putstr", NoneType.VOID, List.of(new PtrType(IntType.I8)));
+    public IrBuilderContext(Module module) {
+        this.module = module;
     }
 
     public Value ensureI1(Value val) {
@@ -52,10 +51,6 @@ public class IrBuilderContext {
         return val;
     }
 
-    public Collection<Function> getBuiltins() {
-        return builtins.values();
-    }
-
     public void registerSymbol(Symbol symbol, Value value) {
         symValMap.put(symbol, value);
     }
@@ -65,12 +60,16 @@ public class IrBuilderContext {
         if (res != null) {
             return Optional.of(res);
         }
-        res = builtins.get(symbol.name());
-        return Optional.ofNullable(res);
+        GlobalValue gv = module.getNamedGlobal(symbol.name());
+        return Optional.ofNullable(gv);
     }
 
     public Optional<Function> lookupBuiltin(String name) {
-        return Optional.ofNullable(builtins.get(name));
+        GlobalValue global = module.getNamedGlobal(name);
+        if (global instanceof Function func) {
+            return Optional.of(func);
+        }
+        return Optional.empty();
     }
 
     public void enterLoop(BasicBlock step, BasicBlock exit) {
@@ -106,11 +105,6 @@ public class IrBuilderContext {
         }
         Instruction last = insts.get(insts.size() - 1);
         return last.getOpCode() == OpCode.RET || last.getOpCode() == OpCode.BR;
-    }
-
-    private void addBuiltin(String name, IrType retType, List<IrType> paramTypes) {
-        Function func = new Function(name, new FuncType(retType, paramTypes), true);
-        builtins.put(name, func);
     }
 
     public record LoopInfo(BasicBlock step, BasicBlock exit) {

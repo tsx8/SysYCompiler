@@ -1,39 +1,43 @@
 package top.tsxb.compiler.ir;
 
+import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import top.tsxb.compiler.ir.value.ConstString;
 import top.tsxb.compiler.ir.value.Function;
+import top.tsxb.compiler.ir.value.GlobalValue;
 import top.tsxb.compiler.ir.value.GlobalVariable;
 import top.tsxb.compiler.ir.value.Value;
 
 public class Module {
-    private final Map<String, GlobalVariable> globalVariables = new LinkedHashMap<>();
-    private final Map<String, Function> functions = new LinkedHashMap<>();
-    private final Map<String, GlobalVariable> stringPool = new LinkedHashMap<>();
+    private final List<GlobalVariable> globalList = new ArrayList<>();
+    private final List<Function> functionList = new ArrayList<>();
+    private final Map<String, GlobalValue> symbolMap = new HashMap<>();
     private final Map<String, Integer> globalNameMap = new HashMap<>();
 
     public void addFunction(Function function) {
         resolveGlobalName(function);
-        functions.put(function.getName(), function);
+        functionList.add(function);
+        symbolMap.put(function.getName(), function);
     }
 
     public void addGlobalVariable(GlobalVariable gv) {
         resolveGlobalName(gv);
-        globalVariables.put(gv.getName(), gv);
+        globalList.add(gv);
+        symbolMap.put(gv.getName(), gv);
+    }
+
+    public GlobalValue getNamedGlobal(String name) {
+        return symbolMap.get(name);
     }
 
     public GlobalVariable createString(String literal) {
-        if (stringPool.containsKey(literal)) {
-            return stringPool.get(literal);
-        }
         ConstString constString = new ConstString(literal);
         GlobalVariable gv =
-            new GlobalVariable(".str", constString.getType(), true, constString);
-        resolveGlobalName(gv);
-        stringPool.put(literal, gv);
+            new GlobalVariable(".str", constString.getType(), true, constString, GlobalValue.Linkage.INTERNAL);
+        addGlobalVariable(gv);
         return gv;
     }
 
@@ -56,20 +60,15 @@ public class Module {
     public String toString() {
         StringBuilder sb = new StringBuilder();
 
-        for (GlobalVariable str : stringPool.values()) {
-            sb.append(str).append(System.lineSeparator());
+        for (GlobalVariable gv : globalList) {
+            sb.append(gv).append(System.lineSeparator());
         }
-        if (!stringPool.isEmpty()) {
+        if (!globalList.isEmpty()) {
             sb.append(System.lineSeparator());
         }
-        for (GlobalVariable globalVariable : globalVariables.values()) {
-            sb.append(globalVariable).append(System.lineSeparator());
-        }
-        if (!globalVariables.isEmpty()) {
-            sb.append(System.lineSeparator());
-        }
-        for (Function function : functions.values()) {
-            sb.append(function).append(System.lineSeparator());
+
+        for (Function func : functionList) {
+            sb.append(func).append(System.lineSeparator());
         }
 
         return sb.toString();

@@ -8,11 +8,6 @@ public abstract class Constant extends User {
     }
 
     @Override
-    public String getName() {
-        return getRef();
-    }
-
-    @Override
     public String toString() {
         return getRef();
     }

@@ -10,7 +10,7 @@ import top.tsxb.compiler.ir.value.Value;
 
 public class CallInst extends Instruction {
     public CallInst(Function func, List<Value> args, BasicBlock parent) {
-        super(((FuncType)func.getType()).getReturnType(), OpCode.CALL, "call", parent);
+        super(((FuncType)func.getValueType()).getReturnType(), OpCode.CALL, "call", parent);
         addOperand(func);
         for (Value arg : args) {
             addOperand(arg);

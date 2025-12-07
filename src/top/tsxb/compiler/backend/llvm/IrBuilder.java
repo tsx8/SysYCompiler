@@ -19,15 +19,7 @@ import top.tsxb.compiler.ir.type.IntType;
 import top.tsxb.compiler.ir.type.IrType;
 import top.tsxb.compiler.ir.type.NoneType;
 import top.tsxb.compiler.ir.type.PtrType;
-import top.tsxb.compiler.ir.value.Argument;
-import top.tsxb.compiler.ir.value.BasicBlock;
-import top.tsxb.compiler.ir.value.ConstArray;
-import top.tsxb.compiler.ir.value.ConstInt;
-import top.tsxb.compiler.ir.value.ConstZero;
-import top.tsxb.compiler.ir.value.Constant;
-import top.tsxb.compiler.ir.value.Function;
-import top.tsxb.compiler.ir.value.GlobalVariable;
-import top.tsxb.compiler.ir.value.Value;
+import top.tsxb.compiler.ir.value.*;
 
 public class IrBuilder implements AstVisitor<Value> {
     private final Module module;
@@ -35,8 +27,11 @@ public class IrBuilder implements AstVisitor<Value> {
 
     public IrBuilder(Module module) {
         this.module = module;
-        this.context = new IrBuilderContext();
-        this.context.getBuiltins().forEach(this.module::addFunction);
+        this.context = new IrBuilderContext(module);
+        addBuiltin("getint", IntType.I32, List.of());
+        addBuiltin("putint", NoneType.VOID, List.of(IntType.I32));
+        addBuiltin("putch", NoneType.VOID, List.of(IntType.I32));
+        addBuiltin("putstr", NoneType.VOID, List.of(new PtrType(IntType.I8)));
     }
 
     @Override
@@ -66,12 +61,11 @@ public class IrBuilder implements AstVisitor<Value> {
                 initVal = new ConstZero(irType);
             }
             GlobalVariable gv;
-            if (node.symbol.isStatic()) {
-                gv = new GlobalVariable(context.currentFunction.getName() + "." + node.name, irType,
-                    node.symbol.isConst(), initVal, GlobalVariable.Linkage.INTERNAL);
-            } else {
-                gv = new GlobalVariable(node.name, irType, node.symbol.isConst(), initVal);
-            }
+            String name = node.symbol.isStatic() ? context.currentFunction.getName() + "." + node.name : node.name;
+            GlobalValue.Linkage linkage =
+                node.symbol.isStatic() ? GlobalValue.Linkage.INTERNAL : GlobalValue.Linkage.EXTERNAL;
+            gv = new GlobalVariable(name, irType, node.symbol.isConst(), initVal, linkage);
+
             module.addGlobalVariable(gv);
             context.registerSymbol(node.symbol, gv);
             return null;
@@ -118,7 +112,7 @@ public class IrBuilder implements AstVisitor<Value> {
         List<IrType> paramTypes = node.params != null ? node.params.stream()
             .map(p -> p.isArray ? new ArrayType(p.type, ArrayType.UNSIZED) : p.type).map(this::translate).toList()
             : List.of();
-        Function func = new Function(node.name, new FuncType(retType, paramTypes), false);
+        Function func = new Function(node.name, new FuncType(retType, paramTypes));
         module.addFunction(func);
         context.registerSymbol(node.symbol, func);
         context.currentFunction = func;
@@ -437,5 +431,10 @@ public class IrBuilder implements AstVisitor<Value> {
             }
             return current;
         }).orElse(null);
+    }
+
+    private void addBuiltin(String name, IrType retType, List<IrType> paramTypes) {
+        Function func = new Function(name, new FuncType(retType, paramTypes), GlobalValue.Linkage.EXTERNAL);
+        module.addFunction(func);
     }
 }

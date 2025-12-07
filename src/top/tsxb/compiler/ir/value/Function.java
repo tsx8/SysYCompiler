@@ -10,28 +10,30 @@ import top.tsxb.compiler.ir.type.FuncType;
 import top.tsxb.compiler.ir.type.IrType;
 import top.tsxb.compiler.ir.type.NoneType;
 
-public class Function extends User {
-    public final boolean isBuiltin;
+public class Function extends GlobalValue {
     private final List<BasicBlock> basicBlocks = new LinkedList<>();
     private final List<Argument> arguments = new LinkedList<>();
-    private final Map<String, Integer> valueNameMap = new HashMap<>();
+    private final Map<String, Integer> localNameMap = new HashMap<>();
 
-    public Function(String name, FuncType type, boolean builtin) {
-        super(type, name);
-        isBuiltin = builtin;
+    public Function(String name, FuncType type, Linkage linkage) {
+        super(type, name, linkage);
         for (IrType paramType : type.getParamTypes()) {
             Argument arg = new Argument(paramType, "arg", this);
             arguments.add(arg);
-            resolveName(arg);
+            resolveLocalName(arg);
         }
+    }
+
+    public Function(String name, FuncType type) {
+        this(name, type, Linkage.EXTERNAL);
     }
 
     public void addBasicBlock(BasicBlock basicBlock) {
         basicBlocks.add(basicBlock);
-        resolveName(basicBlock);
+        resolveLocalName(basicBlock);
     }
 
-    public void resolveName(Value value) {
+    public void resolveLocalName(Value value) {
         boolean needsName = (value instanceof BasicBlock) || !(value.getType() instanceof NoneType);
         if (!needsName) {
             return;
@@ -41,12 +43,12 @@ public class Function extends User {
             nameHint = "anonymous";
             value.setName(nameHint);
         }
-        if (valueNameMap.containsKey(nameHint)) {
-            int count = valueNameMap.get(nameHint);
+        if (localNameMap.containsKey(nameHint)) {
+            int count = localNameMap.get(nameHint);
             value.setName(nameHint + "." + count);
-            valueNameMap.put(nameHint, count + 1);
+            localNameMap.put(nameHint, count + 1);
         } else {
-            valueNameMap.put(nameHint, 1);
+            localNameMap.put(nameHint, 1);
         }
     }
 
@@ -59,15 +61,15 @@ public class Function extends User {
     }
 
     @Override
-    public String getRef() {
-        return "@" + getName();
+    public boolean isDeclaration() {
+        return basicBlocks.isEmpty();
     }
 
     @Override
     public String toString() {
-        FuncType funcType = (FuncType)type;
+        FuncType funcType = (FuncType) getValueType();
         StringBuilder sb = new StringBuilder();
-        if (isBuiltin) {
+        if (isDeclaration()) {
             sb.append("declare ");
         } else {
             sb.append("define ");
@@ -75,7 +77,7 @@ public class Function extends User {
         sb.append(funcType.getReturnType()).append(" ").append(getRef()).append("(");
         sb.append(arguments.stream().map(Argument::toString).collect(Collectors.joining(", ")));
         sb.append(")");
-        if (isBuiltin) {
+        if (isDeclaration()) {
             return sb.toString();
         }
         sb.append(" {").append(System.lineSeparator());

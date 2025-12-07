@@ -26,7 +26,7 @@ public class BasicBlock extends Value {
         instructions.add(instruction);
         instruction.setParent(this);
         if (parent != null) {
-            parent.resolveName(instruction);
+            parent.resolveLocalName(instruction);
         }
     }
 
@@ -34,7 +34,7 @@ public class BasicBlock extends Value {
         instructions.add(0, instruction);
         instruction.setParent(this);
         if (parent != null) {
-            parent.resolveName(instruction);
+            parent.resolveLocalName(instruction);
         }
     }
 
