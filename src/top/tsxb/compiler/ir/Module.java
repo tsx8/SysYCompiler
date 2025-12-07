@@ -22,8 +22,11 @@ public class Module {
         functions.put(function.getName(), function);
     }
 
-    public void addGlobalVariable(GlobalVariable globalVariable) {
-        globalVariables.put(globalVariable.getName(), globalVariable);
+    public void addGlobalVariable(GlobalVariable gv) {
+        while (globalVariables.containsKey(gv.getName())) {
+            gv.setName(gv.getName() + "_1");
+        }
+        globalVariables.put(gv.getName(), gv);
     }
 
     public GlobalVariable createString(String literal) {
