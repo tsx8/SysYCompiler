@@ -3,18 +3,14 @@ package top.tsxb.compiler.frontend.semantic.sym;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
-import top.tsxb.compiler.frontend.semantic.ast.AstNode;
 import top.tsxb.compiler.frontend.semantic.type.FunctionType;
 import top.tsxb.compiler.frontend.semantic.type.IntegerType;
 
 public class SymbolTable {
     private final List<Symbol> symbols = new ArrayList<>();
-    private final Map<AstNode, Scope> nodeToScopeMap = new HashMap<>();
     private Scope currentScope;
     private int scopeCounter = 0;
 
@@ -27,11 +23,9 @@ public class SymbolTable {
         rootScope.define(getintSymbol);
     }
 
-    public void enterScope(AstNode node) {
+    public void enterScope() {
         scopeCounter++;
-        Scope newScope = new Scope(currentScope, scopeCounter);
-        currentScope = newScope;
-        nodeToScopeMap.put(node, newScope);
+        currentScope = new Scope(currentScope, scopeCounter);
     }
 
     public void exitScope() {

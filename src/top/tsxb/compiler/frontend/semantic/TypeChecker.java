@@ -44,7 +44,7 @@ public class TypeChecker implements AstVisitor<Type> {
 
         FuncDef previousFuncDef = currentFuncDef;
         this.currentFuncDef = node;
-        symbolTable.enterScope(node);
+        symbolTable.enterScope();
         try {
             if (node.params != null) {
                 for (FuncParam param : node.params) {
@@ -99,7 +99,7 @@ public class TypeChecker implements AstVisitor<Type> {
 
     @Override
     public Type visit(BlockStmt node) {
-        symbolTable.enterScope(node);
+        symbolTable.enterScope();
         try {
             for (AstNode item : node.items) {
                 item.accept(this);
