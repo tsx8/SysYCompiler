@@ -7,6 +7,7 @@ import top.tsxb.compiler.ir.constant.*;
 import top.tsxb.compiler.ir.structure.Module;
 import top.tsxb.compiler.ir.type.*;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -251,6 +252,33 @@ public class MipsBuilder {
         Value op1 = inst.getOperand(0);
         Value op2 = inst.getOperand(1);
 
+        if (inst.getOpCode() == OpCode.SDIV && op2 instanceof ConstInt ci) {
+            if (emitConstDivision(op1, ci.getValue())) {
+                storeValue(inst, "$t2");
+                return;
+            }
+        }
+
+        if (inst.getOpCode() == OpCode.SREM && op2 instanceof ConstInt ci) {
+            if (emitConstDivision(op1, ci.getValue())) {
+                loadValue(op1, "$t0");
+                sb.append("    li $t3, ").append(ci.getValue()).append("\n");
+                sb.append("    mul $t1, $t2, $t3\n");
+                sb.append("    subu $t2, $t0, $t1\n");
+                storeValue(inst, "$t2");
+                return;
+            }
+        }
+
+        if (inst.getOpCode() == OpCode.MUL) {
+            if (op2 instanceof ConstInt ci && tryConstMul(inst, op1, ci.getValue())) {
+                return;
+            }
+            if (op1 instanceof ConstInt ci && tryConstMul(inst, op2, ci.getValue())) {
+                return;
+            }
+        }
+
         if (inst.getOpCode() == OpCode.ADD && op2 instanceof ConstInt ci && Math.abs(ci.getValue()) < 32768) {
             loadValue(op1, "$t0");
             addI("$t2", "$t0", ci.getValue()); // Use helper that handles neg/pos
@@ -260,12 +288,6 @@ public class MipsBuilder {
         } else if (inst.getOpCode() == OpCode.SUB && op2 instanceof ConstInt ci && Math.abs(ci.getValue()) < 32768) {
             loadValue(op1, "$t0");
             addI("$t2", "$t0", -ci.getValue());
-        } else if (inst.getOpCode() == OpCode.MUL && op2 instanceof ConstInt ci && isPowerOfTwo(ci.getValue())) {
-            loadValue(op1, "$t0");
-            sb.append("    sll $t2, $t0, ").append(log2(ci.getValue())).append("\n");
-        } else if (inst.getOpCode() == OpCode.MUL && op1 instanceof ConstInt ci && isPowerOfTwo(ci.getValue())) {
-            loadValue(op2, "$t0");
-            sb.append("    sll $t2, $t0, ").append(log2(ci.getValue())).append("\n");
         } else {
             loadValue(op1, "$t0");
             loadValue(op2, "$t1");
@@ -298,6 +320,169 @@ public class MipsBuilder {
 
     private int log2(int n) {
         return 31 - Integer.numberOfLeadingZeros(n);
+    }
+
+    private record MulTerm(int shift, boolean positive) {
+    }
+
+    private boolean tryConstMul(Instruction inst, Value multiplicand, int constant) {
+        if (constant == 0) {
+            sb.append("    addu $t2, $zero, $zero\n");
+            storeValue(inst, "$t2");
+            return true;
+        }
+
+        long absConst = Math.abs((long) constant);
+        List<MulTerm> terms = buildConstMulTerms(absConst);
+        if (terms.isEmpty()) {
+            return false;
+        }
+
+        int firstIndex = -1;
+        for (int i = 0; i < terms.size(); i++) {
+            MulTerm term = terms.get(i);
+            if (term.positive && (firstIndex == -1 || terms.get(firstIndex).shift < term.shift)) {
+                firstIndex = i;
+            }
+        }
+        if (firstIndex == -1) {
+            for (int i = 0; i < terms.size(); i++) {
+                if (firstIndex == -1 || terms.get(firstIndex).shift < terms.get(i).shift) {
+                    firstIndex = i;
+                }
+            }
+        }
+        MulTerm firstTerm = terms.get(firstIndex);
+        List<MulTerm> remaining = new ArrayList<>();
+        for (int i = 0; i < terms.size(); i++) {
+            if (i != firstIndex) {
+                remaining.add(terms.get(i));
+            }
+        }
+        remaining.sort((a, b) -> Integer.compare(b.shift, a.shift));
+
+        int instructionCount = 1; // build first term
+        if (!firstTerm.positive) {
+            instructionCount++;
+        }
+        for (MulTerm term : remaining) {
+            instructionCount++; // add/sub
+            if (term.shift != 0) {
+                instructionCount++; // shift temp
+            }
+        }
+        if (constant < 0) {
+            instructionCount++;
+        }
+        if (instructionCount >= 5) {
+            return false;
+        }
+
+        loadValue(multiplicand, "$t0");
+        emitMulTerm("$t2", "$t0", firstTerm);
+        if (!firstTerm.positive) {
+            sb.append("    subu $t2, $zero, $t2\n");
+        }
+        for (MulTerm term : remaining) {
+            if (term.shift == 0) {
+                if (term.positive) {
+                    sb.append("    addu $t2, $t2, $t0\n");
+                } else {
+                    sb.append("    subu $t2, $t2, $t0\n");
+                }
+            } else {
+                sb.append("    sll $t1, $t0, ").append(term.shift).append("\n");
+                if (term.positive) {
+                    sb.append("    addu $t2, $t2, $t1\n");
+                } else {
+                    sb.append("    subu $t2, $t2, $t1\n");
+                }
+            }
+        }
+        if (constant < 0) {
+            sb.append("    subu $t2, $zero, $t2\n");
+        }
+        storeValue(inst, "$t2");
+        return true;
+    }
+
+    private boolean emitConstDivision(Value dividend, int divisor) {
+        if (divisor == 0) {
+            return false;
+        }
+        if (divisor == 1) {
+            loadValue(dividend, "$t0");
+            sb.append("    addu $t2, $t0, $zero\n");
+            return true;
+        }
+        if (divisor == -1) {
+            loadValue(dividend, "$t0");
+            sb.append("    subu $t2, $zero, $t0\n");
+            return true;
+        }
+        long absDiv = Math.abs((long) divisor);
+        if ((absDiv & absDiv - 1) == 0) {
+            int shift = Long.numberOfTrailingZeros(absDiv);
+            if (shift > 0) {
+                loadValue(dividend, "$t0");
+                sb.append("    sra $t1, $t0, 31\n");
+                sb.append("    srl $t1, $t1, ").append(32 - shift).append("\n");
+                sb.append("    addu $t0, $t0, $t1\n");
+                sb.append("    sra $t2, $t0, ").append(shift).append("\n");
+                if (divisor < 0) {
+                    sb.append("    subu $t2, $zero, $t2\n");
+                }
+                return true;
+            }
+        }
+        DivOptimizer.MultiplierInfo info = DivOptimizer.chooseMultiplier(divisor);
+        loadValue(dividend, "$t0");
+        int magic = (int) info.multiplier;
+        sb.append("    li $t1, ").append(magic).append("\n");
+        sb.append("    mult $t0, $t1\n");
+        sb.append("    mfhi $t2\n");
+        if (magic < 0) {
+            sb.append("    addu $t2, $t2, $t0\n");
+        }
+        if (info.shift > 0) {
+            sb.append("    sra $t2, $t2, ").append(info.shift).append("\n");
+        }
+        sb.append("    srl $t3, $t0, 31\n");
+        sb.append("    addu $t2, $t2, $t3\n");
+        if (divisor < 0) {
+            sb.append("    subu $t2, $zero, $t2\n");
+        }
+        return true;
+    }
+
+    private void emitMulTerm(String dest, String source, MulTerm term) {
+        if (term.shift == 0) {
+            sb.append("    addu ").append(dest).append(", ").append(source).append(", $zero\n");
+        } else {
+            sb.append("    sll ").append(dest).append(", ").append(source).append(", ").append(term.shift).append("\n");
+        }
+    }
+
+    private List<MulTerm> buildConstMulTerms(long value) {
+        List<MulTerm> terms = new ArrayList<>();
+        if (value == 0) {
+            return terms;
+        }
+        long n = value;
+        int shift = 0;
+        while (n > 0) {
+            if ((n & 1L) == 0) {
+                n >>= 1;
+            } else {
+                long remainder = n & 3L;
+                boolean positive = remainder == 1L;
+                long digit = positive ? 1L : -1L;
+                terms.add(new MulTerm(shift, positive));
+                n = (n - digit) >> 1;
+            }
+            shift++;
+        }
+        return terms;
     }
 
     private void genIcmp(IcmpInst inst) {
