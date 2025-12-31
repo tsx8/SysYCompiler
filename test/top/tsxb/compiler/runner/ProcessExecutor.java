@@ -14,7 +14,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 public final class ProcessExecutor {
-    private static final long TIMEOUT_SECONDS = 5;
+    private static final long TIMEOUT_SECONDS = 10;
     private static final int MAX_OUTPUT_SIZE = 5 * 1024 * 1024;
 
     public ProcessResult execute(Command cmd) {

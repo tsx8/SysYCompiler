@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.atomic.LongAdder;
 import java.util.stream.Stream;
 
 import top.tsxb.compiler.driver.CompilerConfig;
@@ -19,6 +20,7 @@ import top.tsxb.compiler.runner.ProcessExecutor;
 import top.tsxb.compiler.runner.TestLogger;
 import top.tsxb.compiler.strategy.IrExecutionStrategy;
 import top.tsxb.compiler.strategy.LegacyFileCompareStrategy;
+import top.tsxb.compiler.strategy.MipsExecutionStrategy;
 import top.tsxb.compiler.strategy.TestStrategy;
 
 public class CompilerTest {
@@ -54,40 +56,44 @@ public class CompilerTest {
             System.exit(1);
         }
 
-        int passed = 0;
-        int failed = 0;
+        LongAdder passed = new LongAdder();
+        LongAdder failed = new LongAdder();
 
         List<Path> testDirs = findTestDirectories();
-        for (Path testDir : testDirs) {
-            System.out.printf("--- Running test: %-15s ", testDir.getFileName());
+        System.out
+            .println("Starting parallel execution with " + Runtime.getRuntime().availableProcessors() + " threads...");
+
+        testDirs.parallelStream().forEach(testDir -> {
+            String testName = testDir.getFileName().toString();
             try {
-                TestCase testCase = new TestCase(testDir.getFileName().toString(), testDir.resolve("testfile.txt"),
-                                                 testDir.resolve("ans.txt"), testDir.resolve("in.txt"));
+                TestCase testCase = new TestCase(testName, testDir.resolve("testfile.txt"), testDir.resolve("ans.txt"),
+                    testDir.resolve("in.txt"));
                 Path caseLogDir = LOGS_ROOT.resolve(testCase.name());
                 TestLogger logger = new TestLogger(caseLogDir);
-                logInitialArtifacts(testCase, logger);
+
                 TestResult result = strategy.execute(testCase, logger);
-                logFinalResult(result, logger);
-                if (result instanceof TestResult.Passed p) {
-                    System.out.println("\u001B[32m[PASSED]\u001B[0m");
-                    passed++;
-                } else if (result instanceof TestResult.Failed f) {
-                    System.out.println("\u001B[31m[FAILED]\u001B[0m - " + f.reason());
-                    System.err.println("Expected:\n---\n" + f.expectedOutput().trim() + "\n---");
-                    System.err.println("Actual:\n---\n" + f.actualOutput().trim() + "\n---");
-                    failed++;
-                } else if (result instanceof TestResult.ExecutionError e) {
-                    System.out.println("\u001B[31m[ERROR]\u001B[0m - " + e.summary());
-                    System.err.println("Command: " + e.command());
-                    System.err.println("Stderr:\n---\n" + e.stderr().trim() + "\n---");
-                    failed++;
+
+                synchronized (System.out) {
+                    System.arraycopy(new Object[0], 0, new Object[0], 0, 0); // 仅占位
+                    if (result instanceof TestResult.Passed p) {
+                        System.out.printf("--- [%-15s] \u001B[32m[PASSED]\u001B[0m%n", testName);
+                        passed.increment();
+                    } else if (result instanceof TestResult.Failed f) {
+                        System.out.printf("--- [%-15s] \u001B[31m[FAILED]\u001B[0m - %s%n", testName, f.reason());
+                        failed.increment();
+                    } else if (result instanceof TestResult.ExecutionError e) {
+                        System.out.printf("--- [%-15s] \u001B[31m[ERROR]\u001B[0m - %s%n", testName, e.summary());
+                        failed.increment();
+                    }
                 }
             } catch (Exception e) {
-                System.out.println("\u001B[31m[CRASH]\u001B[0m - " + e.getClass().getSimpleName());
-                System.err.println("  Reason: " + e.getMessage());
-                failed++;
+                synchronized (System.err) {
+                    System.err.printf("--- [%-15s] \u001B[31m[CRASH]\u001B[0m%n", testName);
+                    e.printStackTrace(System.err);
+                }
+                failed.increment();
             }
-        }
+        });
 
         try {
             strategy.cleanup();
@@ -95,8 +101,8 @@ public class CompilerTest {
             System.err.println("ERROR during test cleanup: " + e.getMessage());
         }
 
-        printSummary(passed, failed);
-        if (failed > 0) {
+        printSummary(passed.intValue(), failed.intValue());
+        if (failed.intValue() > 0) {
             System.exit(1);
         }
     }
@@ -149,6 +155,7 @@ public class CompilerTest {
             case "lexer", "parser", "semantic" ->
                 new LegacyFileCompareStrategy(pipeline, CompilerConfig.CURRENT_HOMEWORK);
             case "llvm" -> new IrExecutionStrategy(pipeline, executor);
+            case "mips" -> new MipsExecutionStrategy(pipeline, executor);
             default -> throw new IllegalStateException(
                 "No test strategy available for stage: " + CompilerConfig.CURRENT_HOMEWORK);
         };
