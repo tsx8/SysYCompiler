@@ -10,6 +10,7 @@ import java.util.stream.Collectors;
 
 import top.tsxb.compiler.backend.IrGenStage;
 import top.tsxb.compiler.backend.MipsGenStage;
+import top.tsxb.compiler.backend.OptimizeStage;
 import top.tsxb.compiler.common.CompilerStage;
 import top.tsxb.compiler.common.ErrorEntry;
 import top.tsxb.compiler.common.ErrorReporter;
@@ -31,6 +32,9 @@ public class Pipeline {
         stages.put("parser", new ParserStage());
         stages.put("semantic", new SemanticStage());
         stages.put("llvm", new IrGenStage());
+        if (CompilerConfig.OPTIMIZE) {
+            stages.put("optimize", new OptimizeStage());
+        }
         stages.put("mips", new MipsGenStage());
     }
 

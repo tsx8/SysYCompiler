@@ -8,6 +8,7 @@ import java.nio.file.Paths;
  */
 public final class CompilerConfig {
     public static final boolean DEBUG = false;
+    public static final boolean OPTIMIZE = true;
     public static final String PROGRAMMING_LANGUAGE = "java";
     public static final String OBJECT_CODE = "mips"; // "mips", "llvm"
     public static final String CURRENT_HOMEWORK = "mips";
