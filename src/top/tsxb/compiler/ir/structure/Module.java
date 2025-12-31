@@ -14,6 +14,14 @@ public class Module {
     private final Map<String, GlobalValue> symbolMap = new HashMap<>();
     private final Map<String, Integer> globalNameMap = new HashMap<>();
 
+    public List<GlobalVariable> getGlobalList() {
+        return globalList;
+    }
+
+    public List<Function> getFunctionList() {
+        return functionList;
+    }
+
     public void addFunction(Function function) {
         resolveGlobalName(function);
         functionList.add(function);

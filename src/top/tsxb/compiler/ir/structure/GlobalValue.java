@@ -28,10 +28,6 @@ public abstract class GlobalValue extends Constant {
         this.linkage = linkage;
     }
 
-    public Linkage getLinkage() {
-        return linkage;
-    }
-
     public IrType getValueType() {
         return ((PtrType) this.type).getPointeeType();
     }

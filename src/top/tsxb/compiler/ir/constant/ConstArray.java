@@ -13,6 +13,10 @@ public class ConstArray extends Constant {
         this.values = List.copyOf(values);
     }
 
+    public List<Constant> getValues() {
+        return values;
+    }
+
     @Override
     public String getRef() {
         String elements = values.stream().map(c -> c.getType().toString() + " " + c).collect(Collectors.joining(", "));

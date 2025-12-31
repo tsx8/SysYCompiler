@@ -15,17 +15,16 @@ import top.tsxb.compiler.frontend.semantic.type.IntegerType;
 public class SymbolTable {
     private final List<Symbol> symbols = new ArrayList<>();
     private final Map<AstNode, Scope> nodeToScopeMap = new HashMap<>();
-    private final Scope rootScope;
     private Scope currentScope;
     private int scopeCounter = 0;
 
     public SymbolTable() {
         scopeCounter++;
-        this.rootScope = new Scope(null, scopeCounter);
+        Scope rootScope = new Scope(null, scopeCounter);
         this.currentScope = rootScope;
         FunctionType getintType = new FunctionType(IntegerType.getInstance(), Collections.emptyList());
         Symbol getintSymbol = new Symbol("getint", getintType, 1, false, false, Collections.emptyList());
-        this.rootScope.define(getintSymbol);
+        rootScope.define(getintSymbol);
     }
 
     public void enterScope(AstNode node) {
@@ -54,14 +53,6 @@ public class SymbolTable {
             return currentScope.lookup(name);
         }
         return null;
-    }
-
-    public Scope getScope(AstNode node) {
-        return nodeToScopeMap.get(node);
-    }
-
-    public Scope getRootScope() {
-        return rootScope;
     }
 
     public int getCurrentScopeId() {

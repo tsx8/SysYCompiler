@@ -14,6 +14,10 @@ public class IcmpInst extends Instruction {
         addOperand(rhs);
     }
 
+    public CondCode getPredicate() {
+        return predicate;
+    }
+
     @Override
     public String toString() {
         Value lhs = getOperand(0);

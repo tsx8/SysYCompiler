@@ -386,10 +386,6 @@ public class AstBuilder implements CstVisitor<Object> {
             return find(node, type).map(v);
         }
 
-        public static <T> Optional<T> buildNthOpt(NonTerm node, CstType type, int n, Function<CstNode, T> visitor) {
-            return findNth(node, type, n).map(visitor);
-        }
-
         public static <T> List<T> buildAll(NonTerm node, CstType type, Function<CstNode, T> v) {
             return findAll(node, type).stream().map(v).toList();
         }

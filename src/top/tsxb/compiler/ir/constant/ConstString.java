@@ -11,6 +11,10 @@ public class ConstString extends Constant {
         this.content = content;
     }
 
+    public String getContent() {
+        return content;
+    }
+
     @Override
     public String getRef() {
         StringBuilder sb = new StringBuilder();

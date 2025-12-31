@@ -75,7 +75,7 @@ public class CompilerTest {
 
                 synchronized (System.out) {
                     System.arraycopy(new Object[0], 0, new Object[0], 0, 0); // 仅占位
-                    if (result instanceof TestResult.Passed p) {
+                    if (result instanceof TestResult.Passed) {
                         System.out.printf("--- [%-15s] \u001B[32m[PASSED]\u001B[0m%n", testName);
                         passed.increment();
                     } else if (result instanceof TestResult.Failed f) {
@@ -121,30 +121,6 @@ public class CompilerTest {
         }
         Files.createDirectories(LOGS_ROOT);
         System.out.println("Clean log directory created at: " + LOGS_ROOT.toAbsolutePath());
-    }
-
-    private static void logInitialArtifacts(TestCase testCase, TestLogger logger) {
-        try {
-            logger.log("source.sysy", Files.readString(testCase.sourceFile()));
-            logger.log("expected.txt", Files.readString(testCase.expectedOutputFile()));
-        } catch (IOException e) {
-            System.err.println("Warning: Could not log initial artifacts for " + testCase.name());
-        }
-    }
-
-    private static void logFinalResult(TestResult result, TestLogger logger) {
-        if (result instanceof TestResult.Passed p) {
-            logger.log("output.log", p.actualOutput());
-        } else if (result instanceof TestResult.Failed f) {
-            logger.log("output.log", f.actualOutput());
-            String errorDetails = "Reason: " + f.reason() + "\n\n--- EXPECTED ---\n" + f.expectedOutput()
-                + "\n\n--- ACTUAL ---\n" + f.actualOutput();
-            logger.log("error.log", errorDetails);
-        } else if (result instanceof TestResult.ExecutionError e) {
-            String errorDetails =
-                "Summary: " + e.summary() + "\nCommand: " + e.command() + "\n\n--- STDERR ---\n" + e.stderr();
-            logger.log("error.log", errorDetails);
-        }
     }
 
     private static TestStrategy createStrategy() {
