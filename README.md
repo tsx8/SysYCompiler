@@ -9,6 +9,7 @@
 
 ## CHANGELOG
 
+- [2025.12.31] Finished mips part.
 - [2025.12.07] Finished llvm_ir part.
 - [2025.11.06] Finished semantic part.
 - [2025.10.30] Finished parser part.
