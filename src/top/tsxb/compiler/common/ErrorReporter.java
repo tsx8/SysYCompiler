@@ -44,8 +44,9 @@ public class ErrorReporter implements Backtrackable<Integer> {
      * @return A sorted list of errors.
      */
     public List<ErrorEntry> getErrors() {
-        Collections.sort(errors);
-        return Collections.unmodifiableList(errors);
+        List<ErrorEntry> sortedErrors = new ArrayList<>(this.errors);
+        Collections.sort(sortedErrors);
+        return Collections.unmodifiableList(sortedErrors);
     }
 
     /**
