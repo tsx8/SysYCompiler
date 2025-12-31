@@ -16,13 +16,13 @@ import top.tsxb.compiler.ir.constant.ConstArray;
 import top.tsxb.compiler.ir.constant.ConstInt;
 import top.tsxb.compiler.ir.constant.ConstZero;
 import top.tsxb.compiler.ir.constant.Constant;
+import top.tsxb.compiler.ir.inst.*;
 import top.tsxb.compiler.ir.structure.Argument;
 import top.tsxb.compiler.ir.structure.BasicBlock;
 import top.tsxb.compiler.ir.structure.Function;
 import top.tsxb.compiler.ir.structure.GlobalValue;
 import top.tsxb.compiler.ir.structure.GlobalVariable;
 import top.tsxb.compiler.ir.structure.Module;
-import top.tsxb.compiler.ir.inst.*;
 import top.tsxb.compiler.ir.type.ArrType;
 import top.tsxb.compiler.ir.type.FuncType;
 import top.tsxb.compiler.ir.type.IntType;
@@ -51,6 +51,7 @@ public class IrBuilder implements AstVisitor<Value> {
 
     @Override
     public Value visit(VarDecl node) {
+        if (node.symbol == null) return null;
         IrType irType = translate(node.symbol.type());
         if (node.symbol.scopeLevel() == 1 || node.symbol.isStatic()) {
             Constant initVal;
@@ -59,13 +60,28 @@ public class IrBuilder implements AstVisitor<Value> {
                 int val = !initialValues.isEmpty() ? initialValues.get(0) : 0;
                 initVal = new ConstInt(it, val);
             } else if (irType instanceof ArrType at) {
-                List<Constant> elements = new ArrayList<>();
                 int totSize = at.getNumElements();
-                for (int i = 0; i < totSize; i++) {
-                    int val = i < initialValues.size() ? initialValues.get(i) : 0;
-                    elements.add(new ConstInt((IntType)at.getElementType(), val));
+
+                boolean isAllZero = true;
+                if (!initialValues.isEmpty()) {
+                    for (int v : initialValues) {
+                        if (v != 0) {
+                            isAllZero = false;
+                            break;
+                        }
+                    }
                 }
-                initVal = new ConstArray(at, elements);
+
+                if (isAllZero) {
+                    initVal = new ConstZero(irType);
+                } else {
+                    List<Constant> elements = new ArrayList<>();
+                    for (int i = 0; i < totSize; i++) {
+                        int val = i < initialValues.size() ? initialValues.get(i) : 0;
+                        elements.add(new ConstInt((IntType)at.getElementType(), val));
+                    }
+                    initVal = new ConstArray(at, elements);
+                }
             } else {
                 initVal = new ConstZero(irType);
             }
@@ -79,36 +95,29 @@ public class IrBuilder implements AstVisitor<Value> {
             context.registerSymbol(node.symbol, gv);
             return null;
         }
-        if (node.symbol.isConst()) {
-            if (!node.symbol.initialValues().isEmpty()) {
-                int constVal = node.symbol.initialValues().get(0);
-                context.registerSymbol(node.symbol, new ConstInt(IntType.I32, constVal));
-            }
-            return null;
-        }
         BasicBlock entry = context.currentFunction.getBasicBlocks().get(0);
         AllocaInst alloca = new AllocaInst(irType, node.name, null);
-        entry.addFirst(alloca); // this will set alloca's parent to entry
+        entry.addFirst(alloca);
         context.registerSymbol(node.symbol, alloca);
-        if (irType instanceof IntType) {
-            if (node.initVal != null) {
-                Value initVal = node.initVal.accept(this);
-                new StoreInst(initVal, alloca, context.currentBlock);
+        if (node.symbol.isConst() && !(irType instanceof ArrType)) {
+            if (!node.symbol.initialValues().isEmpty()) {
+                context.registerSymbol(node.symbol, new ConstInt(IntType.I32, node.symbol.initialValues().get(0)));
             }
-        } else if (irType instanceof ArrType at) {
-            if (node.initVal instanceof ArrayInitializer init) {
-                List<Expr> values = init.values;
-                int count = Math.min(values.size(), at.getNumElements());
-                for (int i = 0; i < count; i++) {
-                    Value val = values.get(i).accept(this);
-                    Value index = new ConstInt(IntType.I32, i);
-                    Value ptr = new GetElementPtrInst(alloca, List.of(ConstInt.ZERO, index), context.currentBlock);
-                    new StoreInst(val, ptr, context.currentBlock);
-                }
-                for (int i = count; i < at.getNumElements(); i++) {
-                    Value index = new ConstInt(IntType.I32, i);
-                    Value ptr = new GetElementPtrInst(alloca, List.of(ConstInt.ZERO, index), context.currentBlock);
-                    new StoreInst(ConstInt.ZERO, ptr, context.currentBlock);
+        }
+        if (node.initVal != null) {
+            if (irType instanceof IntType) {
+                Value initVal = node.initVal.accept(this);
+                new StoreInst(context.ensureI32(initVal), alloca, context.currentBlock);
+            } else if (irType instanceof ArrType at) {
+                if (node.initVal instanceof ArrayInitializer init) {
+                    List<Expr> values = init.values;
+                    int count = Math.min(values.size(), at.getNumElements());
+                    for (int i = 0; i < count; i++) {
+                        Value val = context.ensureI32(values.get(i).accept(this));
+                        Value index = new ConstInt(IntType.I32, i);
+                        Value ptr = new GetElementPtrInst(alloca, List.of(ConstInt.ZERO, index), context.currentBlock);
+                        new StoreInst(val, ptr, context.currentBlock);
+                    }
                 }
             }
         }
@@ -117,6 +126,7 @@ public class IrBuilder implements AstVisitor<Value> {
 
     @Override
     public Value visit(FuncDef node) {
+        if (node.symbol == null) return null;
         IrType retType = translate(node.funcType);
         List<IrType> paramTypes = node.params != null ? node.params.stream()
             .map(p -> p.isArray ? new ArrayType(p.type, ArrayType.UNSIZED) : p.type).map(this::translate).toList()
@@ -139,6 +149,10 @@ public class IrBuilder implements AstVisitor<Value> {
         if (node.funcType instanceof VoidType) {
             if (!context.blockTerminated()) {
                 new ReturnInst(context.currentBlock);
+            }
+        } else {
+            if (!context.blockTerminated()) {
+                new ReturnInst(ConstInt.ZERO, context.currentBlock);
             }
         }
         context.currentFunction = null;
@@ -196,6 +210,7 @@ public class IrBuilder implements AstVisitor<Value> {
 
     @Override
     public Value visit(LVal node) {
+        if (node.symbol == null) return ConstInt.ZERO;
         if (node.symbol.isConst()) {
             var initValues = node.symbol.initialValues();
             if (node.indices.isEmpty()) {
@@ -215,7 +230,7 @@ public class IrBuilder implements AstVisitor<Value> {
         }
         Value ptr = getAddress(node);
         if (ptr == null) {
-            return null;
+            return ConstInt.ZERO;
         }
         if (ptr.getType() instanceof PtrType pt && pt.getPointeeType() instanceof ArrType) {
             return new GetElementPtrInst(ptr, List.of(ConstInt.ZERO, ConstInt.ZERO), context.currentBlock);
@@ -229,7 +244,7 @@ public class IrBuilder implements AstVisitor<Value> {
         Value ptr = getAddress(node.lVal);
         if (ptr != null) {
             Value val = node.rVal.accept(this);
-            new StoreInst(val, ptr, context.currentBlock);
+            new StoreInst(context.ensureI32(val), ptr, context.currentBlock);
         }
         return null;
     }
@@ -238,7 +253,9 @@ public class IrBuilder implements AstVisitor<Value> {
     public Value visit(ReturnStmt node) {
         if (!context.blockTerminated()) {
             if (node.retVal != null) {
-                new ReturnInst(node.retVal.accept(this), context.currentBlock);
+                Value val = node.retVal.accept(this);
+                val = context.ensureI32(val);
+                new ReturnInst(val, context.currentBlock);
             } else {
                 new ReturnInst(context.currentBlock);
             }
@@ -390,9 +407,13 @@ public class IrBuilder implements AstVisitor<Value> {
 
     @Override
     public Value visit(FuncCall node) {
+        if (node.symbol == null) return null;
         var funcValue = context.lookupSymbol(node.symbol);
         if (funcValue.isPresent() && funcValue.get() instanceof Function func) {
-            var args = node.args.stream().map(arg -> arg.accept(this)).toList();
+            var args = node.args.stream().map(arg -> {
+                Value val = arg.accept(this);
+                return context.ensureI32(val);
+            }).toList();
             return new CallInst(func, args, context.currentBlock);
         }
         return null;
@@ -429,12 +450,11 @@ public class IrBuilder implements AstVisitor<Value> {
             var current = baseAddr;
             var symType = node.symbol.type();
             if (symType instanceof ArrayType at && !node.indices.isEmpty()) {
+                Value index = context.ensureI32(node.indices.get(0).accept(this));
                 if (at.isUnsized()) {
                     var ptr = new LoadInst(current, context.currentBlock);
-                    var index = node.indices.get(0).accept(this);
                     current = new GetElementPtrInst(ptr, List.of(index), context.currentBlock);
                 } else {
-                    var index = node.indices.get(0).accept(this);
                     current = new GetElementPtrInst(current, List.of(ConstInt.ZERO, index), context.currentBlock);
                 }
             }

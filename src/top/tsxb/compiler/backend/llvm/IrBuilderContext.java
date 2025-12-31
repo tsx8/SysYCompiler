@@ -39,6 +39,7 @@ public class IrBuilderContext {
     }
 
     public Value ensureI32(Value val) {
+        if (val == null) return ConstInt.ZERO;
         if (val.getType() instanceof IntType it && it.getBitWidth() == 1) {
             return new ZextInst(val, IntType.I32, currentBlock);
         }

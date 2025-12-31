@@ -68,6 +68,8 @@ public record SymbolCollector(SymbolTable symbolTable) implements AstVisitor<Obj
     }
 
     private Integer evaluate(Expr expr) {
+        if (expr == null)
+            return 0;
         if (expr instanceof IntLiteral n) {
             return n.value;
         }
