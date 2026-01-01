@@ -12,7 +12,7 @@ import top.tsxb.compiler.ir.type.NoneType;
 import java.util.*;
 
 public class FunctionInliningPass implements Pass {
-    private static final int MAX_INLINE_SIZE = 100;
+    private static final int MAX_INLINE_SIZE = 40;
     private static final int MAX_RECURSIVE_INLINE_SIZE = 50;
 
     @Override
