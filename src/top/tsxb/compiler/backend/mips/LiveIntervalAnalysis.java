@@ -14,16 +14,18 @@ import java.util.*;
 public class LiveIntervalAnalysis {
     private final Function function;
     private final LivenessAnalysis liveness;
+    private final LoopAnalysis loopAnalysis;
     private final List<Instruction> linearizedInsts = new ArrayList<>();
-    private final Map<Instruction, Integer> instToId = new HashMap<>();
-    private final Map<Value, LiveInterval> intervals = new HashMap<>();
-    private final Map<BasicBlock, Integer> blockStart = new HashMap<>();
-    private final Map<BasicBlock, Integer> blockEnd = new HashMap<>();
+    private final Map<Instruction, Integer> instToId = new LinkedHashMap<>();
+    private final Map<Value, LiveInterval> intervals = new LinkedHashMap<>();
+    private final Map<BasicBlock, Integer> blockStart = new LinkedHashMap<>();
+    private final Map<BasicBlock, Integer> blockEnd = new LinkedHashMap<>();
     private final List<Integer> callInstIds = new ArrayList<>();
 
-    public LiveIntervalAnalysis(Function function, LivenessAnalysis liveness) {
+    public LiveIntervalAnalysis(Function function, LivenessAnalysis liveness, LoopAnalysis loopAnalysis) {
         this.function = function;
         this.liveness = liveness;
+        this.loopAnalysis = loopAnalysis;
     }
 
     public void analyze() {
@@ -76,6 +78,7 @@ public class LiveIntervalAnalysis {
         for (BasicBlock bb : blocks) {
             int bStart = blockStart.get(bb);
             int bEnd = blockEnd.get(bb);
+            double weight = Math.pow(10, loopAnalysis.getLoopDepth(bb));
 
             // Live out values are live until the end of the block
             for (Value v : liveness.getLiveOut(bb)) {
@@ -92,6 +95,7 @@ public class LiveIntervalAnalysis {
                 if (isAllocatable(inst)) {
                     LiveInterval interval = getOrCreateInterval(inst);
                     interval.setStart(instId);
+                    interval.addWeight(weight);
                     // If it was not live-out, it ends here
                     if (interval.getEnd() == Integer.MIN_VALUE) {
                         interval.setEnd(instId);
@@ -104,6 +108,7 @@ public class LiveIntervalAnalysis {
                     if (isAllocatable(op)) {
                         LiveInterval interval = getOrCreateInterval(op);
                         interval.addRange(bStart, instId);
+                        interval.addWeight(weight);
                     }
                 }
             }

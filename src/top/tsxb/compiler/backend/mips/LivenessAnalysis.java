@@ -12,12 +12,12 @@ import java.util.*;
 
 public class LivenessAnalysis {
     private final Function function;
-    private final Map<BasicBlock, Set<Value>> liveIn = new HashMap<>();
-    private final Map<BasicBlock, Set<Value>> liveOut = new HashMap<>();
-    private final Map<BasicBlock, Set<Value>> def = new HashMap<>();
-    private final Map<BasicBlock, Set<Value>> use = new HashMap<>();
-    private final Map<BasicBlock, List<BasicBlock>> successors = new HashMap<>();
-    private final Map<BasicBlock, List<BasicBlock>> predecessors = new HashMap<>();
+    private final Map<BasicBlock, Set<Value>> liveIn = new LinkedHashMap<>();
+    private final Map<BasicBlock, Set<Value>> liveOut = new LinkedHashMap<>();
+    private final Map<BasicBlock, Set<Value>> def = new LinkedHashMap<>();
+    private final Map<BasicBlock, Set<Value>> use = new LinkedHashMap<>();
+    private final Map<BasicBlock, List<BasicBlock>> successors = new LinkedHashMap<>();
+    private final Map<BasicBlock, List<BasicBlock>> predecessors = new LinkedHashMap<>();
 
     public LivenessAnalysis(Function function) {
         this.function = function;
@@ -57,8 +57,8 @@ public class LivenessAnalysis {
 
     private void computeDefUse() {
         for (BasicBlock bb : function.getBasicBlocks()) {
-            Set<Value> bbDef = new HashSet<>();
-            Set<Value> bbUse = new HashSet<>();
+            Set<Value> bbDef = new LinkedHashSet<>();
+            Set<Value> bbUse = new LinkedHashSet<>();
             for (Instruction inst : bb.getInstructions()) {
                 // Use
                 for (int i = 0; i < inst.getNumOperands(); i++) {
@@ -74,8 +74,8 @@ public class LivenessAnalysis {
             }
             def.put(bb, bbDef);
             use.put(bb, bbUse);
-            liveIn.put(bb, new HashSet<>());
-            liveOut.put(bb, new HashSet<>());
+            liveIn.put(bb, new LinkedHashSet<>());
+            liveOut.put(bb, new LinkedHashSet<>());
         }
     }
 
@@ -93,19 +93,19 @@ public class LivenessAnalysis {
             Collections.reverse(blocks); // Reverse order for faster convergence
 
             for (BasicBlock bb : blocks) {
-                Set<Value> oldLiveIn = new HashSet<>(liveIn.get(bb));
-                Set<Value> oldLiveOut = new HashSet<>(liveOut.get(bb));
+                Set<Value> oldLiveIn = new LinkedHashSet<>(liveIn.get(bb));
+                Set<Value> oldLiveOut = new LinkedHashSet<>(liveOut.get(bb));
 
                 // Out[B] = Union(In[S] for S in successors(B))
-                Set<Value> newLiveOut = new HashSet<>();
+                Set<Value> newLiveOut = new LinkedHashSet<>();
                 for (BasicBlock succ : successors.get(bb)) {
                     newLiveOut.addAll(liveIn.get(succ));
                 }
                 liveOut.put(bb, newLiveOut);
 
                 // In[B] = Use[B] Union (Out[B] - Def[B])
-                Set<Value> newLiveIn = new HashSet<>(use.get(bb));
-                Set<Value> outMinusDef = new HashSet<>(newLiveOut);
+                Set<Value> newLiveIn = new LinkedHashSet<>(use.get(bb));
+                Set<Value> outMinusDef = new LinkedHashSet<>(newLiveOut);
                 outMinusDef.removeAll(def.get(bb));
                 newLiveIn.addAll(outMinusDef);
                 liveIn.put(bb, newLiveIn);

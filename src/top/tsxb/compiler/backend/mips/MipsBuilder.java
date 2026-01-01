@@ -14,11 +14,11 @@ public class MipsBuilder {
     private final StringBuilder sb = new StringBuilder();
     private StringBuilder currentSb = sb;
     private final StringBuilder pendingBridges = new StringBuilder();
-    private final Map<Value, Integer> stackOffsets = new HashMap<>();
-    private Map<Value, MipsRegister> regMapping = new HashMap<>();
-    private Map<Value, LiveInterval> intervals = new HashMap<>();
-    private Map<Instruction, Integer> instToId = new HashMap<>();
-    private Set<MipsRegister> usedCalleeSaved = new HashSet<>();
+    private final Map<Value, Integer> stackOffsets = new LinkedHashMap<>();
+    private Map<Value, MipsRegister> regMapping = new LinkedHashMap<>();
+    private Map<Value, LiveInterval> intervals = new LinkedHashMap<>();
+    private Map<Instruction, Integer> instToId = new LinkedHashMap<>();
+    private Set<MipsRegister> usedCalleeSaved = new LinkedHashSet<>();
     private int currentStackSize;
     private int brCounter = 0;
 
@@ -206,7 +206,9 @@ public class MipsBuilder {
         // Register Allocation
         LivenessAnalysis liveness = new LivenessAnalysis(func);
         liveness.analyze();
-        LiveIntervalAnalysis intervalAnalysis = new LiveIntervalAnalysis(func, liveness);
+        LoopAnalysis loopAnalysis = new LoopAnalysis(func);
+        loopAnalysis.analyze();
+        LiveIntervalAnalysis intervalAnalysis = new LiveIntervalAnalysis(func, liveness, loopAnalysis);
         intervalAnalysis.analyze();
         this.intervals = intervalAnalysis.getIntervalMap();
         this.instToId = intervalAnalysis.getInstToId();
@@ -265,15 +267,12 @@ public class MipsBuilder {
             }
         }
 
-        if (pendingBridges.length() > 0) {
+        if (!pendingBridges.isEmpty()) {
             currentSb.append("\n# Bridges\n");
             currentSb.append(pendingBridges);
             pendingBridges.setLength(0);
         }
-        
-        // Epilogue (before return)
-        // Note: genRet will handle the actual jr $ra, but we need to restore registers there or here.
-        // For simplicity, I'll add a restore logic in genRet.
+
         currentSb.append("\n");
     }
 
@@ -321,10 +320,6 @@ public class MipsBuilder {
             }
         }
         return false;
-    }
-
-    private void genInstruction(Instruction inst) {
-        genInstruction(inst, null);
     }
 
     private void genInstruction(Instruction inst, BasicBlock nextBb) {
