@@ -26,37 +26,59 @@ public final class ProcessExecutor {
     });
 
     public ProcessResult execute(Command cmd) {
+        Process process = null;
         try {
             var commandList = new ArrayList<String>();
             commandList.add(cmd.executablePath());
             commandList.addAll(cmd.arguments());
             ProcessBuilder pb = new ProcessBuilder(commandList).directory(cmd.workingDirectory().toFile());
-            Process process = pb.start();
-            cmd.stdinContent().ifPresent(stdin -> {
-                try (var writer = process.getOutputStream()) {
-                    writer.write(stdin.getBytes(StandardCharsets.UTF_8));
+            process = pb.start();
+
+            final Process p = process;
+            if (cmd.stdinContent().isPresent()) {
+                try (var writer = p.getOutputStream()) {
+                    writer.write(cmd.stdinContent().get().getBytes(StandardCharsets.UTF_8));
                     writer.flush();
-                } catch (IOException e) {
-                    throw new UncheckedIOException("Failed to write to process stdin", e);
                 }
-            });
-            var stdoutFuture = CompletableFuture.supplyAsync(() -> readStreamSafe(process.getInputStream()), IO_EXECUTOR);
-            var stderrFuture = CompletableFuture.supplyAsync(() -> readStreamSafe(process.getErrorStream()), IO_EXECUTOR);
+            } else {
+                p.getOutputStream().close();
+            }
+
+            var stdoutFuture = CompletableFuture.supplyAsync(() -> readStreamSafe(p.getInputStream()), IO_EXECUTOR);
+            var stderrFuture = CompletableFuture.supplyAsync(() -> readStreamSafe(p.getErrorStream()), IO_EXECUTOR);
+
             boolean finished = process.waitFor(TIMEOUT_SECONDS, TimeUnit.SECONDS);
             if (!finished) {
-                process.destroyForcibly();
-                stdoutFuture.join();
-                stderrFuture.join();
+                cleanupProcess(process);
                 throw new RuntimeException(
                     "Process timed out after " + TIMEOUT_SECONDS + " seconds: " + cmd.toCommandLineString());
             }
 
             return new ProcessResult(process.exitValue(), stdoutFuture.join(), stderrFuture.join());
         } catch (IOException e) {
+            cleanupProcess(process);
             throw new UncheckedIOException("Failed to execute command: " + cmd.toCommandLineString(), e);
         } catch (InterruptedException e) {
+            cleanupProcess(process);
             Thread.currentThread().interrupt();
-            throw new RuntimeException("Process execution was interrupted" + cmd.toCommandLineString(), e);
+            throw new RuntimeException("Process execution was interrupted: " + cmd.toCommandLineString(), e);
+        } catch (Throwable t) {
+            cleanupProcess(process);
+            throw t;
+        }
+    }
+
+    private void cleanupProcess(Process process) {
+        if (process == null) {
+            return;
+        }
+        try {
+            process.descendants().forEach(ProcessHandle::destroyForcibly);
+            process.destroyForcibly();
+            process.waitFor(2, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } catch (Exception ignored) {
         }
     }
 

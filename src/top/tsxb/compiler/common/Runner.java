@@ -7,6 +7,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 import top.tsxb.compiler.driver.CompilerConfig;
@@ -96,29 +97,47 @@ public class Runner {
             p.getOutputStream().close();
         }
 
-        String stdout = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-        String stderr = new String(p.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
+        // Use CompletableFuture to read streams asynchronously to avoid blocking before waitFor
+        var stdoutFuture = CompletableFuture.supplyAsync(() -> {
+            try {
+                return new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            } catch (IOException e) {
+                return "";
+            }
+        });
+        var stderrFuture = CompletableFuture.supplyAsync(() -> {
+            try {
+                return new String(p.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
+            } catch (IOException e) {
+                return "";
+            }
+        });
 
-        int exitCode;
         try {
             if (!p.waitFor(10, TimeUnit.SECONDS)) {
+                p.descendants().forEach(ProcessHandle::destroyForcibly);
                 p.destroyForcibly();
                 throw new IOException("Process timed out: " + String.join(" ", cmd));
             }
-            exitCode = p.exitValue();
+
+            int exitCode = p.exitValue();
+            String stdout = stdoutFuture.join();
+            String stderr = stderrFuture.join();
+
+            if (exitCode != 0) {
+                String errorMsg = "Command failed (Exit " + exitCode + "): " + String.join(" ", cmd);
+                if (!stderr.isBlank()) {
+                    errorMsg += "\nSTDERR:\n" + stderr;
+                }
+                throw new IOException(errorMsg);
+            }
+
+            return stdout;
         } catch (InterruptedException e) {
+            p.descendants().forEach(ProcessHandle::destroyForcibly);
+            p.destroyForcibly();
             Thread.currentThread().interrupt();
             throw new IOException("Process interrupted", e);
         }
-
-        if (exitCode != 0) {
-            String errorMsg = "Command failed (Exit " + exitCode + "): " + String.join(" ", cmd);
-            if (!stderr.isBlank()) {
-                errorMsg += "\nSTDERR:\n" + stderr;
-            }
-            throw new IOException(errorMsg);
-        }
-
-        return stdout;
     }
 }
