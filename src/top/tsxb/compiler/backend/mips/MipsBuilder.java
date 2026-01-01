@@ -312,6 +312,15 @@ public class MipsBuilder {
             regOffset -= 4;
         }
 
+        // Load global addresses into assigned registers
+        for (Map.Entry<Value, MipsRegister> entry : regMapping.entrySet()) {
+            if (entry.getKey() instanceof GlobalVariable gv) {
+                String regName = entry.getValue().getName();
+                invalidateCache(regName);
+                currentSb.append("    la ").append(regName).append(", ").append(getLabel(gv)).append("\n");
+            }
+        }
+
         List<Argument> args = func.getArguments();
         for (int i = 0; i < args.size(); i++) {
             Argument arg = args.get(i);
@@ -439,6 +448,14 @@ public class MipsBuilder {
             invalidateCache(reg);
             currentSb.append("    li ").append(reg).append(", ").append(ci.getValue()).append("\n");
         } else if (val instanceof GlobalValue gv) {
+            if (regMapping.containsKey(gv)) {
+                MipsRegister srcReg = regMapping.get(gv);
+                invalidateCache(reg);
+                if (!srcReg.getName().equals(reg)) {
+                    currentSb.append("    move ").append(reg).append(", ").append(srcReg.getName()).append("\n");
+                }
+                return;
+            }
             if (globalAddrCache.containsKey(gv)) {
                 String cachedReg = globalAddrCache.get(gv);
                 if (!cachedReg.equals(reg)) {
@@ -764,9 +781,6 @@ public class MipsBuilder {
         if (addr instanceof AllocaInst alloca) {
             int dataOffset = getAllocaDataOffset(alloca);
             loadMem("$t1", dataOffset + spShift, "$sp");
-        } else if (addr instanceof GlobalVariable gv) {
-            invalidateCache("$t1");
-            currentSb.append("    lw $t1, ").append(getLabel(gv)).append("\n");
         } else {
             loadValue(addr, "$t0");
             invalidateCache("$t1");
@@ -781,8 +795,6 @@ public class MipsBuilder {
         if (addr instanceof AllocaInst alloca) {
             int dataOffset = getAllocaDataOffset(alloca);
             storeMem("$t0", dataOffset + spShift, "$sp");
-        } else if (addr instanceof GlobalVariable gv) {
-            currentSb.append("    sw $t0, ").append(getLabel(gv)).append("\n");
         } else {
             loadValue(addr, "$t1");
             currentSb.append("    sw $t0, 0($t1)\n");

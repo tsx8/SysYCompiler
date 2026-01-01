@@ -5,6 +5,7 @@ import top.tsxb.compiler.ir.inst.Instruction;
 import top.tsxb.compiler.ir.inst.BrInst;
 import top.tsxb.compiler.ir.structure.BasicBlock;
 import top.tsxb.compiler.ir.structure.Function;
+import top.tsxb.compiler.ir.structure.GlobalVariable;
 import top.tsxb.compiler.ir.type.NoneType;
 import top.tsxb.compiler.ir.constant.Constant;
 
@@ -81,6 +82,7 @@ public class LivenessAnalysis {
 
     private boolean isAllocatable(Value val) {
         if (val == null) return false;
+        if (val instanceof GlobalVariable) return true;
         if (val instanceof Constant || val instanceof BasicBlock) return false;
         return !(val instanceof Instruction inst) || !(inst.getType() instanceof NoneType);
     }

@@ -6,6 +6,7 @@ import top.tsxb.compiler.ir.inst.CallInst;
 import top.tsxb.compiler.ir.structure.BasicBlock;
 import top.tsxb.compiler.ir.structure.Function;
 import top.tsxb.compiler.ir.structure.Argument;
+import top.tsxb.compiler.ir.structure.GlobalVariable;
 import top.tsxb.compiler.ir.type.NoneType;
 import top.tsxb.compiler.ir.constant.Constant;
 
@@ -63,12 +64,28 @@ public class LiveIntervalAnalysis {
 
     private void computeIntervals() {
         // Initialize intervals for arguments
-        int firstInstId = 0;
+        int firstInstId = -1;
         for (Argument arg : function.getArguments()) {
             LiveInterval interval = new LiveInterval(arg);
             interval.setStart(firstInstId);
             interval.setEnd(firstInstId);
             intervals.put(arg, interval);
+        }
+
+        // Initialize intervals for global variables used in this function
+        for (BasicBlock bb : function.getBasicBlocks()) {
+            for (Instruction inst : bb.getInstructions()) {
+                for (int i = 0; i < inst.getNumOperands(); i++) {
+                    Value op = inst.getOperand(i);
+                    if (op instanceof GlobalVariable gv) {
+                        LiveInterval interval = getOrCreateInterval(gv);
+                        if (interval.getStart() == Integer.MAX_VALUE) {
+                            interval.setStart(firstInstId);
+                            interval.setEnd(firstInstId);
+                        }
+                    }
+                }
+            }
         }
 
         // Process blocks in reverse order
@@ -121,6 +138,7 @@ public class LiveIntervalAnalysis {
 
     private boolean isAllocatable(Value val) {
         if (val == null) return false;
+        if (val instanceof GlobalVariable) return true;
         if (val instanceof Constant || val instanceof BasicBlock) return false;
         return !(val instanceof Instruction inst) || !(inst.getType() instanceof NoneType);
     }
