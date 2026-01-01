@@ -637,28 +637,62 @@ public class MipsBuilder {
             return;
         }
 
-        int tempSpace = phis.size() * 4;
-        addI("$sp", "$sp", -tempSpace);
+        Map<PhiInst, Value> assignments = new LinkedHashMap<>();
+        Map<PhiInst, Integer> useCount = new HashMap<>();
+        Set<PhiInst> phiSet = new HashSet<>(phis);
 
-        for (int i = 0; i < phis.size(); i++) {
-            PhiInst phi = phis.get(i);
+        for (PhiInst phi : phis) {
             Value incoming = phi.getIncomingValue(current);
-            if (incoming != null) {
+            if (incoming != null && incoming != phi) {
+                assignments.put(phi, incoming);
+                if (incoming instanceof PhiInst incomingPhi && phiSet.contains(incomingPhi)) {
+                    useCount.put(incomingPhi, useCount.getOrDefault(incomingPhi, 0) + 1);
+                }
+            }
+        }
+
+        Queue<PhiInst> ready = new LinkedList<>();
+        for (PhiInst phi : assignments.keySet()) {
+            if (useCount.getOrDefault(phi, 0) == 0) {
+                ready.add(phi);
+            }
+        }
+
+        while (!ready.isEmpty()) {
+            PhiInst phi = ready.poll();
+            Value incoming = assignments.get(phi);
+            loadValue(incoming, "$t0");
+            storeValue(phi, "$t0");
+            assignments.remove(phi);
+
+            if (incoming instanceof PhiInst incomingPhi && assignments.containsKey(incomingPhi)) {
+                useCount.put(incomingPhi, useCount.get(incomingPhi) - 1);
+                if (useCount.get(incomingPhi) == 0) {
+                    ready.add(incomingPhi);
+                }
+            }
+        }
+
+        if (!assignments.isEmpty()) {
+            List<PhiInst> cyclePhis = new ArrayList<>(assignments.keySet());
+            int tempSpace = cyclePhis.size() * 4;
+            addI("$sp", "$sp", -tempSpace);
+
+            for (int i = 0; i < cyclePhis.size(); i++) {
+                PhiInst phi = cyclePhis.get(i);
+                Value incoming = assignments.get(phi);
                 loadValue(incoming, "$t0");
                 storeMem("$t0", i * 4, "$sp");
             }
-        }
 
-        for (int i = 0; i < phis.size(); i++) {
-            PhiInst phi = phis.get(i);
-            Value incoming = phi.getIncomingValue(current);
-            if (incoming != null) {
+            for (int i = 0; i < cyclePhis.size(); i++) {
+                PhiInst phi = cyclePhis.get(i);
                 loadMem("$t0", i * 4, "$sp");
                 storeValue(phi, "$t0");
             }
-        }
 
-        addI("$sp", "$sp", tempSpace);
+            addI("$sp", "$sp", tempSpace);
+        }
     }
 
     private void genRet(ReturnInst inst) {
