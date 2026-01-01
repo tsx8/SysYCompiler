@@ -147,10 +147,34 @@ public class MipsBuilder {
         currentSb.append("putstr:\n    li $v0, 4\n    syscall\n    jr $ra\n");
     }
 
+    private Map<BasicBlock, Integer> getPredecessorCounts(Function func) {
+        Map<BasicBlock, Integer> counts = new HashMap<>();
+        for (BasicBlock bb : func.getBasicBlocks()) {
+            counts.put(bb, 0);
+        }
+        for (BasicBlock bb : func.getBasicBlocks()) {
+            if (bb.getInstructions().isEmpty()) continue;
+            Instruction last = bb.getInstructions().get(bb.getInstructions().size() - 1);
+            if (last instanceof BrInst br) {
+                if (br.getNumOperands() == 1) {
+                    BasicBlock target = (BasicBlock) br.getOperand(0);
+                    counts.put(target, counts.getOrDefault(target, 0) + 1);
+                } else {
+                    BasicBlock targetTrue = (BasicBlock) br.getOperand(1);
+                    BasicBlock targetFalse = (BasicBlock) br.getOperand(2);
+                    counts.put(targetTrue, counts.getOrDefault(targetTrue, 0) + 1);
+                    counts.put(targetFalse, counts.getOrDefault(targetFalse, 0) + 1);
+                }
+            }
+        }
+        return counts;
+    }
+
     private List<BasicBlock> reorderBlocks(Function func) {
         List<BasicBlock> original = func.getBasicBlocks();
         if (original.isEmpty()) return original;
 
+        Map<BasicBlock, Integer> predCounts = getPredecessorCounts(func);
         List<BasicBlock> reordered = new ArrayList<>();
         Set<BasicBlock> visited = new HashSet<>();
 
@@ -159,41 +183,55 @@ public class MipsBuilder {
         visited.add(current);
 
         while (reordered.size() < original.size()) {
-            Instruction lastInst = current.getInstructions().get(current.getInstructions().size() - 1);
-            BasicBlock next = null;
-            if (lastInst instanceof BrInst br) {
-                if (br.getNumOperands() == 1) {
-                    BasicBlock target = (BasicBlock) br.getOperand(0);
-                    if (!visited.contains(target)) {
-                        next = target;
-                    }
-                } else {
-                    BasicBlock targetTrue = (BasicBlock) br.getOperand(1);
-                    BasicBlock targetFalse = (BasicBlock) br.getOperand(2);
-                    // Heuristic: prefer targetTrue (often the loop body or then-branch)
-                    if (!visited.contains(targetTrue)) {
-                        next = targetTrue;
-                    } else if (!visited.contains(targetFalse)) {
-                        next = targetFalse;
+            if (current.getInstructions().isEmpty()) {
+                current = null;
+            } else {
+                Instruction lastInst = current.getInstructions().get(current.getInstructions().size() - 1);
+                BasicBlock next = null;
+                if (lastInst instanceof BrInst br) {
+                    if (br.getNumOperands() == 1) {
+                        BasicBlock target = (BasicBlock) br.getOperand(0);
+                        if (!visited.contains(target)) {
+                            next = target;
+                        }
+                    } else {
+                        BasicBlock targetTrue = (BasicBlock) br.getOperand(1);
+                        BasicBlock targetFalse = (BasicBlock) br.getOperand(2);
+                        
+                        boolean visitedTrue = visited.contains(targetTrue);
+                        boolean visitedFalse = visited.contains(targetFalse);
+
+                        if (!visitedTrue && !visitedFalse) {
+                            // Heuristic: prefer the one that is NOT a merge block
+                            if (predCounts.getOrDefault(targetFalse, 0) == 1 && predCounts.getOrDefault(targetTrue, 0) > 1) {
+                                next = targetFalse;
+                            } else {
+                                next = targetTrue;
+                            }
+                        } else if (!visitedTrue) {
+                            next = targetTrue;
+                        } else if (!visitedFalse) {
+                            next = targetFalse;
+                        }
                     }
                 }
+                current = next;
             }
 
-            if (next == null) {
+            if (current == null) {
                 // Find first unvisited block
                 for (BasicBlock bb : original) {
                     if (!visited.contains(bb)) {
-                        next = bb;
+                        current = bb;
                         break;
                     }
                 }
             }
 
-            if (next != null) {
-                reordered.add(next);
-                visited.add(next);
-                current = next;
-            } else {
+            if (current != null && !visited.contains(current)) {
+                reordered.add(current);
+                visited.add(current);
+            } else if (current == null) {
                 break;
             }
         }
@@ -679,7 +717,7 @@ public class MipsBuilder {
             boolean phisTrue = hasPhis(inst.getParent(), targetTrue);
             boolean phisFalse = hasPhis(inst.getParent(), targetFalse);
 
-            if (targetFalse == nextBb && !phisFalse) {
+            if (targetFalse == nextBb) {
                 // Fall through to False
                 if (!phisTrue) {
                     currentSb.append("    bne $t0, $zero, ").append(labelTrue).append("\n");
@@ -694,7 +732,8 @@ public class MipsBuilder {
                     currentSb.append("    j ").append(labelTrue).append("\n");
                     currentSb = oldSb;
                 }
-            } else if (targetTrue == nextBb && !phisTrue) {
+                fillPhis(inst.getParent(), targetFalse);
+            } else if (targetTrue == nextBb) {
                 // Fall through to True
                 if (!phisFalse) {
                     currentSb.append("    beq $t0, $zero, ").append(labelFalse).append("\n");
@@ -709,8 +748,9 @@ public class MipsBuilder {
                     currentSb.append("    j ").append(labelFalse).append("\n");
                     currentSb = oldSb;
                 }
+                fillPhis(inst.getParent(), targetTrue);
             } else {
-                // Neither is next or both have phis
+                // Neither is next
                 if (!phisFalse) {
                     currentSb.append("    beq $t0, $zero, ").append(labelFalse).append("\n");
                 } else {
@@ -726,9 +766,7 @@ public class MipsBuilder {
                 }
 
                 fillPhis(inst.getParent(), targetTrue);
-                if (targetTrue != nextBb) {
-                    currentSb.append("    j ").append(labelTrue).append("\n");
-                }
+                currentSb.append("    j ").append(labelTrue).append("\n");
             }
         }
     }
