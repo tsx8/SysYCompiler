@@ -7,8 +7,11 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.stream.Stream;
 
@@ -59,9 +62,15 @@ public class CompilerTest {
         LongAdder passed = new LongAdder();
         LongAdder failed = new LongAdder();
 
-        List<Path> testDirs = findTestDirectories();
-        System.out
-            .println("Starting parallel execution with " + Runtime.getRuntime().availableProcessors() + " threads...");
+        List<Path> testDirs = findTestDirectories(args);
+        if (testDirs.size() == 1) {
+            System.out.printf("Running single test case: %s%n", testDirs.get(0).getFileName());
+        } else if (args.length > 0) {
+            System.out.printf("Running %d selected test cases...%n", testDirs.size());
+        } else {
+            System.out.println(
+                "Starting parallel execution with " + Runtime.getRuntime().availableProcessors() + " threads...");
+        }
 
         testDirs.parallelStream().forEach(testDir -> {
             String testName = testDir.getFileName().toString();
@@ -95,11 +104,7 @@ public class CompilerTest {
             }
         });
 
-        try {
-            strategy.cleanup();
-        } catch (IOException e) {
-            System.err.println("ERROR during test cleanup: " + e.getMessage());
-        }
+        strategy.cleanup();
 
         printSummary(passed.intValue(), failed.intValue());
         if (failed.intValue() > 0) {
@@ -137,9 +142,21 @@ public class CompilerTest {
         };
     }
 
-    private static List<Path> findTestDirectories() {
+    private static List<Path> findTestDirectories(String[] args) {
         try (Stream<Path> paths = Files.list(TEST_CASES_ROOT)) {
-            return paths.filter(Files::isDirectory).sorted(Comparator.comparing(Path::getFileName)).toList();
+            List<Path> allDirs =
+                paths.filter(Files::isDirectory).sorted(Comparator.comparing(Path::getFileName)).toList();
+            if (args.length > 0) {
+                Set<String> targets = new HashSet<>(Arrays.asList(args));
+                List<Path> filtered =
+                    allDirs.stream().filter(p -> targets.contains(p.getFileName().toString())).toList();
+                if (filtered.isEmpty()) {
+                    System.err.printf("ERROR: No matching test cases found for %s in %s%n", targets, TEST_CASES_ROOT);
+                    System.exit(1);
+                }
+                return filtered;
+            }
+            return allDirs;
         } catch (IOException e) {
             System.err.println("ERROR: Could not read test case directories from " + TEST_CASES_ROOT);
             e.printStackTrace(System.err);

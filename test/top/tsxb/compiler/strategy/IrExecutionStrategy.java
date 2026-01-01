@@ -55,6 +55,7 @@ public class IrExecutionStrategy implements TestStrategy {
             String stdinContent = Files.exists(testCase.inputFile()) ? Files.readString(testCase.inputFile()) : "";
             logger.log("input.txt", stdinContent);
             String sourceCode = Files.readString(testCase.sourceFile());
+            logger.log("testfile.txt", sourceCode);
             String mainIr = pipeline.run(sourceCode, "llvm");
             logger.log("generated.ll", mainIr);
             Files.writeString(tmpDir.resolve("main.ll"), mainIr);
@@ -63,6 +64,7 @@ public class IrExecutionStrategy implements TestStrategy {
                 List.of("main.ll", "lib.ll", "-S", "-o", "out.ll"), tmpDir, Optional.empty());
             var linkResult = executor.execute(linkCommand);
             if (linkResult.exitCode() != 0) {
+                logger.logRunError("llvm-link", linkCommand, linkResult);
                 return new TestResult.ExecutionError("llvm-link failed", linkCommand.toCommandLineString(),
                     linkResult.stderr());
             }
@@ -70,12 +72,19 @@ public class IrExecutionStrategy implements TestStrategy {
             var lliCommand = new ProcessExecutor.Command(CompilerConfig.LLI_PATH, List.of("out.ll"), tmpDir,
                 Optional.of(stdinContent));
             var lliResult = executor.execute(lliCommand);
+            String actualOutput = lliResult.stdout();
+            String stderr = lliResult.stderr();
+            String expectedOutput = Files.readString(testCase.expectedOutputFile());
+            logger.log("stdout.txt", actualOutput);
+            if (!stderr.isBlank()) {
+                logger.log("stderr.txt", stderr);
+            }
+            logger.log("expected.txt", expectedOutput);
             if (lliResult.exitCode() != 0) {
+                logger.logRunError("lli", lliCommand, lliResult);
                 return new TestResult.ExecutionError("lli execution failed", lliCommand.toCommandLineString(),
                     lliResult.stderr());
             }
-            String actualOutput = lliResult.stdout();
-            String expectedOutput = Files.readString(testCase.expectedOutputFile());
             String normalizedActual = actualOutput.replaceAll("\\r\\n", "\n").trim();
             String normalizedExpected = expectedOutput.replaceAll("\\r\\n", "\n").trim();
             if (normalizedActual.equals(normalizedExpected)) {

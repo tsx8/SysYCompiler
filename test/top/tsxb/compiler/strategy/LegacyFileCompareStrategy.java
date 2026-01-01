@@ -14,9 +14,11 @@ public record LegacyFileCompareStrategy(Pipeline pipeline, String targetStage) i
     public TestResult execute(TestCase testCase, TestLogger logger) {
         try {
             String sourceCode = Files.readString(testCase.sourceFile());
+            logger.log("testfile.txt", sourceCode);
             String expectedOutput = Files.readString(testCase.expectedOutputFile());
             String actualOutput = pipeline.run(sourceCode, targetStage);
-            logger.log("output.log", actualOutput);
+            logger.log("stdout.txt", actualOutput);
+            logger.log("expected.txt", expectedOutput);
             String normalizedExpected = expectedOutput.replaceAll("\\r\\n", "\n").trim();
             String normalizedActual = actualOutput.replaceAll("\\r\\n", "\n").trim();
             if (normalizedExpected.equals(normalizedActual)) {

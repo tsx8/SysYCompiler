@@ -33,4 +33,27 @@ public record TestLogger(Path logDirectory) {
             e.printStackTrace(System.err);
         }
     }
+
+    public void logRunError(String stage, ProcessExecutor.Command command, ProcessExecutor.ProcessResult result) {
+        String lineSeparator = System.lineSeparator();
+        StringBuilder builder = new StringBuilder();
+        builder.append("Stage: ").append(stage).append(lineSeparator);
+        builder.append("Command: ").append(command.toCommandLineString()).append(lineSeparator);
+        builder.append("Exit Code: ").append(result.exitCode()).append(lineSeparator);
+        if (!result.stdout().isBlank()) {
+            builder.append(lineSeparator).append("[STDOUT]").append(lineSeparator);
+            builder.append(result.stdout());
+            if (!result.stdout().endsWith(lineSeparator)) {
+                builder.append(lineSeparator);
+            }
+        }
+        if (!result.stderr().isBlank()) {
+            builder.append(lineSeparator).append("[STDERR]").append(lineSeparator);
+            builder.append(result.stderr());
+            if (!result.stderr().endsWith(lineSeparator)) {
+                builder.append(lineSeparator);
+            }
+        }
+        log("run.log", builder.toString());
+    }
 }

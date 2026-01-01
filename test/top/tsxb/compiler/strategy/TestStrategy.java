@@ -11,5 +11,5 @@ public interface TestStrategy {
 
     default void prepare() throws IOException {}
 
-    default void cleanup() throws IOException {}
+    default void cleanup() {}
 }

@@ -31,6 +31,7 @@ public record MipsExecutionStrategy(Pipeline pipeline, ProcessExecutor executor)
             String stdinContent = Files.exists(testCase.inputFile()) ? Files.readString(testCase.inputFile()) : "";
             logger.log("input.txt", stdinContent);
             String sourceCode = Files.readString(testCase.sourceFile());
+            logger.log("testfile.txt", sourceCode);
 
             // Run pipeline to generate MIPS
             String mipsCode = pipeline.run(sourceCode, "mips");
@@ -47,14 +48,22 @@ public record MipsExecutionStrategy(Pipeline pipeline, ProcessExecutor executor)
 
             var marsResult = executor.execute(marsCommand);
 
+            String actualOutput = marsResult.stdout();
+            String stderr = marsResult.stderr();
+            String expectedOutput = Files.readString(testCase.expectedOutputFile());
+
+            logger.log("stdout.txt", actualOutput);
+            if (!stderr.isBlank()) {
+                logger.log("stderr.txt", stderr);
+            }
+            logger.log("expected.txt", expectedOutput);
+
             // MARS might exit with non-zero if there's a runtime error, but we should check stdout/stderr
             if (marsResult.stderr().contains("Error")) {
+                logger.logRunError("mars", marsCommand, marsResult);
                 return new TestResult.ExecutionError("MARS execution error", marsCommand.toCommandLineString(),
                     marsResult.stderr());
             }
-
-            String actualOutput = marsResult.stdout();
-            String expectedOutput = Files.readString(testCase.expectedOutputFile());
 
             String normalizedActual = actualOutput.replaceAll("\\r\\n", "\n").trim();
             String normalizedExpected = expectedOutput.replaceAll("\\r\\n", "\n").trim();
