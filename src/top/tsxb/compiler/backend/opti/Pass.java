@@ -4,7 +4,7 @@ import top.tsxb.compiler.ir.structure.Module;
 
 @FunctionalInterface
 public interface Pass {
-    void run(Module module);
+    boolean run(Module module);
 
     default String name() {
         return getClass().getSimpleName();

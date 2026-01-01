@@ -16,18 +16,30 @@ public class PassManager {
     }
 
     public void runAll(Module module, ErrorReporter errorReporter) {
-        for (Pass pass : passes) {
-            if (errorReporter.hasErrors()) {
-                break;
+        int iterations = 0;
+        int MAX_ITERATIONS = 15;
+        boolean changed = true;
+        while (changed && iterations < MAX_ITERATIONS) {
+            changed = false;
+            for (Pass pass : passes) {
+                if (errorReporter.hasErrors()) {
+                    return;
+                }
+                boolean passChanged = pass.run(module);
+                if (passChanged) {
+                    changed = true;
+                }
             }
-            pass.run(module);
+            iterations++;
         }
     }
 
     public static PassManager createDefault() {
         PassManager manager = new PassManager();
+        manager.register(new FunctionInliningPass());
         manager.register(new Mem2RegPass());
         manager.register(new ConstantFoldingPass());
+        manager.register(new SimplifyCfgPass());
         manager.register(new DeadCodeEliminationPass());
         return manager;
     }

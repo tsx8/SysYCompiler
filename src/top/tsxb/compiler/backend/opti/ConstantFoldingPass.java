@@ -13,7 +13,8 @@ import java.util.List;
 
 public class ConstantFoldingPass implements Pass {
     @Override
-    public void run(Module module) {
+    public boolean run(Module module) {
+        boolean anyChanged = false;
         for (Function function : module.getFunctionList()) {
             boolean changed = true;
             while (changed) {
@@ -31,6 +32,7 @@ public class ConstantFoldingPass implements Pass {
                                     binary.dropAllReferences();
                                     bb.getInstructions().remove(binary);
                                     changed = true;
+                                    anyChanged = true;
                                 }
                             } else {
                                 Value simplified = simplifyBinary(binary);
@@ -39,6 +41,7 @@ public class ConstantFoldingPass implements Pass {
                                     binary.dropAllReferences();
                                     bb.getInstructions().remove(binary);
                                     changed = true;
+                                    anyChanged = true;
                                 }
                             }
                         } else if (inst instanceof IcmpInst icmp) {
@@ -51,6 +54,7 @@ public class ConstantFoldingPass implements Pass {
                                     icmp.dropAllReferences();
                                     bb.getInstructions().remove(icmp);
                                     changed = true;
+                                    anyChanged = true;
                                 }
                             }
                         } else if (inst instanceof PhiInst phi) {
@@ -71,6 +75,7 @@ public class ConstantFoldingPass implements Pass {
                                 phi.dropAllReferences();
                                 bb.getInstructions().remove(phi);
                                 changed = true;
+                                anyChanged = true;
                             }
                         } else if (inst instanceof BrInst br && br.getNumOperands() == 3) {
                             Value cond = br.getOperand(0);
@@ -82,6 +87,7 @@ public class ConstantFoldingPass implements Pass {
                                 newBr.setParent(bb);
                                 br.dropAllReferences();
                                 changed = true;
+                                anyChanged = true;
                             }
                         } else if (inst instanceof ZextInst zext) {
                             Value val = zext.getOperand(0);
@@ -97,6 +103,7 @@ public class ConstantFoldingPass implements Pass {
                 }
             }
         }
+        return anyChanged;
     }
 
     private Value simplifyBinary(BinaryInst binary) {

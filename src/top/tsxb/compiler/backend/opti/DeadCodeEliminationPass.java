@@ -10,7 +10,8 @@ import java.util.List;
 
 public class DeadCodeEliminationPass implements Pass {
     @Override
-    public void run(Module module) {
+    public boolean run(Module module) {
+        boolean anyChanged = false;
         for (Function function : module.getFunctionList()) {
             boolean changed = true;
             while (changed) {
@@ -22,11 +23,13 @@ public class DeadCodeEliminationPass implements Pass {
                             inst.dropAllReferences();
                             bb.getInstructions().remove(inst);
                             changed = true;
+                            anyChanged = true;
                         }
                     }
                 }
             }
         }
+        return anyChanged;
     }
 
     private boolean hasSideEffects(Instruction inst) {
