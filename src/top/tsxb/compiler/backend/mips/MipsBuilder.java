@@ -21,6 +21,8 @@ public class MipsBuilder {
     private Set<MipsRegister> usedCalleeSaved = new LinkedHashSet<>();
     private int currentStackSize;
     private int brCounter = 0;
+    private boolean isLeaf = false;
+    private int spShift = 0;
 
     public MipsBuilder(Module module) {
         this.module = module;
@@ -240,6 +242,7 @@ public class MipsBuilder {
 
     private void genFunction(Function func) {
         currentSb.append(getLabel(func)).append(":\n");
+        spShift = 0;
 
         // Register Allocation
         LivenessAnalysis liveness = new LivenessAnalysis(func);
@@ -258,18 +261,19 @@ public class MipsBuilder {
         calculateStackFrame(func);
 
         currentSb.append("    # Prologue\n");
-        addI("$sp", "$sp", -currentStackSize);
-        storeMem("$ra", currentStackSize - 4, "$sp");
-        storeMem("$fp", currentStackSize - 8, "$sp");
+        if (currentStackSize > 0) {
+            addI("$sp", "$sp", -currentStackSize);
+        }
+        if (!isLeaf) {
+            storeMem("$ra", currentStackSize - 4, "$sp");
+        }
         
         // Save callee-saved registers
-        int regOffset = currentStackSize - 12;
+        int regOffset = currentStackSize - (isLeaf ? 4 : 8);
         for (MipsRegister reg : usedCalleeSaved) {
             storeMem(reg.getName(), regOffset, "$sp");
             regOffset -= 4;
         }
-        
-        addI("$fp", "$sp", currentStackSize);
 
         List<Argument> args = func.getArguments();
         for (int i = 0; i < args.size(); i++) {
@@ -279,17 +283,17 @@ public class MipsBuilder {
                 if (i < 4) {
                     currentSb.append("    move ").append(reg.getName()).append(", $a").append(i).append("\n");
                 } else {
-                    loadMem(reg.getName(), (i - 4) * 4, "$fp");
+                    loadMem(reg.getName(), currentStackSize + (i - 4) * 4, "$sp");
                 }
             } else {
                 // Spilled or not used
                 Integer offset = stackOffsets.get(arg);
                 if (offset != null) {
                     if (i < 4) {
-                        storeMem("$a" + i, offset, "$fp");
+                        storeMem("$a" + i, offset, "$sp");
                     } else {
-                        loadMem("$t0", (i - 4) * 4, "$fp");
-                        storeMem("$t0", offset, "$fp");
+                        loadMem("$t0", currentStackSize + (i - 4) * 4, "$sp");
+                        storeMem("$t0", offset, "$sp");
                     }
                 }
             }
@@ -316,33 +320,46 @@ public class MipsBuilder {
 
     private void calculateStackFrame(Function func) {
         stackOffsets.clear();
-        int offset = -8; // -4: ra, -8: fp
-        
-        // Space for callee-saved registers
-        offset -= usedCalleeSaved.size() * 4;
+        isLeaf = true;
+        for (BasicBlock bb : func.getBasicBlocks()) {
+            for (Instruction inst : bb.getInstructions()) {
+                if (inst instanceof CallInst) {
+                    isLeaf = false;
+                    break;
+                }
+            }
+            if (!isLeaf) break;
+        }
 
+        int offset = 0;
+        // Space for arguments that are spilled
         for (Argument arg : func.getArguments()) {
             if (!regMapping.containsKey(arg)) {
                 stackOffsets.put(arg, offset);
-                offset -= 4;
+                offset += 4;
             }
         }
 
+        // Space for alloca and other spills
         for (BasicBlock bb : func.getBasicBlocks()) {
             for (Instruction inst : bb.getInstructions()) {
                 if (inst instanceof AllocaInst alloca) {
                     int size = getSize(((PtrType) alloca.getType()).getPointeeType());
                     size = (size + 3) / 4 * 4; // Align to 4 bytes
-                    offset -= size;
                     stackOffsets.put(inst, offset);
+                    offset += size;
                 } else if (!(inst.getType() instanceof NoneType) && !regMapping.containsKey(inst)) {
-                    offset -= 4;
                     stackOffsets.put(inst, offset);
+                    offset += 4;
                 }
             }
         }
 
-        currentStackSize = -offset;
+        int localsSize = offset;
+        int calleeSavedSize = usedCalleeSaved.size() * 4;
+        int raSize = isLeaf ? 0 : 4;
+
+        currentStackSize = localsSize + calleeSavedSize + raSize;
         currentStackSize = (currentStackSize + 7) / 8 * 8;
     }
 
@@ -385,7 +402,7 @@ public class MipsBuilder {
             currentSb.append("    la ").append(reg).append(", ").append(getLabel(gv)).append("\n");
         } else if (val instanceof AllocaInst alloca) {
             int dataOffset = getAllocaDataOffset(alloca);
-            addI(reg, "$fp", dataOffset);
+            addI(reg, "$sp", dataOffset + spShift);
         } else if (regMapping.containsKey(val)) {
             MipsRegister srcReg = regMapping.get(val);
             if (!srcReg.getName().equals(reg)) {
@@ -400,7 +417,7 @@ public class MipsBuilder {
                 }
                 throw new RuntimeException("Value not found in stack or register: " + val);
             }
-            loadMem(reg, offset, "$fp");
+            loadMem(reg, offset + spShift, "$sp");
         }
     }
 
@@ -413,7 +430,7 @@ public class MipsBuilder {
         } else {
             Integer offset = stackOffsets.get(inst);
             if (offset != null) {
-                storeMem(reg, offset, "$fp");
+                storeMem(reg, offset + spShift, "$sp");
             }
         }
     }
@@ -674,7 +691,7 @@ public class MipsBuilder {
         Value addr = inst.getOperand(0);
         if (addr instanceof AllocaInst alloca) {
             int dataOffset = getAllocaDataOffset(alloca);
-            loadMem("$t1", dataOffset, "$fp");
+            loadMem("$t1", dataOffset + spShift, "$sp");
         } else if (addr instanceof GlobalVariable gv) {
             currentSb.append("    lw $t1, ").append(getLabel(gv)).append("\n");
         } else {
@@ -689,7 +706,7 @@ public class MipsBuilder {
         Value addr = inst.getOperand(1);
         if (addr instanceof AllocaInst alloca) {
             int dataOffset = getAllocaDataOffset(alloca);
-            storeMem("$t0", dataOffset, "$fp");
+            storeMem("$t0", dataOffset + spShift, "$sp");
         } else if (addr instanceof GlobalVariable gv) {
             currentSb.append("    sw $t0, ").append(getLabel(gv)).append("\n");
         } else {
@@ -825,6 +842,7 @@ public class MipsBuilder {
             List<PhiInst> cyclePhis = new ArrayList<>(assignments.keySet());
             int tempSpace = cyclePhis.size() * 4;
             addI("$sp", "$sp", -tempSpace);
+            spShift += tempSpace;
 
             for (int i = 0; i < cyclePhis.size(); i++) {
                 PhiInst phi = cyclePhis.get(i);
@@ -840,6 +858,7 @@ public class MipsBuilder {
             }
 
             addI("$sp", "$sp", tempSpace);
+            spShift -= tempSpace;
         }
     }
 
@@ -848,16 +867,19 @@ public class MipsBuilder {
             loadValue(inst.getOperand(0), "$v0");
         }
         
-        // Restore callee-saved registers
-        int regOffset = currentStackSize - 12;
-        for (MipsRegister reg : usedCalleeSaved) {
-            loadMem(reg.getName(), regOffset, "$sp");
-            regOffset -= 4;
+        if (currentStackSize > 0) {
+            // Restore callee-saved registers
+            int regOffset = currentStackSize - (isLeaf ? 4 : 8);
+            for (MipsRegister reg : usedCalleeSaved) {
+                loadMem(reg.getName(), regOffset, "$sp");
+                regOffset -= 4;
+            }
+            
+            if (!isLeaf) {
+                loadMem("$ra", currentStackSize - 4, "$sp");
+            }
+            addI("$sp", "$sp", currentStackSize);
         }
-        
-        loadMem("$ra", currentStackSize - 4, "$sp");
-        loadMem("$fp", currentStackSize - 8, "$sp");
-        addI("$sp", "$sp", currentStackSize);
         currentSb.append("    jr $ra\n");
     }
 
@@ -880,7 +902,9 @@ public class MipsBuilder {
 
         // Save to stack (below current sp)
         if (!toSave.isEmpty()) {
-            addI("$sp", "$sp", -toSave.size() * 4);
+            int shift = toSave.size() * 4;
+            addI("$sp", "$sp", -shift);
+            spShift += shift;
             for (int i = 0; i < toSave.size(); i++) {
                 storeMem(toSave.get(i).getName(), i * 4, "$sp");
             }
@@ -891,6 +915,7 @@ public class MipsBuilder {
 
         if (stackSpace > 0) {
             addI("$sp", "$sp", -stackSpace);
+            spShift += stackSpace;
         }
 
         for (int i = 1; i < inst.getNumOperands(); i++) {
@@ -907,14 +932,17 @@ public class MipsBuilder {
 
         if (stackSpace > 0) {
             addI("$sp", "$sp", stackSpace);
+            spShift -= stackSpace;
         }
 
         // Restore caller-saved registers
         if (!toSave.isEmpty()) {
+            int shift = toSave.size() * 4;
             for (int i = 0; i < toSave.size(); i++) {
                 loadMem(toSave.get(i).getName(), i * 4, "$sp");
             }
-            addI("$sp", "$sp", toSave.size() * 4);
+            addI("$sp", "$sp", shift);
+            spShift -= shift;
         }
 
         if (!(inst.getType() instanceof NoneType)) {
