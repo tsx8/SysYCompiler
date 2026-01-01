@@ -54,6 +54,10 @@ public abstract class Value {
         return !useList.isEmpty();
     }
 
+    public synchronized List<Use> getUseList() {
+        return new ArrayList<>(useList);
+    }
+
     public abstract String getRef();
 
     @Override

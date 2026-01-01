@@ -126,8 +126,11 @@ public class DominatorAnalysis {
                     continue;
                 }
                 BasicBlock runner = pred;
-                while (runner != null && runner != idom.get(block)) {
+                while (runner != idom.get(block)) {
                     frontier.get(runner).add(block);
+                    if (runner == entry) {
+                        break;
+                    }
                     runner = idom.get(runner);
                 }
             }

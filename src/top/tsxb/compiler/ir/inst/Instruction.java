@@ -29,6 +29,13 @@ public abstract class Instruction extends User {
         return opCode;
     }
 
+    public boolean isPinned() {
+        return switch (opCode) {
+            case RET, BR, STORE, PHI, CALL, ALLOCA, LOAD -> true;
+            default -> false;
+        };
+    }
+
     @Override
     public String getRef() {
         return "%" + getName();
