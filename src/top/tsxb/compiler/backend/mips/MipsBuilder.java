@@ -19,6 +19,8 @@ public class MipsBuilder {
     private Map<Value, LiveInterval> intervals = new LinkedHashMap<>();
     private Map<Instruction, Integer> instToId = new LinkedHashMap<>();
     private Set<MipsRegister> usedCalleeSaved = new LinkedHashSet<>();
+    private final Map<GlobalValue, String> globalAddrCache = new HashMap<>();
+    private final Map<String, GlobalValue> regToGlobal = new HashMap<>();
     private int currentStackSize;
     private int brCounter = 0;
     private boolean isLeaf = false;
@@ -35,9 +37,11 @@ public class MipsBuilder {
     }
 
     private void addI(String dest, String src, int imm) {
+        invalidateCache(dest);
         if (imm >= -32768 && imm <= 32767) {
             currentSb.append("    addiu ").append(dest).append(", ").append(src).append(", ").append(imm).append("\n");
         } else {
+            invalidateCache("$at");
             // Load immediate to $at (assembler temporary) or $t9
             currentSb.append("    li $at, ").append(imm).append("\n");
             currentSb.append("    addu ").append(dest).append(", ").append(src).append(", $at\n");
@@ -45,9 +49,11 @@ public class MipsBuilder {
     }
 
     private void loadMem(String dest, int offset, String base) {
+        invalidateCache(dest);
         if (offset >= -32768 && offset <= 32767) {
             currentSb.append("    lw ").append(dest).append(", ").append(offset).append("(").append(base).append(")\n");
         } else {
+            invalidateCache("$at");
             currentSb.append("    li $at, ").append(offset).append("\n");
             currentSb.append("    addu $at, ").append(base).append(", $at\n");
             currentSb.append("    lw ").append(dest).append(", 0($at)\n");
@@ -69,6 +75,37 @@ public class MipsBuilder {
             return bb.getParent().getName() + "_" + bb.getName().replace(".", "_");
         }
         return val.getName().replace(".", "_");
+    }
+
+    private void invalidateCache(String... regs) {
+        for (String reg : regs) {
+            GlobalValue gv = regToGlobal.remove(reg);
+            if (gv != null) {
+                globalAddrCache.remove(gv);
+            }
+        }
+    }
+
+    private void updateCache(GlobalValue gv, String reg) {
+        invalidateCache(reg);
+        String oldReg = globalAddrCache.remove(gv);
+        if (oldReg != null) {
+            regToGlobal.remove(oldReg);
+        }
+        globalAddrCache.put(gv, reg);
+        regToGlobal.put(reg, gv);
+    }
+
+    private void invalidateCallerSaved() {
+        List<String> toRemove = new ArrayList<>();
+        for (String reg : regToGlobal.keySet()) {
+            if (reg.startsWith("$t") || reg.startsWith("$a") || reg.startsWith("$v") || reg.equals("$at")) {
+                toRemove.add(reg);
+            }
+        }
+        for (String reg : toRemove) {
+            invalidateCache(reg);
+        }
     }
 
     private void genData() {
@@ -304,6 +341,8 @@ public class MipsBuilder {
             BasicBlock bb = blocks.get(i);
             BasicBlock nextBb = (i + 1 < blocks.size()) ? blocks.get(i + 1) : null;
             currentSb.append(getLabel(bb)).append(":\n");
+            globalAddrCache.clear();
+            regToGlobal.clear();
             for (Instruction inst : bb.getInstructions()) {
                 genInstruction(inst, nextBb);
             }
@@ -397,24 +436,32 @@ public class MipsBuilder {
 
     private void loadValue(Value val, String reg) {
         if (val instanceof ConstInt ci) {
+            invalidateCache(reg);
             currentSb.append("    li ").append(reg).append(", ").append(ci.getValue()).append("\n");
-        } else if (val instanceof GlobalVariable gv) {
-            currentSb.append("    la ").append(reg).append(", ").append(getLabel(gv)).append("\n");
+        } else if (val instanceof GlobalValue gv) {
+            if (globalAddrCache.containsKey(gv)) {
+                String cachedReg = globalAddrCache.get(gv);
+                if (!cachedReg.equals(reg)) {
+                    invalidateCache(reg);
+                    currentSb.append("    move ").append(reg).append(", ").append(cachedReg).append("\n");
+                }
+            } else {
+                invalidateCache(reg);
+                currentSb.append("    la ").append(reg).append(", ").append(getLabel(gv)).append("\n");
+                updateCache(gv, reg);
+            }
         } else if (val instanceof AllocaInst alloca) {
             int dataOffset = getAllocaDataOffset(alloca);
             addI(reg, "$sp", dataOffset + spShift);
         } else if (regMapping.containsKey(val)) {
             MipsRegister srcReg = regMapping.get(val);
             if (!srcReg.getName().equals(reg)) {
+                invalidateCache(reg);
                 currentSb.append("    move ").append(reg).append(", ").append(srcReg.getName()).append("\n");
             }
         } else {
             Integer offset = stackOffsets.get(val);
             if (offset == null) {
-                if (val instanceof GlobalValue gv) {
-                    currentSb.append("    la ").append(reg).append(", ").append(getLabel(gv)).append("\n");
-                    return;
-                }
                 throw new RuntimeException("Value not found in stack or register: " + val);
             }
             loadMem(reg, offset + spShift, "$sp");
@@ -425,6 +472,7 @@ public class MipsBuilder {
         if (regMapping.containsKey(inst)) {
             MipsRegister destReg = regMapping.get(inst);
             if (!destReg.getName().equals(reg)) {
+                invalidateCache(destReg.getName());
                 currentSb.append("    move ").append(destReg.getName()).append(", ").append(reg).append("\n");
             }
         } else {
@@ -449,8 +497,11 @@ public class MipsBuilder {
         if (inst.getOpCode() == OpCode.SREM && op2 instanceof ConstInt ci) {
             if (emitConstDivision(op1, ci.getValue())) {
                 loadValue(op1, "$t0");
+                invalidateCache("$t3");
                 currentSb.append("    li $t3, ").append(ci.getValue()).append("\n");
+                invalidateCache("$t1");
                 currentSb.append("    mul $t1, $t2, $t3\n");
+                invalidateCache("$t2");
                 currentSb.append("    subu $t2, $t0, $t1\n");
                 storeValue(inst, "$t2");
                 return;
@@ -478,6 +529,7 @@ public class MipsBuilder {
         } else {
             loadValue(op1, "$t0");
             loadValue(op2, "$t1");
+            invalidateCache("$t2");
             switch (inst.getOpCode()) {
                 case ADD -> currentSb.append("    addu $t2, $t0, $t1\n");
                 case SUB -> currentSb.append("    subu $t2, $t0, $t1\n");
@@ -502,6 +554,7 @@ public class MipsBuilder {
 
     private boolean tryConstMul(Instruction inst, Value multiplicand, int constant) {
         if (constant == 0) {
+            invalidateCache("$t2");
             currentSb.append("    addu $t2, $zero, $zero\n");
             storeValue(inst, "$t2");
             return true;
@@ -554,18 +607,22 @@ public class MipsBuilder {
         }
 
         loadValue(multiplicand, "$t0");
+        invalidateCache("$t2");
         emitMulTerm("$t2", "$t0", firstTerm);
         if (!firstTerm.positive) {
+            invalidateCache("$t2");
             currentSb.append("    subu $t2, $zero, $t2\n");
         }
         for (MulTerm term : remaining) {
             if (term.shift == 0) {
+                invalidateCache("$t2");
                 if (term.positive) {
                     currentSb.append("    addu $t2, $t2, $t0\n");
                 } else {
                     currentSb.append("    subu $t2, $t2, $t0\n");
                 }
             } else {
+                invalidateCache("$t1", "$t2");
                 currentSb.append("    sll $t1, $t0, ").append(term.shift).append("\n");
                 if (term.positive) {
                     currentSb.append("    addu $t2, $t2, $t1\n");
@@ -575,6 +632,7 @@ public class MipsBuilder {
             }
         }
         if (constant < 0) {
+            invalidateCache("$t2");
             currentSb.append("    subu $t2, $zero, $t2\n");
         }
         storeValue(inst, "$t2");
@@ -587,11 +645,13 @@ public class MipsBuilder {
         }
         if (divisor == 1) {
             loadValue(dividend, "$t0");
+            invalidateCache("$t2");
             currentSb.append("    addu $t2, $t0, $zero\n");
             return true;
         }
         if (divisor == -1) {
             loadValue(dividend, "$t0");
+            invalidateCache("$t2");
             currentSb.append("    subu $t2, $zero, $t0\n");
             return true;
         }
@@ -600,11 +660,15 @@ public class MipsBuilder {
             int shift = Long.numberOfTrailingZeros(absDiv);
             if (shift > 0) {
                 loadValue(dividend, "$t0");
+                invalidateCache("$t1");
                 currentSb.append("    sra $t1, $t0, 31\n");
                 currentSb.append("    srl $t1, $t1, ").append(32 - shift).append("\n");
+                invalidateCache("$t0");
                 currentSb.append("    addu $t0, $t0, $t1\n");
+                invalidateCache("$t2");
                 currentSb.append("    sra $t2, $t0, ").append(shift).append("\n");
                 if (divisor < 0) {
+                    invalidateCache("$t2");
                     currentSb.append("    subu $t2, $zero, $t2\n");
                 }
                 return true;
@@ -613,18 +677,25 @@ public class MipsBuilder {
         DivOptimizer.MultiplierInfo info = DivOptimizer.chooseMultiplier(divisor);
         loadValue(dividend, "$t0");
         int magic = (int) info.multiplier();
+        invalidateCache("$t1");
         currentSb.append("    li $t1, ").append(magic).append("\n");
+        invalidateCache("$t2");
         currentSb.append("    mult $t0, $t1\n");
         currentSb.append("    mfhi $t2\n");
         if (magic < 0) {
+            invalidateCache("$t2");
             currentSb.append("    addu $t2, $t2, $t0\n");
         }
         if (info.shift() > 0) {
+            invalidateCache("$t2");
             currentSb.append("    sra $t2, $t2, ").append(info.shift()).append("\n");
         }
+        invalidateCache("$t3");
         currentSb.append("    srl $t3, $t0, 31\n");
+        invalidateCache("$t2");
         currentSb.append("    addu $t2, $t2, $t3\n");
         if (divisor < 0) {
+            invalidateCache("$t2");
             currentSb.append("    subu $t2, $zero, $t2\n");
         }
         return true;
@@ -664,6 +735,7 @@ public class MipsBuilder {
         loadValue(inst.getOperand(0), "$t0");
         loadValue(inst.getOperand(1), "$t1");
         String cond = inst.getPredicate().toString();
+        invalidateCache("$t2");
         switch (cond) {
             case "eq" -> currentSb.append("    seq $t2, $t0, $t1\n");
             case "ne" -> currentSb.append("    sne $t2, $t0, $t1\n");
@@ -693,9 +765,11 @@ public class MipsBuilder {
             int dataOffset = getAllocaDataOffset(alloca);
             loadMem("$t1", dataOffset + spShift, "$sp");
         } else if (addr instanceof GlobalVariable gv) {
+            invalidateCache("$t1");
             currentSb.append("    lw $t1, ").append(getLabel(gv)).append("\n");
         } else {
             loadValue(addr, "$t0");
+            invalidateCache("$t1");
             currentSb.append("    lw $t1, 0($t0)\n");
         }
         storeValue(inst, "$t1");
@@ -929,6 +1003,7 @@ public class MipsBuilder {
             }
         }
         currentSb.append("    jal ").append(getLabel(target)).append("\n");
+        invalidateCallerSaved();
 
         if (stackSpace > 0) {
             addI("$sp", "$sp", stackSpace);
@@ -982,13 +1057,19 @@ public class MipsBuilder {
             } else {
                 loadValue(index, "$t1");
                 if (elementSize == 1) {
+                    invalidateCache("$t0");
                     currentSb.append("    addu $t0, $t0, $t1\n");
                 } else if (isPowerOfTwo(elementSize)) {
+                    invalidateCache("$t1");
                     currentSb.append("    sll $t1, $t1, ").append(log2(elementSize)).append("\n");
+                    invalidateCache("$t0");
                     currentSb.append("    addu $t0, $t0, $t1\n");
                 } else {
+                    invalidateCache("$t2");
                     currentSb.append("    li $t2, ").append(elementSize).append("\n");
+                    invalidateCache("$t1");
                     currentSb.append("    mul $t1, $t1, $t2\n");
+                    invalidateCache("$t0");
                     currentSb.append("    addu $t0, $t0, $t1\n");
                 }
             }
