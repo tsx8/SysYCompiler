@@ -8,10 +8,11 @@ import top.tsxb.compiler.model.TestCase;
 import top.tsxb.compiler.model.TestResult;
 import top.tsxb.compiler.runner.TestLogger;
 
-public record LegacyFileCompareStrategy(Pipeline pipeline, String targetStage) implements TestStrategy {
+public record LegacyFileCompareStrategy(String targetStage) implements TestStrategy {
 
     @Override
     public TestResult execute(TestCase testCase, TestLogger logger) {
+        Pipeline pipeline = new Pipeline();
         try {
             String sourceCode = Files.readString(testCase.sourceFile());
             logger.log("testfile.txt", sourceCode);

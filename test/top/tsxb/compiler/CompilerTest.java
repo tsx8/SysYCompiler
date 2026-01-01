@@ -16,7 +16,6 @@ import java.util.concurrent.atomic.LongAdder;
 import java.util.stream.Stream;
 
 import top.tsxb.compiler.driver.CompilerConfig;
-import top.tsxb.compiler.driver.Pipeline;
 import top.tsxb.compiler.model.TestCase;
 import top.tsxb.compiler.model.TestResult;
 import top.tsxb.compiler.runner.ProcessExecutor;
@@ -129,14 +128,13 @@ public class CompilerTest {
     }
 
     private static TestStrategy createStrategy() {
-        var pipeline = new Pipeline();
         var executor = new ProcessExecutor();
 
         return switch (CompilerConfig.CURRENT_HOMEWORK) {
             case "lexer", "parser", "semantic" ->
-                new LegacyFileCompareStrategy(pipeline, CompilerConfig.CURRENT_HOMEWORK);
-            case "llvm" -> new IrExecutionStrategy(pipeline, executor);
-            case "mips" -> new MipsExecutionStrategy(pipeline, executor);
+                new LegacyFileCompareStrategy(CompilerConfig.CURRENT_HOMEWORK);
+            case "llvm" -> new IrExecutionStrategy(executor);
+            case "mips" -> new MipsExecutionStrategy(executor);
             default -> throw new IllegalStateException(
                 "No test strategy available for stage: " + CompilerConfig.CURRENT_HOMEWORK);
         };

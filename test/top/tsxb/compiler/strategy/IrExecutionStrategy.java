@@ -18,12 +18,10 @@ import top.tsxb.compiler.runner.ProcessExecutor;
 import top.tsxb.compiler.runner.TestLogger;
 
 public class IrExecutionStrategy implements TestStrategy {
-    private final Pipeline pipeline;
     private final ProcessExecutor executor;
     private Path precompiledLibIr;
 
-    public IrExecutionStrategy(Pipeline pipeline, ProcessExecutor executor) {
-        this.pipeline = pipeline;
+    public IrExecutionStrategy(ProcessExecutor executor) {
         this.executor = executor;
     }
 
@@ -45,6 +43,7 @@ public class IrExecutionStrategy implements TestStrategy {
 
     @Override
     public TestResult execute(TestCase testCase, TestLogger logger) {
+        Pipeline pipeline = new Pipeline();
         Path tmpDir;
         try {
             tmpDir = Files.createTempDirectory("sysy_test_" + testCase.name());

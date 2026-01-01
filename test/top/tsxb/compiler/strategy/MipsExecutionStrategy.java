@@ -17,10 +17,11 @@ import top.tsxb.compiler.model.TestResult;
 import top.tsxb.compiler.runner.ProcessExecutor;
 import top.tsxb.compiler.runner.TestLogger;
 
-public record MipsExecutionStrategy(Pipeline pipeline, ProcessExecutor executor) implements TestStrategy {
+public record MipsExecutionStrategy(ProcessExecutor executor) implements TestStrategy {
 
     @Override
     public TestResult execute(TestCase testCase, TestLogger logger) {
+        Pipeline pipeline = new Pipeline();
         Path tmpDir;
         try {
             tmpDir = Files.createTempDirectory("sysy_mips_test_" + testCase.name());

@@ -11,11 +11,19 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 public final class ProcessExecutor {
     private static final long TIMEOUT_SECONDS = 10;
     private static final int MAX_OUTPUT_SIZE = 5 * 1024 * 1024;
+
+    private static final ExecutorService IO_EXECUTOR = Executors.newCachedThreadPool(r -> {
+        Thread t = new Thread(r, "ProcessExecutor-IO");
+        t.setDaemon(true);
+        return t;
+    });
 
     public ProcessResult execute(Command cmd) {
         try {
@@ -32,8 +40,8 @@ public final class ProcessExecutor {
                     throw new UncheckedIOException("Failed to write to process stdin", e);
                 }
             });
-            var stdoutFuture = CompletableFuture.supplyAsync(() -> readStreamSafe(process.getInputStream()));
-            var stderrFuture = CompletableFuture.supplyAsync(() -> readStreamSafe(process.getErrorStream()));
+            var stdoutFuture = CompletableFuture.supplyAsync(() -> readStreamSafe(process.getInputStream()), IO_EXECUTOR);
+            var stderrFuture = CompletableFuture.supplyAsync(() -> readStreamSafe(process.getErrorStream()), IO_EXECUTOR);
             boolean finished = process.waitFor(TIMEOUT_SECONDS, TimeUnit.SECONDS);
             if (!finished) {
                 process.destroyForcibly();
