@@ -12,6 +12,8 @@ import java.util.*;
 public class MipsBuilder {
     private final Module module;
     private final StringBuilder sb = new StringBuilder();
+    private StringBuilder currentSb = sb;
+    private final StringBuilder pendingBridges = new StringBuilder();
     private final Map<Value, Integer> stackOffsets = new HashMap<>();
     private Map<Value, MipsRegister> regMapping = new HashMap<>();
     private Map<Value, LiveInterval> intervals = new HashMap<>();
@@ -32,31 +34,31 @@ public class MipsBuilder {
 
     private void addI(String dest, String src, int imm) {
         if (imm >= -32768 && imm <= 32767) {
-            sb.append("    addiu ").append(dest).append(", ").append(src).append(", ").append(imm).append("\n");
+            currentSb.append("    addiu ").append(dest).append(", ").append(src).append(", ").append(imm).append("\n");
         } else {
             // Load immediate to $at (assembler temporary) or $t9
-            sb.append("    li $at, ").append(imm).append("\n");
-            sb.append("    addu ").append(dest).append(", ").append(src).append(", $at\n");
+            currentSb.append("    li $at, ").append(imm).append("\n");
+            currentSb.append("    addu ").append(dest).append(", ").append(src).append(", $at\n");
         }
     }
 
     private void loadMem(String dest, int offset, String base) {
         if (offset >= -32768 && offset <= 32767) {
-            sb.append("    lw ").append(dest).append(", ").append(offset).append("(").append(base).append(")\n");
+            currentSb.append("    lw ").append(dest).append(", ").append(offset).append("(").append(base).append(")\n");
         } else {
-            sb.append("    li $at, ").append(offset).append("\n");
-            sb.append("    addu $at, ").append(base).append(", $at\n");
-            sb.append("    lw ").append(dest).append(", 0($at)\n");
+            currentSb.append("    li $at, ").append(offset).append("\n");
+            currentSb.append("    addu $at, ").append(base).append(", $at\n");
+            currentSb.append("    lw ").append(dest).append(", 0($at)\n");
         }
     }
 
     private void storeMem(String src, int offset, String base) {
         if (offset >= -32768 && offset <= 32767) {
-            sb.append("    sw ").append(src).append(", ").append(offset).append("(").append(base).append(")\n");
+            currentSb.append("    sw ").append(src).append(", ").append(offset).append("(").append(base).append(")\n");
         } else {
-            sb.append("    li $at, ").append(offset).append("\n");
-            sb.append("    addu $at, ").append(base).append(", $at\n");
-            sb.append("    sw ").append(src).append(", 0($at)\n");
+            currentSb.append("    li $at, ").append(offset).append("\n");
+            currentSb.append("    addu $at, ").append(base).append(", $at\n");
+            currentSb.append("    sw ").append(src).append(", 0($at)\n");
         }
     }
 
@@ -68,13 +70,13 @@ public class MipsBuilder {
     }
 
     private void genData() {
-        sb.append(".data\n");
+        currentSb.append(".data\n");
         for (GlobalVariable gv : module.getGlobalList()) {
-            sb.append(".align 2\n");
-            sb.append(getLabel(gv)).append(": ");
+            currentSb.append(".align 2\n");
+            currentSb.append(getLabel(gv)).append(": ");
             if (gv.isDeclaration()) {
                 IrType type = ((PtrType) gv.getType()).getPointeeType();
-                sb.append(".space ").append(getSize(type)).append("\n");
+                currentSb.append(".space ").append(getSize(type)).append("\n");
             } else {
                 Constant init = (Constant) gv.getOperand(0);
                 genConstant(init);
@@ -84,10 +86,10 @@ public class MipsBuilder {
 
     private void genConstant(Constant constant) {
         if (constant instanceof ConstInt ci) {
-            sb.append(".word ").append(ci.getValue()).append("\n");
+            currentSb.append(".word ").append(ci.getValue()).append("\n");
         } else if (constant instanceof ConstArray ca) {
             if (isAllZero(ca)) {
-                sb.append(".space ").append(getSize(ca.getType())).append("\n");
+                currentSb.append(".space ").append(getSize(ca.getType())).append("\n");
             } else {
                 for (Constant val : ca.getValues()) {
                     genConstant(val);
@@ -95,9 +97,9 @@ public class MipsBuilder {
             }
         } else if (constant instanceof ConstZero cz) {
             int size = getSize(cz.getType());
-            sb.append(".space ").append(size).append("\n");
+            currentSb.append(".space ").append(size).append("\n");
         } else if (constant instanceof ConstString cs) {
-            sb.append(".asciiz \"").append(cs.getContent().replace("\n", "\\n").replace("\"", "\\\"")).append("\"\n");
+            currentSb.append(".asciiz \"").append(cs.getContent().replace("\n", "\\n").replace("\"", "\\\"")).append("\"\n");
         }
     }
 
@@ -125,10 +127,10 @@ public class MipsBuilder {
     }
 
     private void genText() {
-        sb.append(".text\n");
-        sb.append("    jal main\n");
-        sb.append("    li $v0, 10\n");
-        sb.append("    syscall\n\n");
+        currentSb.append(".text\n");
+        currentSb.append("    jal main\n");
+        currentSb.append("    li $v0, 10\n");
+        currentSb.append("    syscall\n\n");
         for (Function func : module.getFunctionList()) {
             if (!func.isDeclaration()) {
                 genFunction(func);
@@ -138,15 +140,68 @@ public class MipsBuilder {
     }
 
     private void genRuntime() {
-        sb.append("\n# SysY Runtime\n");
-        sb.append("getint:\n    li $v0, 5\n    syscall\n    jr $ra\n");
-        sb.append("putint:\n    li $v0, 1\n    syscall\n    jr $ra\n");
-        sb.append("putch:\n    li $v0, 11\n    syscall\n    jr $ra\n");
-        sb.append("putstr:\n    li $v0, 4\n    syscall\n    jr $ra\n");
+        currentSb.append("\n# SysY Runtime\n");
+        currentSb.append("getint:\n    li $v0, 5\n    syscall\n    jr $ra\n");
+        currentSb.append("putint:\n    li $v0, 1\n    syscall\n    jr $ra\n");
+        currentSb.append("putch:\n    li $v0, 11\n    syscall\n    jr $ra\n");
+        currentSb.append("putstr:\n    li $v0, 4\n    syscall\n    jr $ra\n");
+    }
+
+    private List<BasicBlock> reorderBlocks(Function func) {
+        List<BasicBlock> original = func.getBasicBlocks();
+        if (original.isEmpty()) return original;
+
+        List<BasicBlock> reordered = new ArrayList<>();
+        Set<BasicBlock> visited = new HashSet<>();
+
+        BasicBlock current = original.get(0);
+        reordered.add(current);
+        visited.add(current);
+
+        while (reordered.size() < original.size()) {
+            Instruction lastInst = current.getInstructions().get(current.getInstructions().size() - 1);
+            BasicBlock next = null;
+            if (lastInst instanceof BrInst br) {
+                if (br.getNumOperands() == 1) {
+                    BasicBlock target = (BasicBlock) br.getOperand(0);
+                    if (!visited.contains(target)) {
+                        next = target;
+                    }
+                } else {
+                    BasicBlock targetTrue = (BasicBlock) br.getOperand(1);
+                    BasicBlock targetFalse = (BasicBlock) br.getOperand(2);
+                    // Heuristic: prefer targetTrue (often the loop body or then-branch)
+                    if (!visited.contains(targetTrue)) {
+                        next = targetTrue;
+                    } else if (!visited.contains(targetFalse)) {
+                        next = targetFalse;
+                    }
+                }
+            }
+
+            if (next == null) {
+                // Find first unvisited block
+                for (BasicBlock bb : original) {
+                    if (!visited.contains(bb)) {
+                        next = bb;
+                        break;
+                    }
+                }
+            }
+
+            if (next != null) {
+                reordered.add(next);
+                visited.add(next);
+                current = next;
+            } else {
+                break;
+            }
+        }
+        return reordered;
     }
 
     private void genFunction(Function func) {
-        sb.append(getLabel(func)).append(":\n");
+        currentSb.append(getLabel(func)).append(":\n");
 
         // Register Allocation
         LivenessAnalysis liveness = new LivenessAnalysis(func);
@@ -162,7 +217,7 @@ public class MipsBuilder {
 
         calculateStackFrame(func);
 
-        sb.append("    # Prologue\n");
+        currentSb.append("    # Prologue\n");
         addI("$sp", "$sp", -currentStackSize);
         storeMem("$ra", currentStackSize - 4, "$sp");
         storeMem("$fp", currentStackSize - 8, "$sp");
@@ -182,7 +237,7 @@ public class MipsBuilder {
             MipsRegister reg = regMapping.get(arg);
             if (reg != null) {
                 if (i < 4) {
-                    sb.append("    move ").append(reg.getName()).append(", $a").append(i).append("\n");
+                    currentSb.append("    move ").append(reg.getName()).append(", $a").append(i).append("\n");
                 } else {
                     loadMem(reg.getName(), (i - 4) * 4, "$fp");
                 }
@@ -200,17 +255,26 @@ public class MipsBuilder {
             }
         }
 
-        for (BasicBlock bb : func.getBasicBlocks()) {
-            sb.append(getLabel(bb)).append(":\n");
+        List<BasicBlock> blocks = reorderBlocks(func);
+        for (int i = 0; i < blocks.size(); i++) {
+            BasicBlock bb = blocks.get(i);
+            BasicBlock nextBb = (i + 1 < blocks.size()) ? blocks.get(i + 1) : null;
+            currentSb.append(getLabel(bb)).append(":\n");
             for (Instruction inst : bb.getInstructions()) {
-                genInstruction(inst);
+                genInstruction(inst, nextBb);
             }
+        }
+
+        if (pendingBridges.length() > 0) {
+            currentSb.append("\n# Bridges\n");
+            currentSb.append(pendingBridges);
+            pendingBridges.setLength(0);
         }
         
         // Epilogue (before return)
         // Note: genRet will handle the actual jr $ra, but we need to restore registers there or here.
         // For simplicity, I'll add a restore logic in genRet.
-        sb.append("\n");
+        currentSb.append("\n");
     }
 
     private void calculateStackFrame(Function func) {
@@ -245,15 +309,33 @@ public class MipsBuilder {
         currentStackSize = (currentStackSize + 7) / 8 * 8;
     }
 
+    private boolean hasPhis(BasicBlock current, BasicBlock target) {
+        for (Instruction inst : target.getInstructions()) {
+            if (inst instanceof PhiInst phi) {
+                Value incoming = phi.getIncomingValue(current);
+                if (incoming != null && incoming != phi) {
+                    return true;
+                }
+            } else {
+                break;
+            }
+        }
+        return false;
+    }
+
     private void genInstruction(Instruction inst) {
-        sb.append("    # ").append(inst.toString()).append("\n");
+        genInstruction(inst, null);
+    }
+
+    private void genInstruction(Instruction inst, BasicBlock nextBb) {
+        currentSb.append("    # ").append(inst.toString()).append("\n");
         switch (inst.getOpCode()) {
             case ADD, SUB, MUL, SDIV, SREM -> genBinary(inst);
             case ICMP -> genIcmp((IcmpInst) inst);
             case ALLOCA -> genAlloca();
             case LOAD -> genLoad((LoadInst) inst);
             case STORE -> genStore((StoreInst) inst);
-            case BR -> genBr((BrInst) inst);
+            case BR -> genBr((BrInst) inst, nextBb);
             case RET -> genRet((ReturnInst) inst);
             case CALL -> genCall((CallInst) inst);
             case ZEXT -> genZext((ZextInst) inst);
@@ -265,22 +347,22 @@ public class MipsBuilder {
 
     private void loadValue(Value val, String reg) {
         if (val instanceof ConstInt ci) {
-            sb.append("    li ").append(reg).append(", ").append(ci.getValue()).append("\n");
+            currentSb.append("    li ").append(reg).append(", ").append(ci.getValue()).append("\n");
         } else if (val instanceof GlobalVariable gv) {
-            sb.append("    la ").append(reg).append(", ").append(getLabel(gv)).append("\n");
+            currentSb.append("    la ").append(reg).append(", ").append(getLabel(gv)).append("\n");
         } else if (val instanceof AllocaInst alloca) {
             int dataOffset = getAllocaDataOffset(alloca);
             addI(reg, "$fp", dataOffset);
         } else if (regMapping.containsKey(val)) {
             MipsRegister srcReg = regMapping.get(val);
             if (!srcReg.getName().equals(reg)) {
-                sb.append("    move ").append(reg).append(", ").append(srcReg.getName()).append("\n");
+                currentSb.append("    move ").append(reg).append(", ").append(srcReg.getName()).append("\n");
             }
         } else {
             Integer offset = stackOffsets.get(val);
             if (offset == null) {
                 if (val instanceof GlobalValue gv) {
-                    sb.append("    la ").append(reg).append(", ").append(getLabel(gv)).append("\n");
+                    currentSb.append("    la ").append(reg).append(", ").append(getLabel(gv)).append("\n");
                     return;
                 }
                 throw new RuntimeException("Value not found in stack or register: " + val);
@@ -293,7 +375,7 @@ public class MipsBuilder {
         if (regMapping.containsKey(inst)) {
             MipsRegister destReg = regMapping.get(inst);
             if (!destReg.getName().equals(reg)) {
-                sb.append("    move ").append(destReg.getName()).append(", ").append(reg).append("\n");
+                currentSb.append("    move ").append(destReg.getName()).append(", ").append(reg).append("\n");
             }
         } else {
             Integer offset = stackOffsets.get(inst);
@@ -317,9 +399,9 @@ public class MipsBuilder {
         if (inst.getOpCode() == OpCode.SREM && op2 instanceof ConstInt ci) {
             if (emitConstDivision(op1, ci.getValue())) {
                 loadValue(op1, "$t0");
-                sb.append("    li $t3, ").append(ci.getValue()).append("\n");
-                sb.append("    mul $t1, $t2, $t3\n");
-                sb.append("    subu $t2, $t0, $t1\n");
+                currentSb.append("    li $t3, ").append(ci.getValue()).append("\n");
+                currentSb.append("    mul $t1, $t2, $t3\n");
+                currentSb.append("    subu $t2, $t0, $t1\n");
                 storeValue(inst, "$t2");
                 return;
             }
@@ -347,22 +429,22 @@ public class MipsBuilder {
             loadValue(op1, "$t0");
             loadValue(op2, "$t1");
             switch (inst.getOpCode()) {
-                case ADD -> sb.append("    addu $t2, $t0, $t1\n");
-                case SUB -> sb.append("    subu $t2, $t0, $t1\n");
-                case MUL -> sb.append("    mul $t2, $t0, $t1\n");
+                case ADD -> currentSb.append("    addu $t2, $t0, $t1\n");
+                case SUB -> currentSb.append("    subu $t2, $t0, $t1\n");
+                case MUL -> currentSb.append("    mul $t2, $t0, $t1\n");
                 case SDIV -> {
                     String okLabel = "div_ok_" + (brCounter++);
-                    sb.append("    bne $t1, $zero, ").append(okLabel).append("\n");
-                    sb.append("    break 7\n");
-                    sb.append(okLabel).append(":\n");
-                    sb.append("    div $t0, $t1\n    mflo $t2\n");
+                    currentSb.append("    bne $t1, $zero, ").append(okLabel).append("\n");
+                    currentSb.append("    break 7\n");
+                    currentSb.append(okLabel).append(":\n");
+                    currentSb.append("    div $t0, $t1\n    mflo $t2\n");
                 }
                 case SREM -> {
                     String okLabel = "rem_ok_" + (brCounter++);
-                    sb.append("    bne $t1, $zero, ").append(okLabel).append("\n");
-                    sb.append("    break 7\n");
-                    sb.append(okLabel).append(":\n");
-                    sb.append("    div $t0, $t1\n    mfhi $t2\n");
+                    currentSb.append("    bne $t1, $zero, ").append(okLabel).append("\n");
+                    currentSb.append("    break 7\n");
+                    currentSb.append(okLabel).append(":\n");
+                    currentSb.append("    div $t0, $t1\n    mfhi $t2\n");
                 }
             }
         }
@@ -382,7 +464,7 @@ public class MipsBuilder {
 
     private boolean tryConstMul(Instruction inst, Value multiplicand, int constant) {
         if (constant == 0) {
-            sb.append("    addu $t2, $zero, $zero\n");
+            currentSb.append("    addu $t2, $zero, $zero\n");
             storeValue(inst, "$t2");
             return true;
         }
@@ -436,26 +518,26 @@ public class MipsBuilder {
         loadValue(multiplicand, "$t0");
         emitMulTerm("$t2", "$t0", firstTerm);
         if (!firstTerm.positive) {
-            sb.append("    subu $t2, $zero, $t2\n");
+            currentSb.append("    subu $t2, $zero, $t2\n");
         }
         for (MulTerm term : remaining) {
             if (term.shift == 0) {
                 if (term.positive) {
-                    sb.append("    addu $t2, $t2, $t0\n");
+                    currentSb.append("    addu $t2, $t2, $t0\n");
                 } else {
-                    sb.append("    subu $t2, $t2, $t0\n");
+                    currentSb.append("    subu $t2, $t2, $t0\n");
                 }
             } else {
-                sb.append("    sll $t1, $t0, ").append(term.shift).append("\n");
+                currentSb.append("    sll $t1, $t0, ").append(term.shift).append("\n");
                 if (term.positive) {
-                    sb.append("    addu $t2, $t2, $t1\n");
+                    currentSb.append("    addu $t2, $t2, $t1\n");
                 } else {
-                    sb.append("    subu $t2, $t2, $t1\n");
+                    currentSb.append("    subu $t2, $t2, $t1\n");
                 }
             }
         }
         if (constant < 0) {
-            sb.append("    subu $t2, $zero, $t2\n");
+            currentSb.append("    subu $t2, $zero, $t2\n");
         }
         storeValue(inst, "$t2");
         return true;
@@ -467,12 +549,12 @@ public class MipsBuilder {
         }
         if (divisor == 1) {
             loadValue(dividend, "$t0");
-            sb.append("    addu $t2, $t0, $zero\n");
+            currentSb.append("    addu $t2, $t0, $zero\n");
             return true;
         }
         if (divisor == -1) {
             loadValue(dividend, "$t0");
-            sb.append("    subu $t2, $zero, $t0\n");
+            currentSb.append("    subu $t2, $zero, $t0\n");
             return true;
         }
         long absDiv = Math.abs((long) divisor);
@@ -480,12 +562,12 @@ public class MipsBuilder {
             int shift = Long.numberOfTrailingZeros(absDiv);
             if (shift > 0) {
                 loadValue(dividend, "$t0");
-                sb.append("    sra $t1, $t0, 31\n");
-                sb.append("    srl $t1, $t1, ").append(32 - shift).append("\n");
-                sb.append("    addu $t0, $t0, $t1\n");
-                sb.append("    sra $t2, $t0, ").append(shift).append("\n");
+                currentSb.append("    sra $t1, $t0, 31\n");
+                currentSb.append("    srl $t1, $t1, ").append(32 - shift).append("\n");
+                currentSb.append("    addu $t0, $t0, $t1\n");
+                currentSb.append("    sra $t2, $t0, ").append(shift).append("\n");
                 if (divisor < 0) {
-                    sb.append("    subu $t2, $zero, $t2\n");
+                    currentSb.append("    subu $t2, $zero, $t2\n");
                 }
                 return true;
             }
@@ -493,28 +575,28 @@ public class MipsBuilder {
         DivOptimizer.MultiplierInfo info = DivOptimizer.chooseMultiplier(divisor);
         loadValue(dividend, "$t0");
         int magic = (int) info.multiplier();
-        sb.append("    li $t1, ").append(magic).append("\n");
-        sb.append("    mult $t0, $t1\n");
-        sb.append("    mfhi $t2\n");
+        currentSb.append("    li $t1, ").append(magic).append("\n");
+        currentSb.append("    mult $t0, $t1\n");
+        currentSb.append("    mfhi $t2\n");
         if (magic < 0) {
-            sb.append("    addu $t2, $t2, $t0\n");
+            currentSb.append("    addu $t2, $t2, $t0\n");
         }
         if (info.shift() > 0) {
-            sb.append("    sra $t2, $t2, ").append(info.shift()).append("\n");
+            currentSb.append("    sra $t2, $t2, ").append(info.shift()).append("\n");
         }
-        sb.append("    srl $t3, $t0, 31\n");
-        sb.append("    addu $t2, $t2, $t3\n");
+        currentSb.append("    srl $t3, $t0, 31\n");
+        currentSb.append("    addu $t2, $t2, $t3\n");
         if (divisor < 0) {
-            sb.append("    subu $t2, $zero, $t2\n");
+            currentSb.append("    subu $t2, $zero, $t2\n");
         }
         return true;
     }
 
     private void emitMulTerm(String dest, String source, MulTerm term) {
         if (term.shift == 0) {
-            sb.append("    addu ").append(dest).append(", ").append(source).append(", $zero\n");
+            currentSb.append("    addu ").append(dest).append(", ").append(source).append(", $zero\n");
         } else {
-            sb.append("    sll ").append(dest).append(", ").append(source).append(", ").append(term.shift).append("\n");
+            currentSb.append("    sll ").append(dest).append(", ").append(source).append(", ").append(term.shift).append("\n");
         }
     }
 
@@ -545,12 +627,12 @@ public class MipsBuilder {
         loadValue(inst.getOperand(1), "$t1");
         String cond = inst.getPredicate().toString();
         switch (cond) {
-            case "eq" -> sb.append("    seq $t2, $t0, $t1\n");
-            case "ne" -> sb.append("    sne $t2, $t0, $t1\n");
-            case "sgt" -> sb.append("    sgt $t2, $t0, $t1\n");
-            case "sge" -> sb.append("    sge $t2, $t0, $t1\n");
-            case "slt" -> sb.append("    slt $t2, $t0, $t1\n");
-            case "sle" -> sb.append("    sle $t2, $t0, $t1\n");
+            case "eq" -> currentSb.append("    seq $t2, $t0, $t1\n");
+            case "ne" -> currentSb.append("    sne $t2, $t0, $t1\n");
+            case "sgt" -> currentSb.append("    sgt $t2, $t0, $t1\n");
+            case "sge" -> currentSb.append("    sge $t2, $t0, $t1\n");
+            case "slt" -> currentSb.append("    slt $t2, $t0, $t1\n");
+            case "sle" -> currentSb.append("    sle $t2, $t0, $t1\n");
         }
         storeValue(inst, "$t2");
     }
@@ -573,10 +655,10 @@ public class MipsBuilder {
             int dataOffset = getAllocaDataOffset(alloca);
             loadMem("$t1", dataOffset, "$fp");
         } else if (addr instanceof GlobalVariable gv) {
-            sb.append("    lw $t1, ").append(getLabel(gv)).append("\n");
+            currentSb.append("    lw $t1, ").append(getLabel(gv)).append("\n");
         } else {
             loadValue(addr, "$t0");
-            sb.append("    lw $t1, 0($t0)\n");
+            currentSb.append("    lw $t1, 0($t0)\n");
         }
         storeValue(inst, "$t1");
     }
@@ -588,18 +670,20 @@ public class MipsBuilder {
             int dataOffset = getAllocaDataOffset(alloca);
             storeMem("$t0", dataOffset, "$fp");
         } else if (addr instanceof GlobalVariable gv) {
-            sb.append("    sw $t0, ").append(getLabel(gv)).append("\n");
+            currentSb.append("    sw $t0, ").append(getLabel(gv)).append("\n");
         } else {
             loadValue(addr, "$t1");
-            sb.append("    sw $t0, 0($t1)\n");
+            currentSb.append("    sw $t0, 0($t1)\n");
         }
     }
 
-    private void genBr(BrInst inst) {
+    private void genBr(BrInst inst, BasicBlock nextBb) {
         if (inst.getNumOperands() == 1) {
             BasicBlock target = (BasicBlock) inst.getOperand(0);
             fillPhis(inst.getParent(), target);
-            sb.append("    j ").append(getLabel(target)).append("\n");
+            if (target != nextBb) {
+                currentSb.append("    j ").append(getLabel(target)).append("\n");
+            }
         } else {
             Value cond = inst.getOperand(0);
             BasicBlock targetTrue = (BasicBlock) inst.getOperand(1);
@@ -608,18 +692,61 @@ public class MipsBuilder {
             loadValue(cond, "$t0");
             String labelTrue = getLabel(targetTrue);
             String labelFalse = getLabel(targetFalse);
-            String bridgeLabel = "br_bridge_" + (brCounter++);
 
-            sb.append("    beq $t0, $zero, ").append(bridgeLabel).append("\n");
+            boolean phisTrue = hasPhis(inst.getParent(), targetTrue);
+            boolean phisFalse = hasPhis(inst.getParent(), targetFalse);
 
-            // True path
-            fillPhis(inst.getParent(), targetTrue);
-            sb.append("    j ").append(labelTrue).append("\n");
+            if (targetFalse == nextBb && !phisFalse) {
+                // Fall through to False
+                if (!phisTrue) {
+                    currentSb.append("    bne $t0, $zero, ").append(labelTrue).append("\n");
+                } else {
+                    String bridgeLabel = "br_bridge_" + (brCounter++);
+                    currentSb.append("    bne $t0, $zero, ").append(bridgeLabel).append("\n");
 
-            // False path
-            sb.append(bridgeLabel).append(":\n");
-            fillPhis(inst.getParent(), targetFalse);
-            sb.append("    j ").append(labelFalse).append("\n");
+                    StringBuilder oldSb = currentSb;
+                    currentSb = pendingBridges;
+                    currentSb.append(bridgeLabel).append(":\n");
+                    fillPhis(inst.getParent(), targetTrue);
+                    currentSb.append("    j ").append(labelTrue).append("\n");
+                    currentSb = oldSb;
+                }
+            } else if (targetTrue == nextBb && !phisTrue) {
+                // Fall through to True
+                if (!phisFalse) {
+                    currentSb.append("    beq $t0, $zero, ").append(labelFalse).append("\n");
+                } else {
+                    String bridgeLabel = "br_bridge_" + (brCounter++);
+                    currentSb.append("    beq $t0, $zero, ").append(bridgeLabel).append("\n");
+
+                    StringBuilder oldSb = currentSb;
+                    currentSb = pendingBridges;
+                    currentSb.append(bridgeLabel).append(":\n");
+                    fillPhis(inst.getParent(), targetFalse);
+                    currentSb.append("    j ").append(labelFalse).append("\n");
+                    currentSb = oldSb;
+                }
+            } else {
+                // Neither is next or both have phis
+                if (!phisFalse) {
+                    currentSb.append("    beq $t0, $zero, ").append(labelFalse).append("\n");
+                } else {
+                    String bridgeLabel = "br_bridge_" + (brCounter++);
+                    currentSb.append("    beq $t0, $zero, ").append(bridgeLabel).append("\n");
+
+                    StringBuilder oldSb = currentSb;
+                    currentSb = pendingBridges;
+                    currentSb.append(bridgeLabel).append(":\n");
+                    fillPhis(inst.getParent(), targetFalse);
+                    currentSb.append("    j ").append(labelFalse).append("\n");
+                    currentSb = oldSb;
+                }
+
+                fillPhis(inst.getParent(), targetTrue);
+                if (targetTrue != nextBb) {
+                    currentSb.append("    j ").append(labelTrue).append("\n");
+                }
+            }
         }
     }
 
@@ -710,7 +837,7 @@ public class MipsBuilder {
         loadMem("$ra", currentStackSize - 4, "$sp");
         loadMem("$fp", currentStackSize - 8, "$sp");
         addI("$sp", "$sp", currentStackSize);
-        sb.append("    jr $ra\n");
+        currentSb.append("    jr $ra\n");
     }
 
     private void genCall(CallInst inst) {
@@ -755,7 +882,7 @@ public class MipsBuilder {
                 storeMem("$t0", offset, "$sp");
             }
         }
-        sb.append("    jal ").append(getLabel(target)).append("\n");
+        currentSb.append("    jal ").append(getLabel(target)).append("\n");
 
         if (stackSpace > 0) {
             addI("$sp", "$sp", stackSpace);
@@ -806,14 +933,14 @@ public class MipsBuilder {
             } else {
                 loadValue(index, "$t1");
                 if (elementSize == 1) {
-                    sb.append("    addu $t0, $t0, $t1\n");
+                    currentSb.append("    addu $t0, $t0, $t1\n");
                 } else if (isPowerOfTwo(elementSize)) {
-                    sb.append("    sll $t1, $t1, ").append(log2(elementSize)).append("\n");
-                    sb.append("    addu $t0, $t0, $t1\n");
+                    currentSb.append("    sll $t1, $t1, ").append(log2(elementSize)).append("\n");
+                    currentSb.append("    addu $t0, $t0, $t1\n");
                 } else {
-                    sb.append("    li $t2, ").append(elementSize).append("\n");
-                    sb.append("    mul $t1, $t1, $t2\n");
-                    sb.append("    addu $t0, $t0, $t1\n");
+                    currentSb.append("    li $t2, ").append(elementSize).append("\n");
+                    currentSb.append("    mul $t1, $t1, $t2\n");
+                    currentSb.append("    addu $t0, $t0, $t1\n");
                 }
             }
         }
