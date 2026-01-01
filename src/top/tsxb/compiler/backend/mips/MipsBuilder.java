@@ -426,7 +426,7 @@ public class MipsBuilder {
     }
 
     private void genInstruction(Instruction inst, BasicBlock nextBb) {
-        currentSb.append("    # ").append(inst.toString()).append("\n");
+        // currentSb.append("    # ").append(inst.toString()).append("\n");
         switch (inst.getOpCode()) {
             case ADD, SUB, MUL, SDIV, SREM -> genBinary(inst);
             case ICMP -> genIcmp((IcmpInst) inst);
