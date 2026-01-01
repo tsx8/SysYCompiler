@@ -1,11 +1,7 @@
 package top.tsxb.compiler.backend.opti;
 
 import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Deque;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -19,7 +15,6 @@ import top.tsxb.compiler.ir.base.Value;
 import top.tsxb.compiler.ir.constant.ConstInt;
 import top.tsxb.compiler.ir.constant.ConstZero;
 import top.tsxb.compiler.ir.inst.AllocaInst;
-import top.tsxb.compiler.ir.inst.BrInst;
 import top.tsxb.compiler.ir.inst.Instruction;
 import top.tsxb.compiler.ir.inst.LoadInst;
 import top.tsxb.compiler.ir.inst.PhiInst;
@@ -164,6 +159,7 @@ public class Mem2RegPass implements Pass {
                     Deque<Value> stack = stacks.computeIfAbsent(alloca, key -> new ArrayDeque<>());
                     stack.push(store.getOperand(0));
                     pushCounts.merge(alloca, 1, Integer::sum);
+                    store.dropAllReferences();
                     iterator.remove();
                 }
                 continue;
@@ -177,6 +173,7 @@ public class Mem2RegPass implements Pass {
                         replacement = defaultValue(alloca, vars);
                     }
                     load.replaceAllUsesWith(replacement);
+                    load.dropAllReferences();
                     iterator.remove();
                 }
             }

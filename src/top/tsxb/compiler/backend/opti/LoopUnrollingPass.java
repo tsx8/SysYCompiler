@@ -11,8 +11,8 @@ import top.tsxb.compiler.ir.type.IntType;
 import java.util.*;
 
 public class LoopUnrollingPass implements Pass {
-    private static final int MAX_TRIP_COUNT = 20;
-    private static final int MAX_TOTAL_INSTS = 100;
+    private static final int MAX_TRIP_COUNT = 32;
+    private static final int MAX_TOTAL_INSTS = 128;
 
     private static class Loop {
         BasicBlock header;
