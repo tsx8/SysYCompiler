@@ -427,20 +427,8 @@ public class MipsBuilder {
                 case ADD -> currentSb.append("    addu $t2, $t0, $t1\n");
                 case SUB -> currentSb.append("    subu $t2, $t0, $t1\n");
                 case MUL -> currentSb.append("    mul $t2, $t0, $t1\n");
-                case SDIV -> {
-                    String okLabel = "div_ok_" + (brCounter++);
-                    currentSb.append("    bne $t1, $zero, ").append(okLabel).append("\n");
-                    currentSb.append("    break 7\n");
-                    currentSb.append(okLabel).append(":\n");
-                    currentSb.append("    div $t0, $t1\n    mflo $t2\n");
-                }
-                case SREM -> {
-                    String okLabel = "rem_ok_" + (brCounter++);
-                    currentSb.append("    bne $t1, $zero, ").append(okLabel).append("\n");
-                    currentSb.append("    break 7\n");
-                    currentSb.append(okLabel).append(":\n");
-                    currentSb.append("    div $t0, $t1\n    mfhi $t2\n");
-                }
+                case SDIV -> currentSb.append("    div $t0, $t1\n    mflo $t2\n");
+                case SREM -> currentSb.append("    div $t0, $t1\n    mfhi $t2\n");
             }
         }
         storeValue(inst, "$t2");
