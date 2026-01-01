@@ -42,6 +42,29 @@ public class ConstantFoldingPass implements Pass {
                                     bb.getInstructions().remove(binary);
                                     changed = true;
                                     anyChanged = true;
+                                } else {
+                                    // Strength reduction: mul x, -1 -> sub 0, x; sdiv x, -1 -> sub 0, x
+                                    Value x = null;
+                                    if (binary.getOpCode() == OpCode.MUL) {
+                                        if (isConstant(binary.getOperand(0), -1)) x = binary.getOperand(1);
+                                        else if (isConstant(binary.getOperand(1), -1)) x = binary.getOperand(0);
+                                    } else if (binary.getOpCode() == OpCode.SDIV) {
+                                        if (isConstant(binary.getOperand(1), -1)) x = binary.getOperand(0);
+                                    }
+
+                                    if (x != null) {
+                                        BinaryInst sub = new BinaryInst(OpCode.SUB, new ConstInt(IntType.I32, 0), x, null);
+                                        int index = bb.getInstructions().indexOf(binary);
+                                        bb.getInstructions().set(index, sub);
+                                        sub.setParent(bb);
+                                        if (bb.getParent() != null) {
+                                            bb.getParent().resolveLocalName(sub);
+                                        }
+                                        binary.replaceAllUsesWith(sub);
+                                        binary.dropAllReferences();
+                                        changed = true;
+                                        anyChanged = true;
+                                    }
                                 }
                             }
                         } else if (inst instanceof IcmpInst icmp) {
@@ -117,6 +140,10 @@ public class ConstantFoldingPass implements Pass {
         } else if (op == OpCode.SUB) {
             if (isConstant(right, 0)) return left;
             if (left == right) return new ConstInt(IntType.I32, 0);
+            // 0 - (0 - x) -> x
+            if (isConstant(left, 0) && right instanceof BinaryInst rBin && rBin.getOpCode() == OpCode.SUB && isConstant(rBin.getOperand(0), 0)) {
+                return rBin.getOperand(1);
+            }
         } else if (op == OpCode.MUL) {
             if (isConstant(left, 1)) return right;
             if (isConstant(right, 1)) return left;
