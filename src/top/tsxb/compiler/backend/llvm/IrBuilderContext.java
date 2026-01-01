@@ -33,13 +33,13 @@ public class IrBuilderContext {
 
     public Value ensureI1(Value val) {
         if (val.getType() instanceof IntType it && it.getBitWidth() == 32) {
-            return new IcmpInst(IcmpInst.CondCode.NE, val, ConstInt.ZERO, currentBlock);
+            return new IcmpInst(IcmpInst.CondCode.NE, val, new ConstInt(IntType.I32, 0), currentBlock);
         }
         return val;
     }
 
     public Value ensureI32(Value val) {
-        if (val == null) return ConstInt.ZERO;
+        if (val == null) return new ConstInt(IntType.I32, 0);
         if (val.getType() instanceof IntType it && it.getBitWidth() == 1) {
             return new ZextInst(val, IntType.I32, currentBlock);
         }

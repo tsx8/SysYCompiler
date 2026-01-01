@@ -3,7 +3,6 @@ package top.tsxb.compiler.ir.constant;
 import top.tsxb.compiler.ir.type.IntType;
 
 public class ConstInt extends Constant {
-    public static final ConstInt ZERO = new ConstInt(IntType.I32, 0);
     private final int value;
 
     public ConstInt(IntType type, int value) {
