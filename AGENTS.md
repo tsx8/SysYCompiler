@@ -33,7 +33,7 @@ Set `CompilerConfig.CURRENT_HOMEWORK`, `OBJECT_CODE`, and `OPTIMIZE` before runn
 Indent four spaces, keep `UpperCamelCase` classes, `lowerCamelCase` members, and `UPPER_SNAKE_CASE` constants. Implement new traversals by extending the existing `CstVisitor`/`AstVisitor` hierarchies and define grammar additions through the DSL utilities in `Parser.java`. Use `var` only when the type is obvious, prefer `final` for shared dependencies, emit diagnostics through `ErrorReporter`/`BacktrackMgr`, and extend `IrBuilder`/`MipsBuilder` incrementally instead of creating new output layers.
 
 ## Testing Guidelines
-`CompilerTest` picks cases from `testcases/<CURRENT_HOMEWORK>` and writes logs under `out/logs/<timestamp>`, so run it after every semantic, IR, or MIPS change. You can pass specific test case names as arguments to run only those cases (e.g., `java ... CompilerTest testcase1`). For manual LLVM integration and execution, use the `Runner` utility in the `common` package. Keep folder names short so console alignment remains readable, and version-control both `testfile.txt` and `ans.txt` for every new case. Capture `FinalCycle` measurements with `assets/mars.jar` whenever backend logic changes.
+`CompilerTest` picks cases from `testcases/<CURRENT_HOMEWORK>` and writes logs under `out/logs/<timestamp>`, so run it after every semantic, IR, or MIPS change. By default, it uses **parallel execution** to leverage multi-core processors. You can pass specific test case names as arguments to run only those cases (e.g., `java ... CompilerTest testcase1`). For manual LLVM integration and execution, use the `Runner` utility in the `common` package. Keep folder names short so console alignment remains readable, and version-control both `testfile.txt` and `ans.txt` for every new case. Capture `FinalCycle` measurements with `assets/mars.jar` whenever backend logic changes.
 
 ## Commit & Pull Request Guidelines
 Commits follow the `type: short imperative summary` style already in history (`feat:`, `refactor:`, `docs:`). Pull requests must call out the affected stage or builder, the compiler switches used (`CURRENT_HOMEWORK`, `OBJECT_CODE`, `OPTIMIZE`), the commands/tests executed, and any performance impact (FinalCycle or IR diff). Link homework issues when relevant and update `CHANGELOG` for stage milestones.
@@ -45,6 +45,11 @@ Commits follow the `type: short imperative summary` style already in history (`f
 Middle-end passes are managed by `PassManager` and run iteratively (up to 15 times) until convergence:
 - **Function Inlining**: Replaces function calls with the function body to reduce overhead.
 - **Mem2Reg**: Promotes `alloca` instructions to SSA registers using dominator tree analysis, significantly reducing memory operations.
+- **GVN (Global Value Numbering)**: Eliminates redundant computations by identifying and merging equivalent expressions.
+- **GCM (Global Code Motion)**: Moves instructions to the least frequently executed basic blocks (hoisting/sinking) while respecting data dependencies.
+- **Loop Unrolling**: Expands loop bodies to reduce branch overhead and expose more optimization opportunities.
+- **Loop Strength Reduction**: Replaces expensive operations (e.g., induction variable multiplication) with cheaper ones (e.g., addition).
+- **Global Localization**: Promotes global variables to local ones within functions where possible, enabling further optimizations like Mem2Reg.
 - **Constant Folding & Propagation**: Evaluates constant expressions at compile time and propagates the results.
 - **Simplify CFG**: Removes unreachable blocks, merges single-successor blocks, and simplifies branch instructions.
 - **Dead Code Elimination (DCE)**: Removes instructions whose results are never used.
@@ -52,8 +57,12 @@ Middle-end passes are managed by `PassManager` and run iteratively (up to 15 tim
 ### Backend Optimizations (MIPS Level)
 Backend optimizations focus on efficient code generation and resource usage:
 - **Linear Scan Register Allocation**: Assigns physical registers to virtual registers based on live interval analysis, minimizing stack spills.
+- **Global Variable Register Allocation**: Assigns physical registers to frequently accessed global variables to reduce memory traffic.
+- **Global Address Caching**: Caches global variable addresses in registers within `MipsBuilder` to avoid redundant address calculations.
 - **Liveness & Loop Analysis**: Provides data flow information and loop depth heuristics to prioritize register allocation for hot code paths.
+- **Stack Frame Optimization**: Eliminates the frame pointer (`$fp`) and optimizes stack space allocation to reduce function prologue/epilogue overhead.
 - **Division/Multiplication Optimization**: Replaces expensive `div` and `mult` instructions with sequences of `sll`, `sra`, `add`, and `sub` using magic numbers (via `DivOptimizer`).
-- **Block Reordering**: Reorders basic blocks to maximize fall-through branches and reduce explicit `j` instructions.
+- **Block Reordering & Layout**: Reorders basic blocks to maximize fall-through branches and reduce explicit `j` instructions.
+- **Phi Elimination Optimization**: Minimizes redundant jumps and moves during SSA deconstruction.
 
 Optimize toward the official score `FinalCycle = DIV*15 + MULT*5 + (JUMP/BRANCH)*2 + MEM*3 + OTHER*1`, prioritizing memory- and branch-reduction even if total instruction count rises slightly.
