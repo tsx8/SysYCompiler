@@ -2,6 +2,7 @@ package top.tsxb.compiler.backend.mips;
 
 import top.tsxb.compiler.ir.base.Value;
 import top.tsxb.compiler.ir.inst.Instruction;
+import top.tsxb.compiler.ir.inst.CallInst;
 import top.tsxb.compiler.ir.structure.BasicBlock;
 import top.tsxb.compiler.ir.structure.Function;
 import top.tsxb.compiler.ir.structure.Argument;
@@ -18,6 +19,7 @@ public class LiveIntervalAnalysis {
     private final Map<Value, LiveInterval> intervals = new HashMap<>();
     private final Map<BasicBlock, Integer> blockStart = new HashMap<>();
     private final Map<BasicBlock, Integer> blockEnd = new HashMap<>();
+    private final List<Integer> callInstIds = new ArrayList<>();
 
     public LiveIntervalAnalysis(Function function, LivenessAnalysis liveness) {
         this.function = function;
@@ -27,6 +29,7 @@ public class LiveIntervalAnalysis {
     public void analyze() {
         linearize();
         computeIntervals();
+        checkSpansCall();
     }
 
     private void linearize() {
@@ -36,9 +39,23 @@ public class LiveIntervalAnalysis {
             for (Instruction inst : bb.getInstructions()) {
                 linearizedInsts.add(inst);
                 instToId.put(inst, id);
+                if (inst instanceof CallInst) {
+                    callInstIds.add(id);
+                }
                 id += 2; // Use step 2 to allow insertions if needed
             }
             blockEnd.put(bb, id - 1);
+        }
+    }
+
+    private void checkSpansCall() {
+        for (LiveInterval interval : intervals.values()) {
+            for (int callId : callInstIds) {
+                if (callId > interval.getStart() && callId < interval.getEnd()) {
+                    interval.setSpansCall(true);
+                    break;
+                }
+            }
         }
     }
 

@@ -9,12 +9,14 @@ public class LiveInterval implements Comparable<LiveInterval> {
     private MipsRegister reg;
     private int stackOffset;
     private boolean spilled;
+    private boolean spansCall;
 
     public LiveInterval(Value value) {
         this.value = value;
         this.start = Integer.MAX_VALUE;
         this.end = Integer.MIN_VALUE;
         this.spilled = false;
+        this.spansCall = false;
     }
 
     public Value getValue() {
@@ -52,6 +54,14 @@ public class LiveInterval implements Comparable<LiveInterval> {
 
     public void setSpilled(boolean spilled) {
         this.spilled = spilled;
+    }
+
+    public boolean isSpansCall() {
+        return spansCall;
+    }
+
+    public void setSpansCall(boolean spansCall) {
+        this.spansCall = spansCall;
     }
 
     @Override

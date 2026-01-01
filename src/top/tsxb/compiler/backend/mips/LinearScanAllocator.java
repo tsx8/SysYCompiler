@@ -30,7 +30,9 @@ public class LinearScanAllocator {
             if (freeRegs.isEmpty()) {
                 spillAtInterval(i);
             } else {
-                MipsRegister reg = freeRegs.remove(0);
+                MipsRegister reg = getMipsRegister(i);
+                freeRegs.remove(reg);
+
                 i.setReg(reg);
                 regMapping.put(i.getValue(), reg);
                 if (reg.isCalleeSaved()) {
@@ -40,6 +42,33 @@ public class LinearScanAllocator {
                 active.sort(Comparator.comparingInt(LiveInterval::getEnd));
             }
         }
+    }
+
+    private MipsRegister getMipsRegister(LiveInterval i) {
+        MipsRegister reg = null;
+        if (i.isSpansCall()) {
+            // Strongly prioritize callee-saved ($s) for intervals spanning calls
+            for (MipsRegister r : freeRegs) {
+                if (r.isCalleeSaved()) {
+                    reg = r;
+                    break;
+                }
+            }
+        } else {
+            // Prioritize caller-saved ($t) for intervals not spanning calls
+            for (MipsRegister r : freeRegs) {
+                if (r.isCallerSaved()) {
+                    reg = r;
+                    break;
+                }
+            }
+        }
+
+        // Fallback to the first available register if preferred type not found
+        if (reg == null) {
+            reg = freeRegs.get(0);
+        }
+        return reg;
     }
 
     private void expireOldIntervals(LiveInterval i) {
@@ -53,14 +82,48 @@ public class LinearScanAllocator {
     }
 
     private void spillAtInterval(LiveInterval i) {
-        LiveInterval spill = active.get(active.size() - 1);
-        if (spill.getEnd() > i.getEnd()) {
+        // Find the best candidate to spill in active list
+        // We want to spill an interval that ends later than i, 
+        // and preferably one that has the register type i wants.
+        LiveInterval spill = null;
+        List<LiveInterval> candidates = new ArrayList<>();
+        for (LiveInterval a : active) {
+            if (a.getEnd() > i.getEnd()) {
+                candidates.add(a);
+            }
+        }
+
+        if (!candidates.isEmpty()) {
+            if (i.isSpansCall()) {
+                // i wants $s, so try to spill an interval that has $s
+                for (int j = candidates.size() - 1; j >= 0; j--) {
+                    if (candidates.get(j).getReg().isCalleeSaved()) {
+                        spill = candidates.get(j);
+                        break;
+                    }
+                }
+            } else {
+                // i wants $t, so try to spill an interval that has $t
+                for (int j = candidates.size() - 1; j >= 0; j--) {
+                    if (candidates.get(j).getReg().isCallerSaved()) {
+                        spill = candidates.get(j);
+                        break;
+                    }
+                }
+            }
+            // If no preferred register type found among candidates, pick the one that ends latest
+            if (spill == null) {
+                spill = candidates.get(candidates.size() - 1);
+            }
+        }
+
+        if (spill != null) {
             i.setReg(spill.getReg());
             regMapping.put(i.getValue(), i.getReg());
             regMapping.remove(spill.getValue());
             spill.setSpilled(true);
             spill.setReg(null);
-            active.remove(active.size() - 1);
+            active.remove(spill);
             active.add(i);
             active.sort(Comparator.comparingInt(LiveInterval::getEnd));
         } else {
