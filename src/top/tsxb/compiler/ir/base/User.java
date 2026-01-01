@@ -26,4 +26,22 @@ public abstract class User extends Value {
     public int getNumOperands() {
         return operands.size();
     }
+
+    public void setOperand(int index, Value operand) {
+        Value previous = operands.set(index, operand);
+        if (previous != null) {
+            previous.removeUseOf(this);
+        }
+        if (operand != null) {
+            operand.addUse(new Use(this, operand));
+        }
+    }
+
+    public void replaceOperand(Value oldValue, Value newValue) {
+        for (int i = 0; i < operands.size(); i++) {
+            if (operands.get(i) == oldValue) {
+                setOperand(i, newValue);
+            }
+        }
+    }
 }

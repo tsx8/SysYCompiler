@@ -20,13 +20,13 @@ public class PassManager {
             if (errorReporter.hasErrors()) {
                 break;
             }
-            pass.run(module, errorReporter);
+            pass.run(module);
         }
     }
 
     public static PassManager createDefault() {
         PassManager manager = new PassManager();
-        // Add default optimization passes here as they become available.
+        manager.register(new Mem2RegPass());
         return manager;
     }
 }

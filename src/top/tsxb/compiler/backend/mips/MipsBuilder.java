@@ -217,6 +217,8 @@ public class MipsBuilder {
             case CALL -> genCall((CallInst) inst);
             case ZEXT -> genZext((ZextInst) inst);
             case GEP -> genGep((GetElementPtrInst) inst);
+            case PHI -> {
+            } // Handled by predecessors
         }
     }
 
@@ -437,15 +439,15 @@ public class MipsBuilder {
         }
         DivOptimizer.MultiplierInfo info = DivOptimizer.chooseMultiplier(divisor);
         loadValue(dividend, "$t0");
-        int magic = (int) info.multiplier;
+        int magic = (int) info.multiplier();
         sb.append("    li $t1, ").append(magic).append("\n");
         sb.append("    mult $t0, $t1\n");
         sb.append("    mfhi $t2\n");
         if (magic < 0) {
             sb.append("    addu $t2, $t2, $t0\n");
         }
-        if (info.shift > 0) {
-            sb.append("    sra $t2, $t2, ").append(info.shift).append("\n");
+        if (info.shift() > 0) {
+            sb.append("    sra $t2, $t2, ").append(info.shift()).append("\n");
         }
         sb.append("    srl $t3, $t0, 31\n");
         sb.append("    addu $t2, $t2, $t3\n");
@@ -505,7 +507,11 @@ public class MipsBuilder {
     }
 
     private int getAllocaDataOffset(AllocaInst alloca) {
-        return stackOffsets.get(alloca);
+        Integer offset = stackOffsets.get(alloca);
+        if (offset == null) {
+            throw new RuntimeException("Missing stack slot for alloca: " + alloca);
+        }
+        return offset;
     }
 
     private void genLoad(LoadInst inst) {
@@ -538,17 +544,68 @@ public class MipsBuilder {
 
     private void genBr(BrInst inst) {
         if (inst.getNumOperands() == 1) {
-            sb.append("    j ").append(getLabel(inst.getOperand(0))).append("\n");
+            BasicBlock target = (BasicBlock) inst.getOperand(0);
+            fillPhis(inst.getParent(), target);
+            sb.append("    j ").append(getLabel(target)).append("\n");
         } else {
-            loadValue(inst.getOperand(0), "$t0");
-            String labelTrue = getLabel(inst.getOperand(1));
-            String labelFalse = getLabel(inst.getOperand(2));
+            Value cond = inst.getOperand(0);
+            BasicBlock targetTrue = (BasicBlock) inst.getOperand(1);
+            BasicBlock targetFalse = (BasicBlock) inst.getOperand(2);
+
+            loadValue(cond, "$t0");
+            String labelTrue = getLabel(targetTrue);
+            String labelFalse = getLabel(targetFalse);
             String bridgeLabel = "br_bridge_" + (brCounter++);
+
             sb.append("    beq $t0, $zero, ").append(bridgeLabel).append("\n");
+
+            // True path
+            fillPhis(inst.getParent(), targetTrue);
             sb.append("    j ").append(labelTrue).append("\n");
+
+            // False path
             sb.append(bridgeLabel).append(":\n");
+            fillPhis(inst.getParent(), targetFalse);
             sb.append("    j ").append(labelFalse).append("\n");
         }
+    }
+
+    private void fillPhis(BasicBlock current, BasicBlock target) {
+        List<PhiInst> phis = new ArrayList<>();
+        for (Instruction inst : target.getInstructions()) {
+            if (inst instanceof PhiInst phi) {
+                phis.add(phi);
+            } else {
+                break;
+            }
+        }
+
+        if (phis.isEmpty()) {
+            return;
+        }
+
+        int tempSpace = phis.size() * 4;
+        addI("$sp", "$sp", -tempSpace);
+
+        for (int i = 0; i < phis.size(); i++) {
+            PhiInst phi = phis.get(i);
+            Value incoming = phi.getIncomingValue(current);
+            if (incoming != null) {
+                loadValue(incoming, "$t0");
+                storeMem("$t0", i * 4, "$sp");
+            }
+        }
+
+        for (int i = 0; i < phis.size(); i++) {
+            PhiInst phi = phis.get(i);
+            Value incoming = phi.getIncomingValue(current);
+            if (incoming != null) {
+                loadMem("$t0", i * 4, "$sp");
+                storeValue(phi, "$t0");
+            }
+        }
+
+        addI("$sp", "$sp", tempSpace);
     }
 
     private void genRet(ReturnInst inst) {

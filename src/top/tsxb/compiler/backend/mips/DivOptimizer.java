@@ -4,14 +4,7 @@ public final class DivOptimizer {
     private DivOptimizer() {
     }
 
-    public static final class MultiplierInfo {
-        public final long multiplier;
-        public final int shift;
-
-        public MultiplierInfo(long multiplier, int shift) {
-            this.multiplier = multiplier;
-            this.shift = shift;
-        }
+    public record MultiplierInfo(long multiplier, int shift) {
     }
 
     public static MultiplierInfo chooseMultiplier(int d) {

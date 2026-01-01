@@ -12,6 +12,10 @@ public class AllocaInst extends Instruction {
         this.allocatedType = allocatedType;
     }
 
+    public IrType getAllocatedType() {
+        return allocatedType;
+    }
+
     @Override
     public String toString() {
         return String.format("%s = alloca %s", getRef(), allocatedType);

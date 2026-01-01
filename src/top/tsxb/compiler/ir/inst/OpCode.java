@@ -8,7 +8,7 @@ public enum OpCode {
     // Comparison
     ICMP("icmp"),
     // Memory
-    ALLOCA("alloca"), LOAD("load"), STORE("store"), GEP("getelementptr"),
+    ALLOCA("alloca"), LOAD("load"), STORE("store"), GEP("getelementptr"), PHI("phi"),
     // Cast
     ZEXT("zext"),
     // Other

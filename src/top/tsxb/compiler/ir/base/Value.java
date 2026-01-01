@@ -1,6 +1,7 @@
 package top.tsxb.compiler.ir.base;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 
 import top.tsxb.compiler.ir.type.IrType;
@@ -29,6 +30,28 @@ public abstract class Value {
 
     public void addUse(Use use) {
         useList.add(use);
+    }
+
+    public void removeUseOf(User user) {
+        for (Iterator<Use> iterator = useList.iterator(); iterator.hasNext();) {
+            Use use = iterator.next();
+            if (use.user() == user) {
+                iterator.remove();
+                break;
+            }
+        }
+    }
+
+    public void replaceAllUsesWith(Value replacement) {
+        var usesSnapshot = new ArrayList<>(useList);
+        for (Use use : usesSnapshot) {
+            use.user().replaceOperand(this, replacement);
+        }
+        useList.clear();
+    }
+
+    public boolean hasUses() {
+        return !useList.isEmpty();
     }
 
     public abstract String getRef();
