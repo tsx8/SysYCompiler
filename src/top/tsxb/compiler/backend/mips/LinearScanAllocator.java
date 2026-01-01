@@ -7,8 +7,8 @@ public class LinearScanAllocator {
     private final List<LiveInterval> intervals;
     private final List<MipsRegister> freeRegs = new LinkedList<>();
     private final List<LiveInterval> active = new ArrayList<>();
-    private final Map<Value, MipsRegister> regMapping = new HashMap<>();
-    private final Set<MipsRegister> usedCalleeSaved = new HashSet<>();
+    private final Map<Value, MipsRegister> regMapping = new LinkedHashMap<>();
+    private final Set<MipsRegister> usedCalleeSaved = new LinkedHashSet<>();
 
     public LinearScanAllocator(List<LiveInterval> intervals) {
         this.intervals = intervals;
@@ -39,7 +39,12 @@ public class LinearScanAllocator {
                     usedCalleeSaved.add(reg);
                 }
                 active.add(i);
-                active.sort(Comparator.comparingInt(LiveInterval::getEnd));
+                active.sort((a, b) -> {
+                    if (a.getEnd() != b.getEnd()) {
+                        return Integer.compare(a.getEnd(), b.getEnd());
+                    }
+                    return a.getValue().getName().compareTo(b.getValue().getName());
+                });
             }
         }
     }
@@ -83,8 +88,8 @@ public class LinearScanAllocator {
 
     private void spillAtInterval(LiveInterval i) {
         // Find the best candidate to spill in active list
-        // We want to spill an interval that ends later than i, 
-        // and preferably one that has the register type i wants.
+        // We want to spill an interval with the minimum weight.
+        // If weights are equal, we prefer to spill the one that ends later.
         LiveInterval spill = null;
         List<LiveInterval> candidates = new ArrayList<>();
         for (LiveInterval a : active) {
@@ -94,26 +99,40 @@ public class LinearScanAllocator {
         }
 
         if (!candidates.isEmpty()) {
-            if (i.isSpansCall()) {
-                // i wants $s, so try to spill an interval that has $s
-                for (int j = candidates.size() - 1; j >= 0; j--) {
-                    if (candidates.get(j).getReg().isCalleeSaved()) {
-                        spill = candidates.get(j);
-                        break;
-                    }
-                }
-            } else {
-                // i wants $t, so try to spill an interval that has $t
-                for (int j = candidates.size() - 1; j >= 0; j--) {
-                    if (candidates.get(j).getReg().isCallerSaved()) {
-                        spill = candidates.get(j);
-                        break;
+            // Find candidate with minimum weight
+            spill = candidates.get(0);
+            for (LiveInterval c : candidates) {
+                if (c.getWeight() < spill.getWeight()) {
+                    spill = c;
+                } else if (c.getWeight() == spill.getWeight()) {
+                    // Tie-break: prefer spilling the one that matches register type preference
+                    boolean spillMatches = i.isSpansCall() ? spill.getReg().isCalleeSaved() : spill.getReg().isCallerSaved();
+                    boolean cMatches = i.isSpansCall() ? c.getReg().isCalleeSaved() : c.getReg().isCallerSaved();
+                    if (cMatches && !spillMatches) {
+                        spill = c;
+                    } else if (cMatches == spillMatches) {
+                        if (c.getEnd() > spill.getEnd()) {
+                            spill = c;
+                        } else if (c.getEnd() == spill.getEnd()) {
+                            if (c.getValue().getName().compareTo(spill.getValue().getName()) > 0) {
+                                spill = c;
+                            }
+                        }
                     }
                 }
             }
-            // If no preferred register type found among candidates, pick the one that ends latest
-            if (spill == null) {
-                spill = candidates.get(candidates.size() - 1);
+
+            // Compare with i
+            if (i.getWeight() < spill.getWeight()) {
+                spill = null; // Spill i instead
+            } else if (i.getWeight() == spill.getWeight()) {
+                if (i.getEnd() > spill.getEnd()) {
+                    spill = null; // Spill i instead
+                } else if (i.getEnd() == spill.getEnd()) {
+                    if (i.getValue().getName().compareTo(spill.getValue().getName()) > 0) {
+                        spill = null;
+                    }
+                }
             }
         }
 
@@ -125,7 +144,12 @@ public class LinearScanAllocator {
             spill.setReg(null);
             active.remove(spill);
             active.add(i);
-            active.sort(Comparator.comparingInt(LiveInterval::getEnd));
+            active.sort((a, b) -> {
+                if (a.getEnd() != b.getEnd()) {
+                    return Integer.compare(a.getEnd(), b.getEnd());
+                }
+                return a.getValue().getName().compareTo(b.getValue().getName());
+            });
         } else {
             i.setSpilled(true);
         }

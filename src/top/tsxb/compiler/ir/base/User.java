@@ -37,6 +37,13 @@ public abstract class User extends Value {
         }
     }
 
+    public void removeOperand(int index) {
+        Value previous = operands.remove(index);
+        if (previous != null) {
+            previous.removeUseOf(this);
+        }
+    }
+
     public void dropAllReferences() {
         for (int i = 0; i < operands.size(); i++) {
             setOperand(i, null);

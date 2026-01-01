@@ -25,9 +25,30 @@ public class PhiInst extends Instruction {
         }
     }
 
+    public void removeIncoming(BasicBlock block) {
+        Integer index = incomingIndex.remove(block);
+        if (index != null) {
+            removeOperand(index);
+            // Update indices for remaining blocks
+            for (Map.Entry<BasicBlock, Integer> entry : incomingIndex.entrySet()) {
+                if (entry.getValue() > index) {
+                    entry.setValue(entry.getValue() - 1);
+                }
+            }
+        }
+    }
+
     public Value getIncomingValue(BasicBlock block) {
         Integer index = incomingIndex.get(block);
         return (index != null) ? getOperand(index) : null;
+    }
+
+    public Map<BasicBlock, Value> getIncoming() {
+        Map<BasicBlock, Value> map = new LinkedHashMap<>();
+        for (Map.Entry<BasicBlock, Integer> entry : incomingIndex.entrySet()) {
+            map.put(entry.getKey(), getOperand(entry.getValue()));
+        }
+        return map;
     }
 
     @Override

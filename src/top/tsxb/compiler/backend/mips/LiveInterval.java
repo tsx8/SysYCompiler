@@ -10,6 +10,7 @@ public class LiveInterval implements Comparable<LiveInterval> {
     private int stackOffset;
     private boolean spilled;
     private boolean spansCall;
+    private double weight;
 
     public LiveInterval(Value value) {
         this.value = value;
@@ -17,10 +18,23 @@ public class LiveInterval implements Comparable<LiveInterval> {
         this.end = Integer.MIN_VALUE;
         this.spilled = false;
         this.spansCall = false;
+        this.weight = 0.0;
     }
 
     public Value getValue() {
         return value;
+    }
+
+    public double getWeight() {
+        return weight;
+    }
+
+    public void setWeight(double weight) {
+        this.weight = weight;
+    }
+
+    public void addWeight(double weight) {
+        this.weight += weight;
     }
 
     public int getStart() {
@@ -69,7 +83,10 @@ public class LiveInterval implements Comparable<LiveInterval> {
         if (this.start != o.start) {
             return Integer.compare(this.start, o.start);
         }
-        return Integer.compare(this.end, o.end);
+        if (this.end != o.end) {
+            return Integer.compare(this.end, o.end);
+        }
+        return this.value.getName().compareTo(o.value.getName());
     }
 
     @Override
