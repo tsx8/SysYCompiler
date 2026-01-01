@@ -4,7 +4,9 @@
 Java sources live in `src/top/tsxb/compiler`, grouped into `driver` (Compiler entry + `Pipeline`), `frontend` (lexer/parser/semantic), and `backend/{llvm,mips,opti}`. Each backend sub-package contains its respective `Stage` entry (e.g., `IrGenStage`, `MipsGenStage`, `OptimizeStage`) and builders (`IrBuilder`, `MipsBuilder`). Tests and helpers sit in `test/top/tsxb/compiler`, while executable fixtures belong in `testcases/<stage>/<case>` (each case supplies `testfile.txt`, `ans.txt`, and optional `in.txt`). Runtime dependencies (`assets/libsysy`, `assets/mars.jar`) support execution, and any compiled classes or logs should be written under `out/`.
 
 ## Build, Test, and Development Commands
-Use JDK 17+; the repo deliberately avoids Maven/Gradle, so compile directly. Example (bash; swap `:` for `;` on Windows):
+Use JDK 17+; the repo deliberately avoids Maven/Gradle, so compile directly.
+
+### Bash (Linux/macOS/Git Bash)
 ```bash
 find src -name "*.java" > sources.txt && javac -encoding UTF-8 -d out/classes @sources.txt
 java -cp out/classes top.tsxb.compiler.driver.Compiler
@@ -13,6 +15,17 @@ find test -name "*.java" > tests.txt && javac -encoding UTF-8 -cp out/classes -d
 java -cp "out/classes:out/tests" top.tsxb.compiler.CompilerTest
 # Run specific test cases:
 java -cp "out/classes:out/tests" top.tsxb.compiler.CompilerTest testcase1 testcase2
+```
+
+### PowerShell (Windows)
+```powershell
+Get-ChildItem -Path src -Filter *.java -Recurse | ForEach-Object { $_.FullName } > sources.txt; javac -encoding UTF-8 -d out/classes "@sources.txt"
+java -cp out/classes top.tsxb.compiler.driver.Compiler
+Get-ChildItem -Path test -Filter *.java -Recurse | ForEach-Object { $_.FullName } > tests.txt; javac -encoding UTF-8 -cp out/classes -d out/tests "@tests.txt"
+# Run all tests:
+java -cp "out/classes;out/tests" top.tsxb.compiler.CompilerTest
+# Run specific test cases:
+java -cp "out/classes;out/tests" top.tsxb.compiler.CompilerTest testcase1 testcase2
 ```
 Set `CompilerConfig.CURRENT_HOMEWORK`, `OBJECT_CODE`, and `OPTIMIZE` before running and clean `out/logs` between benchmark sessions.
 
