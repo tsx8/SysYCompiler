@@ -69,6 +69,11 @@ public record MipsExecutionStrategy(ProcessExecutor executor) implements TestStr
             String normalizedActual = actualOutput.replaceAll("\\r\\n", "\n").trim();
             String normalizedExpected = expectedOutput.replaceAll("\\r\\n", "\n").trim();
 
+            Path statsFile = tmpDir.resolve("InstructionStatistics.txt");
+            if (Files.exists(statsFile)) {
+                logger.log("InstructionStatistics.txt", statsFile);
+            }
+
             if (normalizedActual.equals(normalizedExpected)) {
                 return new TestResult.Passed(actualOutput);
             } else {
