@@ -1,10 +1,8 @@
-package top.tsxb.compiler.frontend;
+package top.tsxb.compiler.frontend.semantic;
 
 import top.tsxb.compiler.common.CompilerStage;
 import top.tsxb.compiler.common.ErrorReporter;
 import top.tsxb.compiler.frontend.parser.cst.CstNode;
-import top.tsxb.compiler.frontend.semantic.AstBuilder;
-import top.tsxb.compiler.frontend.semantic.TypeChecker;
 import top.tsxb.compiler.frontend.semantic.ast.AstNode;
 import top.tsxb.compiler.frontend.semantic.ast.CompUnit;
 import top.tsxb.compiler.frontend.semantic.sym.SymbolTable;

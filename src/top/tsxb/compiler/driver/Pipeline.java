@@ -8,15 +8,15 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import top.tsxb.compiler.backend.IrGenStage;
-import top.tsxb.compiler.backend.MipsGenStage;
-import top.tsxb.compiler.backend.OptimizeStage;
+import top.tsxb.compiler.backend.llvm.IrGenStage;
+import top.tsxb.compiler.backend.mips.MipsGenStage;
+import top.tsxb.compiler.backend.opti.OptimizeStage;
 import top.tsxb.compiler.common.CompilerStage;
 import top.tsxb.compiler.common.ErrorEntry;
 import top.tsxb.compiler.common.ErrorReporter;
-import top.tsxb.compiler.frontend.LexerStage;
-import top.tsxb.compiler.frontend.ParserStage;
-import top.tsxb.compiler.frontend.SemanticStage;
+import top.tsxb.compiler.frontend.lexer.LexerStage;
+import top.tsxb.compiler.frontend.parser.ParserStage;
+import top.tsxb.compiler.frontend.semantic.SemanticStage;
 
 /**
  * The type Pipeline.

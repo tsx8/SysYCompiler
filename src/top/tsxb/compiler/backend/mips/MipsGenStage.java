@@ -1,6 +1,5 @@
-package top.tsxb.compiler.backend;
+package top.tsxb.compiler.backend.mips;
 
-import top.tsxb.compiler.backend.mips.MipsBuilder;
 import top.tsxb.compiler.common.CompilerStage;
 import top.tsxb.compiler.common.ErrorReporter;
 

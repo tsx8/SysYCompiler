@@ -1,6 +1,5 @@
-package top.tsxb.compiler.backend;
+package top.tsxb.compiler.backend.llvm;
 
-import top.tsxb.compiler.backend.llvm.IrBuilder;
 import top.tsxb.compiler.common.CompilerStage;
 import top.tsxb.compiler.common.ErrorReporter;
 import top.tsxb.compiler.frontend.semantic.ast.AstNode;

@@ -1,4 +1,4 @@
-package top.tsxb.compiler.backend.opti;
+package top.tsxb.compiler.backend.mips;
 
 import top.tsxb.compiler.ir.base.Value;
 import top.tsxb.compiler.ir.inst.Instruction;

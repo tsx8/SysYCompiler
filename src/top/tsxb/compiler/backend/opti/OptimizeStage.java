@@ -1,8 +1,7 @@
-package top.tsxb.compiler.backend;
+package top.tsxb.compiler.backend.opti;
 
 import java.util.Objects;
 
-import top.tsxb.compiler.backend.opti.PassManager;
 import top.tsxb.compiler.common.CompilerStage;
 import top.tsxb.compiler.common.ErrorReporter;
 import top.tsxb.compiler.ir.structure.Module;

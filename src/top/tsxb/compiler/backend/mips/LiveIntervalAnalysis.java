@@ -1,6 +1,5 @@
 package top.tsxb.compiler.backend.mips;
 
-import top.tsxb.compiler.backend.opti.LivenessAnalysis;
 import top.tsxb.compiler.ir.base.Value;
 import top.tsxb.compiler.ir.inst.Instruction;
 import top.tsxb.compiler.ir.structure.BasicBlock;

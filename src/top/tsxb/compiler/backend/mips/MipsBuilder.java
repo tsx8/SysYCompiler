@@ -6,7 +6,6 @@ import top.tsxb.compiler.ir.base.*;
 import top.tsxb.compiler.ir.constant.*;
 import top.tsxb.compiler.ir.structure.Module;
 import top.tsxb.compiler.ir.type.*;
-import top.tsxb.compiler.backend.opti.LivenessAnalysis;
 
 import java.util.*;
 
