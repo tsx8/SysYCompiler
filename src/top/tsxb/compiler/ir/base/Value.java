@@ -28,11 +28,11 @@ public abstract class Value {
         this.name = name;
     }
 
-    public void addUse(Use use) {
+    public synchronized void addUse(Use use) {
         useList.add(use);
     }
 
-    public void removeUseOf(User user) {
+    public synchronized void removeUseOf(User user) {
         for (Iterator<Use> iterator = useList.iterator(); iterator.hasNext();) {
             Use use = iterator.next();
             if (use.user() == user) {
@@ -42,7 +42,7 @@ public abstract class Value {
         }
     }
 
-    public void replaceAllUsesWith(Value replacement) {
+    public synchronized void replaceAllUsesWith(Value replacement) {
         var usesSnapshot = new ArrayList<>(useList);
         for (Use use : usesSnapshot) {
             use.user().replaceOperand(this, replacement);
@@ -50,7 +50,7 @@ public abstract class Value {
         useList.clear();
     }
 
-    public boolean hasUses() {
+    public synchronized boolean hasUses() {
         return !useList.isEmpty();
     }
 

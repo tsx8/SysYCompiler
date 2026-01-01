@@ -27,6 +27,8 @@ public class PassManager {
     public static PassManager createDefault() {
         PassManager manager = new PassManager();
         manager.register(new Mem2RegPass());
+        manager.register(new ConstantFoldingPass());
+        manager.register(new DeadCodeEliminationPass());
         return manager;
     }
 }

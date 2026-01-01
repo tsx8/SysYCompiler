@@ -37,6 +37,12 @@ public abstract class User extends Value {
         }
     }
 
+    public void dropAllReferences() {
+        for (int i = 0; i < operands.size(); i++) {
+            setOperand(i, null);
+        }
+    }
+
     public void replaceOperand(Value oldValue, Value newValue) {
         for (int i = 0; i < operands.size(); i++) {
             if (operands.get(i) == oldValue) {
