@@ -50,6 +50,7 @@ public class LoopStrengthReductionPass implements Pass {
         DominatorAnalysis.DominatorInfo domInfo = DominatorAnalysis.computeDominators(function);
 
         for (BasicBlock n : function.getBasicBlocks()) {
+            if (!domInfo.dominators().containsKey(n)) continue;
             for (BasicBlock d : cfg.successors().getOrDefault(n, List.of())) {
                 if (domInfo.dominators().get(n).contains(d)) {
                     // Back-edge n -> d found. d is header, n is latch.

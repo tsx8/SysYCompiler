@@ -24,6 +24,7 @@ public class LoopAnalysis {
 
         // Find back-edges (n -> d where d dominates n)
         for (BasicBlock n : function.getBasicBlocks()) {
+            if (!domInfo.dominators().containsKey(n)) continue;
             List<BasicBlock> successors = cfg.successors().getOrDefault(n, List.of());
             for (BasicBlock d : successors) {
                 if (domInfo.dominators().get(n).contains(d)) {

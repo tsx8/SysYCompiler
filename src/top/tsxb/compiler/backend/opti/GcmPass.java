@@ -218,7 +218,9 @@ public class GcmPass implements Pass {
             if (op instanceof Instruction opInst) {
                 scheduleEarly(opInst, root);
                 BasicBlock opBlock = earlyBlock.get(opInst);
-                if (domDepth.get(opBlock) > domDepth.get(best)) {
+                Integer opDepth = domDepth.get(opBlock);
+                Integer bestDepth = domDepth.get(best);
+                if (opDepth != null && bestDepth != null && opDepth > bestDepth) {
                     best = opBlock;
                 }
             }
