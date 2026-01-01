@@ -40,6 +40,7 @@ public class PassManager {
         manager.register(new Mem2RegPass());
         manager.register(new ConstantFoldingPass());
         manager.register(new SimplifyCfgPass());
+        manager.register(new LoopUnrollingPass());
         manager.register(new DeadCodeEliminationPass());
         return manager;
     }

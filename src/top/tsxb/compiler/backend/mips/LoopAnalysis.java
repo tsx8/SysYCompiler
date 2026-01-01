@@ -41,7 +41,7 @@ public class LoopAnalysis {
         Set<BasicBlock> loopNodes = new LinkedHashSet<>();
         loopNodes.add(d);
         loopNodes.add(n);
-        
+
         if (n == d) return loopNodes;
 
         Queue<BasicBlock> queue = new LinkedList<>();
@@ -61,9 +61,5 @@ public class LoopAnalysis {
 
     public int getLoopDepth(BasicBlock bb) {
         return loopDepth.getOrDefault(bb, 0);
-    }
-
-    public Map<BasicBlock, Integer> getLoopDepthMap() {
-        return loopDepth;
     }
 }

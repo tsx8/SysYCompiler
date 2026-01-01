@@ -34,6 +34,10 @@ public class Function extends GlobalValue {
         resolveLocalName(basicBlock);
     }
 
+    public void removeBasicBlock(BasicBlock basicBlock) {
+        basicBlocks.remove(basicBlock);
+    }
+
     public void resolveLocalName(Value value) {
         boolean needsName = (value instanceof BasicBlock) || !(value.getType() instanceof NoneType);
         if (!needsName) {
