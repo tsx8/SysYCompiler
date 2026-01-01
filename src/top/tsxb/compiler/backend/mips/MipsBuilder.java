@@ -6,16 +6,18 @@ import top.tsxb.compiler.ir.base.*;
 import top.tsxb.compiler.ir.constant.*;
 import top.tsxb.compiler.ir.structure.Module;
 import top.tsxb.compiler.ir.type.*;
+import top.tsxb.compiler.backend.opti.LivenessAnalysis;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class MipsBuilder {
     private final Module module;
     private final StringBuilder sb = new StringBuilder();
     private final Map<Value, Integer> stackOffsets = new HashMap<>();
+    private Map<Value, MipsRegister> regMapping = new HashMap<>();
+    private Map<Value, LiveInterval> intervals = new HashMap<>();
+    private Map<Instruction, Integer> instToId = new HashMap<>();
+    private Set<MipsRegister> usedCalleeSaved = new HashSet<>();
     private int currentStackSize;
     private int brCounter = 0;
 
@@ -147,24 +149,55 @@ public class MipsBuilder {
     private void genFunction(Function func) {
         sb.append(getLabel(func)).append(":\n");
 
+        // Register Allocation
+        LivenessAnalysis liveness = new LivenessAnalysis(func);
+        liveness.analyze();
+        LiveIntervalAnalysis intervalAnalysis = new LiveIntervalAnalysis(func, liveness);
+        intervalAnalysis.analyze();
+        this.intervals = intervalAnalysis.getIntervalMap();
+        this.instToId = intervalAnalysis.getInstToId();
+        LinearScanAllocator allocator = new LinearScanAllocator(intervalAnalysis.getIntervals());
+        allocator.allocate();
+        this.regMapping = allocator.getRegMapping();
+        this.usedCalleeSaved = allocator.getUsedCalleeSaved();
+
         calculateStackFrame(func);
 
         sb.append("    # Prologue\n");
         addI("$sp", "$sp", -currentStackSize);
         storeMem("$ra", currentStackSize - 4, "$sp");
         storeMem("$fp", currentStackSize - 8, "$sp");
+        
+        // Save callee-saved registers
+        int regOffset = currentStackSize - 12;
+        for (MipsRegister reg : usedCalleeSaved) {
+            storeMem(reg.getName(), regOffset, "$sp");
+            regOffset -= 4;
+        }
+        
         addI("$fp", "$sp", currentStackSize);
 
         List<Argument> args = func.getArguments();
         for (int i = 0; i < args.size(); i++) {
             Argument arg = args.get(i);
-            int offset = stackOffsets.get(arg);
-            if (i < 4) {
-                storeMem("$a" + i, offset, "$fp");
+            MipsRegister reg = regMapping.get(arg);
+            if (reg != null) {
+                if (i < 4) {
+                    sb.append("    move ").append(reg.getName()).append(", $a").append(i).append("\n");
+                } else {
+                    loadMem(reg.getName(), (i - 4) * 4, "$fp");
+                }
             } else {
-                int callerOffset = (i - 4) * 4;
-                loadMem("$t0", callerOffset, "$fp");
-                storeMem("$t0", offset, "$fp");
+                // Spilled or not used
+                Integer offset = stackOffsets.get(arg);
+                if (offset != null) {
+                    if (i < 4) {
+                        storeMem("$a" + i, offset, "$fp");
+                    } else {
+                        loadMem("$t0", (i - 4) * 4, "$fp");
+                        storeMem("$t0", offset, "$fp");
+                    }
+                }
             }
         }
 
@@ -174,16 +207,25 @@ public class MipsBuilder {
                 genInstruction(inst);
             }
         }
+        
+        // Epilogue (before return)
+        // Note: genRet will handle the actual jr $ra, but we need to restore registers there or here.
+        // For simplicity, I'll add a restore logic in genRet.
         sb.append("\n");
     }
 
     private void calculateStackFrame(Function func) {
         stackOffsets.clear();
-        int offset = -12; // -4: ra, -8: fp
+        int offset = -8; // -4: ra, -8: fp
+        
+        // Space for callee-saved registers
+        offset -= usedCalleeSaved.size() * 4;
 
         for (Argument arg : func.getArguments()) {
-            stackOffsets.put(arg, offset);
-            offset -= 4;
+            if (!regMapping.containsKey(arg)) {
+                stackOffsets.put(arg, offset);
+                offset -= 4;
+            }
         }
 
         for (BasicBlock bb : func.getBasicBlocks()) {
@@ -193,7 +235,7 @@ public class MipsBuilder {
                     size = (size + 3) / 4 * 4; // Align to 4 bytes
                     offset -= size;
                     stackOffsets.put(inst, offset);
-                } else if (!(inst.getType() instanceof NoneType)) {
+                } else if (!(inst.getType() instanceof NoneType) && !regMapping.containsKey(inst)) {
                     offset -= 4;
                     stackOffsets.put(inst, offset);
                 }
@@ -230,6 +272,11 @@ public class MipsBuilder {
         } else if (val instanceof AllocaInst alloca) {
             int dataOffset = getAllocaDataOffset(alloca);
             addI(reg, "$fp", dataOffset);
+        } else if (regMapping.containsKey(val)) {
+            MipsRegister srcReg = regMapping.get(val);
+            if (!srcReg.getName().equals(reg)) {
+                sb.append("    move ").append(reg).append(", ").append(srcReg.getName()).append("\n");
+            }
         } else {
             Integer offset = stackOffsets.get(val);
             if (offset == null) {
@@ -237,16 +284,23 @@ public class MipsBuilder {
                     sb.append("    la ").append(reg).append(", ").append(getLabel(gv)).append("\n");
                     return;
                 }
-                throw new RuntimeException("Value not found in stack: " + val);
+                throw new RuntimeException("Value not found in stack or register: " + val);
             }
             loadMem(reg, offset, "$fp");
         }
     }
 
     private void storeValue(Value inst, String reg) {
-        Integer offset = stackOffsets.get(inst);
-        if (offset != null) {
-            storeMem(reg, offset, "$fp");
+        if (regMapping.containsKey(inst)) {
+            MipsRegister destReg = regMapping.get(inst);
+            if (!destReg.getName().equals(reg)) {
+                sb.append("    move ").append(destReg.getName()).append(", ").append(reg).append("\n");
+            }
+        } else {
+            Integer offset = stackOffsets.get(inst);
+            if (offset != null) {
+                storeMem(reg, offset, "$fp");
+            }
         }
     }
 
@@ -612,6 +666,14 @@ public class MipsBuilder {
         if (inst.getNumOperands() > 0) {
             loadValue(inst.getOperand(0), "$v0");
         }
+        
+        // Restore callee-saved registers
+        int regOffset = currentStackSize - 12;
+        for (MipsRegister reg : usedCalleeSaved) {
+            loadMem(reg.getName(), regOffset, "$sp");
+            regOffset -= 4;
+        }
+        
         loadMem("$ra", currentStackSize - 4, "$sp");
         loadMem("$fp", currentStackSize - 8, "$sp");
         addI("$sp", "$sp", currentStackSize);
@@ -621,6 +683,28 @@ public class MipsBuilder {
     private void genCall(CallInst inst) {
         Function target = (Function) inst.getOperand(0);
         int numArgs = inst.getNumOperands() - 1;
+        
+        // Save caller-saved registers that are live across this call
+        int instId = instToId.get(inst);
+        List<MipsRegister> toSave = new ArrayList<>();
+        for (Map.Entry<Value, MipsRegister> entry : regMapping.entrySet()) {
+            MipsRegister reg = entry.getValue();
+            if (reg.isCallerSaved()) {
+                LiveInterval interval = intervals.get(entry.getKey());
+                if (interval != null && interval.getStart() < instId && interval.getEnd() > instId) {
+                    toSave.add(reg);
+                }
+            }
+        }
+
+        // Save to stack (below current sp)
+        if (!toSave.isEmpty()) {
+            addI("$sp", "$sp", -toSave.size() * 4);
+            for (int i = 0; i < toSave.size(); i++) {
+                storeMem(toSave.get(i).getName(), i * 4, "$sp");
+            }
+        }
+
         int stackArgs = Math.max(0, numArgs - 4);
         int stackSpace = (stackArgs * 4 + 7) / 8 * 8;
 
@@ -642,6 +726,14 @@ public class MipsBuilder {
 
         if (stackSpace > 0) {
             addI("$sp", "$sp", stackSpace);
+        }
+
+        // Restore caller-saved registers
+        if (!toSave.isEmpty()) {
+            for (int i = 0; i < toSave.size(); i++) {
+                loadMem(toSave.get(i).getName(), i * 4, "$sp");
+            }
+            addI("$sp", "$sp", toSave.size() * 4);
         }
 
         if (!(inst.getType() instanceof NoneType)) {
