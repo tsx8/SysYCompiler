@@ -290,7 +290,7 @@ public class MipsBuilder {
         intervalAnalysis.analyze();
         this.intervals = intervalAnalysis.getIntervalMap();
         this.instToId = intervalAnalysis.getInstToId();
-        LinearScanAllocator allocator = new LinearScanAllocator(intervalAnalysis.getIntervals());
+        GraphColoringRegAlloc allocator = new GraphColoringRegAlloc(intervalAnalysis.getIntervals());
         allocator.allocate();
         this.regMapping = allocator.getRegMapping();
         this.usedCalleeSaved = allocator.getUsedCalleeSaved();
