@@ -47,8 +47,8 @@ public class LiveIntervalAnalysis {
                         Value incoming = phi.getOperand(i);
                         LiveInterval incomingInterval = intervals.get(incoming);
                         if (incomingInterval != null) {
-                            phiInterval.addHint(incomingInterval);
-                            incomingInterval.addHint(phiInterval);
+                            phiInterval.addPhiHint(incomingInterval);
+                            incomingInterval.addPhiHint(phiInterval);
                         }
                     }
                 }

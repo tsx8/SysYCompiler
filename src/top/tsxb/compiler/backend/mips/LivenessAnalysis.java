@@ -3,6 +3,7 @@ package top.tsxb.compiler.backend.mips;
 import top.tsxb.compiler.ir.base.Value;
 import top.tsxb.compiler.ir.inst.Instruction;
 import top.tsxb.compiler.ir.inst.BrInst;
+import top.tsxb.compiler.ir.inst.PhiInst;
 import top.tsxb.compiler.ir.structure.BasicBlock;
 import top.tsxb.compiler.ir.structure.Function;
 import top.tsxb.compiler.ir.structure.GlobalVariable;
@@ -17,6 +18,8 @@ public class LivenessAnalysis {
     private final Map<BasicBlock, Set<Value>> liveOut = new LinkedHashMap<>();
     private final Map<BasicBlock, Set<Value>> def = new LinkedHashMap<>();
     private final Map<BasicBlock, Set<Value>> use = new LinkedHashMap<>();
+    // Phi uses: for each block, what values are used by Phi nodes in successor blocks
+    private final Map<BasicBlock, Set<Value>> phiUse = new LinkedHashMap<>();
     private final Map<BasicBlock, List<BasicBlock>> successors = new LinkedHashMap<>();
     private final Map<BasicBlock, List<BasicBlock>> predecessors = new LinkedHashMap<>();
 
@@ -34,6 +37,7 @@ public class LivenessAnalysis {
         for (BasicBlock bb : function.getBasicBlocks()) {
             successors.put(bb, new ArrayList<>());
             predecessors.putIfAbsent(bb, new ArrayList<>());
+            phiUse.put(bb, new LinkedHashSet<>());
         }
 
         for (BasicBlock bb : function.getBasicBlocks()) {
@@ -61,6 +65,14 @@ public class LivenessAnalysis {
             Set<Value> bbDef = new LinkedHashSet<>();
             Set<Value> bbUse = new LinkedHashSet<>();
             for (Instruction inst : bb.getInstructions()) {
+                // Skip Phi operands - they're handled specially
+                if (inst instanceof PhiInst) {
+                    // Phi defs
+                    if (isAllocatable(inst)) {
+                        bbDef.add(inst);
+                    }
+                    continue;
+                }
                 // Use
                 for (int i = 0; i < inst.getNumOperands(); i++) {
                     Value op = inst.getOperand(i);
@@ -77,6 +89,24 @@ public class LivenessAnalysis {
             use.put(bb, bbUse);
             liveIn.put(bb, new LinkedHashSet<>());
             liveOut.put(bb, new LinkedHashSet<>());
+        }
+        
+        // Compute Phi uses: for each predecessor, collect the values used by Phi in successors
+        for (BasicBlock bb : function.getBasicBlocks()) {
+            for (Instruction inst : bb.getInstructions()) {
+                if (inst instanceof PhiInst phi) {
+                    Map<BasicBlock, Value> incoming = phi.getIncoming();
+                    for (Map.Entry<BasicBlock, Value> entry : incoming.entrySet()) {
+                        BasicBlock pred = entry.getKey();
+                        Value val = entry.getValue();
+                        if (isAllocatable(val) && phiUse.containsKey(pred)) {
+                            phiUse.get(pred).add(val);
+                        }
+                    }
+                } else {
+                    break; // Phis are always at the beginning
+                }
+            }
         }
     }
 
@@ -98,11 +128,14 @@ public class LivenessAnalysis {
                 Set<Value> oldLiveIn = new LinkedHashSet<>(liveIn.get(bb));
                 Set<Value> oldLiveOut = new LinkedHashSet<>(liveOut.get(bb));
 
-                // Out[B] = Union(In[S] for S in successors(B))
+                // Out[B] = Union(In[S] for S in successors(B)) + PhiUse[B]
+                // where PhiUse[B] are values used by Phi nodes in successors
                 Set<Value> newLiveOut = new LinkedHashSet<>();
                 for (BasicBlock succ : successors.get(bb)) {
                     newLiveOut.addAll(liveIn.get(succ));
                 }
+                // Add values needed for Phi nodes at successor edges
+                newLiveOut.addAll(phiUse.get(bb));
                 liveOut.put(bb, newLiveOut);
 
                 // In[B] = Use[B] Union (Out[B] - Def[B])

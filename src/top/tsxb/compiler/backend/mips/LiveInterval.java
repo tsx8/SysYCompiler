@@ -12,6 +12,7 @@ public class LiveInterval implements Comparable<LiveInterval> {
     private boolean spansCall;
     private double weight;
     private final List<LiveInterval> hints = new ArrayList<>();
+    private final List<LiveInterval> phiHints = new ArrayList<>();
 
     public LiveInterval(Value value) {
         this.value = value;
@@ -21,14 +22,18 @@ public class LiveInterval implements Comparable<LiveInterval> {
         this.weight = 0.0;
     }
 
-    public void addHint(LiveInterval interval) {
-        if (interval != null && !hints.contains(interval)) {
-            hints.add(interval);
+    public void addPhiHint(LiveInterval interval) {
+        if (interval != null && !phiHints.contains(interval)) {
+            phiHints.add(interval);
         }
     }
 
     public List<LiveInterval> getHints() {
         return hints;
+    }
+
+    public List<LiveInterval> getPhiHints() {
+        return phiHints;
     }
 
     public Value getValue() {

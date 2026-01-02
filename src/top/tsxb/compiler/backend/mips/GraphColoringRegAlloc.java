@@ -4,6 +4,31 @@ import top.tsxb.compiler.ir.base.Value;
 import java.util.*;
 
 public class GraphColoringRegAlloc {
+    private static class Move {
+        LiveInterval u, v;
+        boolean isPhi;
+
+        Move(LiveInterval u, LiveInterval v, boolean isPhi) {
+            this.u = u;
+            this.v = v;
+            this.isPhi = isPhi;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            Move move = (Move) o;
+            return (Objects.equals(u, move.u) && Objects.equals(v, move.v)) ||
+                   (Objects.equals(u, move.v) && Objects.equals(v, move.u));
+        }
+
+        @Override
+        public int hashCode() {
+            return u.hashCode() ^ v.hashCode();
+        }
+    }
+
     private final List<LiveInterval> intervals;
     private final int K;
     private final List<MipsRegister> allocatableRegs;
@@ -11,12 +36,17 @@ public class GraphColoringRegAlloc {
     private final Map<LiveInterval, Set<LiveInterval>> adjList = new HashMap<>();
     private final Map<LiveInterval, Integer> degree = new HashMap<>();
 
-    private final Set<LiveInterval> simplifyWorklist = new HashSet<>();
-    private final Set<LiveInterval> spillWorklist = new HashSet<>();
-    private final Set<LiveInterval> freezeWorklist = new HashSet<>();
+    private final Set<LiveInterval> simplifyWorklist = new LinkedHashSet<>();
+    private final Set<LiveInterval> spillWorklist = new LinkedHashSet<>();
+    private final Set<LiveInterval> freezeWorklist = new LinkedHashSet<>();
     private final Stack<LiveInterval> selectStack = new Stack<>();
+    private final Set<LiveInterval> selectStackSet = new HashSet<>();
     
-    private final Set<LiveInterval> moveRelated = new HashSet<>();
+    // Coalescing fields
+    private final Set<Move> worklistMoves = new LinkedHashSet<>();
+    private final Set<Move> activeMoves = new HashSet<>();
+    private final Map<LiveInterval, Set<Move>> moveList = new HashMap<>();
+    private final Map<LiveInterval, LiveInterval> alias = new HashMap<>();
     
     private final Map<Value, MipsRegister> regMapping = new LinkedHashMap<>();
     private final Set<MipsRegister> usedCalleeSaved = new LinkedHashSet<>();
@@ -39,9 +69,11 @@ public class GraphColoringRegAlloc {
         build();
         makeWorklist();
         
-        while (!simplifyWorklist.isEmpty() || !freezeWorklist.isEmpty() || !spillWorklist.isEmpty()) {
+        while (!simplifyWorklist.isEmpty() || !worklistMoves.isEmpty() || !freezeWorklist.isEmpty() || !spillWorklist.isEmpty()) {
             if (!simplifyWorklist.isEmpty()) {
                 simplify();
+            } else if (!worklistMoves.isEmpty()) {
+                coalesce();
             } else if (!freezeWorklist.isEmpty()) {
                 freeze();
             } else {
@@ -53,10 +85,11 @@ public class GraphColoringRegAlloc {
     }
 
     private void build() {
-        // Initialize graph
         for (LiveInterval interval : intervals) {
             adjList.put(interval, new HashSet<>());
             degree.put(interval, 0);
+            moveList.put(interval, new HashSet<>());
+            alias.put(interval, interval);
         }
 
         for (int i = 0; i < intervals.size(); i++) {
@@ -70,11 +103,26 @@ public class GraphColoringRegAlloc {
         }
         
         for (LiveInterval u : intervals) {
+            for (LiveInterval v : u.getPhiHints()) {
+                if (intervals.contains(v) && u != v && !adjList.get(u).contains(v)) {
+                    Move m = new Move(u, v, true);
+                    if (!worklistMoves.contains(m)) {
+                        worklistMoves.add(m);
+                        moveList.get(u).add(m);
+                        moveList.get(v).add(m);
+                    }
+                }
+            }
+        }
+
+        for (LiveInterval u : intervals) {
             for (LiveInterval v : u.getHints()) {
-                if (intervals.contains(v)) {
-                    if (!interferes(u, v)) {
-                        moveRelated.add(u);
-                        moveRelated.add(v);
+                if (intervals.contains(v) && !adjList.get(u).contains(v)) {
+                    Move m = new Move(u, v, false);
+                    if (!worklistMoves.contains(m)) {
+                        worklistMoves.add(m);
+                        moveList.get(u).add(m);
+                        moveList.get(v).add(m);
                     }
                 }
             }
@@ -86,12 +134,19 @@ public class GraphColoringRegAlloc {
     }
 
     private void addEdge(LiveInterval u, LiveInterval v) {
-        if (!adjList.get(u).contains(v)) {
-            adjList.get(u).add(v);
-            degree.put(u, degree.get(u) + 1);
+        if (u == v) return;
+        Set<LiveInterval> uAdj = adjList.get(u);
+        Set<LiveInterval> vAdj = adjList.get(v);
+        if (uAdj == null || vAdj == null) return;
+        
+        if (!uAdj.contains(v)) {
+            uAdj.add(v);
+            vAdj.add(u);
             
-            adjList.get(v).add(u);
-            degree.put(v, degree.get(v) + 1);
+            Integer uDeg = degree.get(u);
+            Integer vDeg = degree.get(v);
+            if (uDeg != null) degree.put(u, uDeg + 1);
+            if (vDeg != null) degree.put(v, vDeg + 1);
         }
     }
 
@@ -99,7 +154,7 @@ public class GraphColoringRegAlloc {
         for (LiveInterval i : intervals) {
             if (degree.get(i) >= K) {
                 spillWorklist.add(i);
-            } else if (moveRelated.contains(i)) {
+            } else if (isMoveRelated(i)) {
                 freezeWorklist.add(i);
             } else {
                 simplifyWorklist.add(i);
@@ -107,38 +162,175 @@ public class GraphColoringRegAlloc {
         }
     }
 
+    private LiveInterval getAlias(LiveInterval n) {
+        if (alias.get(n) == n) return n;
+        LiveInterval a = getAlias(alias.get(n));
+        alias.put(n, a);
+        return a;
+    }
+
+    private boolean isMoveRelated(LiveInterval n) {
+        return !nodeMoves(n).isEmpty();
+    }
+
+    private Set<Move> nodeMoves(LiveInterval n) {
+        Set<Move> res = new HashSet<>();
+        for (Move m : moveList.get(n)) {
+            if (activeMoves.contains(m) || worklistMoves.contains(m)) {
+                res.add(m);
+            }
+        }
+        return res;
+    }
+
+    private Set<LiveInterval> adjacent(LiveInterval n) {
+        Set<LiveInterval> res = new HashSet<>();
+        Set<LiveInterval> adj = adjList.get(n);
+        if (adj == null) return res;
+        for (LiveInterval m : adj) {
+            if (!selectStackSet.contains(m) && getAlias(m) == m) {
+                res.add(m);
+            }
+        }
+        return res;
+    }
+
     private void simplify() {
-        Iterator<LiveInterval> it = simplifyWorklist.iterator();
-        LiveInterval n = it.next();
-        it.remove();
+        LiveInterval n = simplifyWorklist.iterator().next();
+        simplifyWorklist.remove(n);
         
         selectStack.push(n);
-        for (LiveInterval m : adjList.get(n)) {
+        selectStackSet.add(n);
+        for (LiveInterval m : adjacent(n)) {
             decrementDegree(m);
         }
     }
     
     private void decrementDegree(LiveInterval m) {
-        if (selectStack.contains(m)) return; // Already removed
+        Integer d = degree.get(m);
+        if (d == null) return;
         
-        int d = degree.get(m);
         degree.put(m, d - 1);
         
         if (d == K) {
+            Set<LiveInterval> nodes = new HashSet<>(adjacent(m));
+            nodes.add(m);
+            for (LiveInterval node : nodes) {
+                enableMoves(node);
+            }
             spillWorklist.remove(m);
-            if (moveRelated.contains(m)) {
+            if (isMoveRelated(m)) {
                 freezeWorklist.add(m);
             } else {
                 simplifyWorklist.add(m);
             }
         }
     }
+
+    private void enableMoves(LiveInterval n) {
+        for (Move m : nodeMoves(n)) {
+            if (activeMoves.contains(m)) {
+                activeMoves.remove(m);
+                worklistMoves.add(m);
+            }
+        }
+    }
+
+    private void addWorkList(LiveInterval u) {
+        Integer uDegree = degree.get(u);
+        if (uDegree != null && uDegree < K && !isMoveRelated(u)) {
+            freezeWorklist.remove(u);
+            simplifyWorklist.add(u);
+        }
+    }
     
+    private void coalesce() {
+        Move m = worklistMoves.iterator().next();
+        LiveInterval x = getAlias(m.u);
+        LiveInterval y = getAlias(m.v);
+        
+        LiveInterval u, v;
+        if (y.getReg() != null) {
+            u = y; v = x;
+        } else {
+            u = x; v = y;
+        }
+        
+        worklistMoves.remove(m);
+        
+        if (u == v) {
+            addWorkList(u);
+        } else if (v.getReg() != null || adjList.get(u).contains(v)) {
+            addWorkList(u);
+            addWorkList(v);
+        } else if (conservative(u, v)) {
+            combine(u, v);
+            addWorkList(u);
+        } else {
+            activeMoves.add(m);
+        }
+    }
+
+    private boolean conservative(LiveInterval u, LiveInterval v) {
+        int k = 0;
+        Set<LiveInterval> union = new HashSet<>(adjacent(u));
+        union.addAll(adjacent(v));
+        for (LiveInterval n : union) {
+            Integer nDeg = degree.get(n);
+            if (nDeg != null && nDeg >= K) {
+                k++;
+            }
+        }
+        return k < K;
+    }
+
+    private void combine(LiveInterval u, LiveInterval v) {
+        if (freezeWorklist.contains(v)) {
+            freezeWorklist.remove(v);
+        } else {
+            spillWorklist.remove(v);
+        }
+        simplifyWorklist.remove(v);
+        
+        alias.put(v, u);
+        moveList.get(u).addAll(moveList.get(v));
+        enableMoves(v);
+        
+        for (LiveInterval t : new HashSet<>(adjacent(v))) {
+            addEdge(t, u);
+            decrementDegree(t);
+        }
+        
+        if (degree.get(u) >= K && freezeWorklist.contains(u)) {
+            freezeWorklist.remove(u);
+            spillWorklist.add(u);
+        }
+    }
+
     private void freeze() {
-        Iterator<LiveInterval> it = freezeWorklist.iterator();
-        LiveInterval u = it.next();
-        it.remove();
+        LiveInterval u = freezeWorklist.iterator().next();
+        freezeWorklist.remove(u);
         simplifyWorklist.add(u);
+        freezeMoves(u);
+    }
+
+    private void freezeMoves(LiveInterval u) {
+        for (Move m : new HashSet<>(nodeMoves(u))) {
+            LiveInterval x = m.u;
+            LiveInterval y = m.v;
+            LiveInterval v;
+            if (getAlias(y) == getAlias(u)) {
+                v = getAlias(x);
+            } else {
+                v = getAlias(y);
+            }
+            activeMoves.remove(m);
+            Integer vDegree = degree.get(v);
+            if (vDegree != null && nodeMoves(v).isEmpty() && vDegree < K) {
+                freezeWorklist.remove(v);
+                simplifyWorklist.add(v);
+            }
+        }
     }
 
     private void selectSpill() {
@@ -156,31 +348,49 @@ public class GraphColoringRegAlloc {
         if (m == null) m = spillWorklist.iterator().next();
         
         spillWorklist.remove(m);
-        selectStack.push(m);
-        for (LiveInterval neighbor : adjList.get(m)) {
-            decrementDegree(neighbor);
-        }
+        simplifyWorklist.add(m);
+        freezeMoves(m);
     }
 
     private void assignColors() {
         while (!selectStack.isEmpty()) {
             LiveInterval n = selectStack.pop();
+            selectStackSet.remove(n);
             Set<MipsRegister> okColors = new HashSet<>(allocatableRegs);
 
             for (LiveInterval w : adjList.get(n)) {
-                MipsRegister wReg = w.getReg();
+                LiveInterval aliasW = getAlias(w);
+                MipsRegister wReg = aliasW.getReg();
                 if (wReg != null) {
                     okColors.remove(wReg);
                 }
+                MipsRegister mappedReg = regMapping.get(aliasW.getValue());
+                if (mappedReg != null) {
+                    okColors.remove(mappedReg);
+                }
+            }
+            
+            if (okColors.isEmpty()) {
+                continue;
             }
             
             MipsRegister color = null;
             
-            for (LiveInterval hint : n.getHints()) {
-                MipsRegister hintReg = hint.getReg();
+            for (LiveInterval hint : n.getPhiHints()) {
+                MipsRegister hintReg = getAlias(hint).getReg();
                 if (hintReg != null && okColors.contains(hintReg)) {
                     color = hintReg;
                     break;
+                }
+            }
+            
+            if (color == null) {
+                for (LiveInterval hint : n.getHints()) {
+                    MipsRegister hintReg = getAlias(hint).getReg();
+                    if (hintReg != null && okColors.contains(hintReg)) {
+                        color = hintReg;
+                        break;
+                    }
                 }
             }
             
@@ -202,7 +412,7 @@ public class GraphColoringRegAlloc {
                 }
             }
             
-            if (color == null && !okColors.isEmpty()) {
+            if (color == null) {
                 color = okColors.iterator().next();
             }
             
@@ -212,6 +422,14 @@ public class GraphColoringRegAlloc {
                 if (color.isCalleeSaved()) {
                     usedCalleeSaved.add(color);
                 }
+            }
+        }
+        
+        for (LiveInterval n : intervals) {
+            LiveInterval a = getAlias(n);
+            if (a != n && a.getReg() != null) {
+                n.setReg(a.getReg());
+                regMapping.put(n.getValue(), a.getReg());
             }
         }
     }

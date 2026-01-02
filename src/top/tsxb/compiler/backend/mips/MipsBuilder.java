@@ -891,15 +891,24 @@ public class MipsBuilder {
 
         Map<PhiInst, Value> assignments = new LinkedHashMap<>();
         Map<PhiInst, Integer> useCount = new HashMap<>();
-        Set<PhiInst> phiSet = new HashSet<>(phis);
 
         for (PhiInst phi : phis) {
             Value incoming = phi.getIncomingValue(current);
             if (incoming != null && incoming != phi) {
-                assignments.put(phi, incoming);
-                if (incoming instanceof PhiInst incomingPhi && phiSet.contains(incomingPhi)) {
-                    useCount.put(incomingPhi, useCount.getOrDefault(incomingPhi, 0) + 1);
+                MipsRegister phiReg = regMapping.get(phi);
+                MipsRegister incomingReg = regMapping.get(incoming);
+                if (incomingReg != null && phiReg == incomingReg) {
+                    continue;
                 }
+                
+                assignments.put(phi, incoming);
+            }
+        }
+        
+        for (PhiInst phi : assignments.keySet()) {
+            Value incoming = assignments.get(phi);
+            if (incoming instanceof PhiInst incomingPhi && assignments.containsKey(incomingPhi)) {
+                useCount.put(incomingPhi, useCount.getOrDefault(incomingPhi, 0) + 1);
             }
         }
 
@@ -913,8 +922,16 @@ public class MipsBuilder {
         while (!ready.isEmpty()) {
             PhiInst phi = ready.poll();
             Value incoming = assignments.get(phi);
-            loadValue(incoming, "$t0");
-            storeValue(phi, "$t0");
+            
+            MipsRegister phiReg = regMapping.get(phi);
+            regMapping.get(incoming);
+
+            if (phiReg != null) {
+                loadValue(incoming, phiReg.getName());
+            } else {
+                loadValue(incoming, "$t0");
+                storeValue(phi, "$t0");
+            }
             assignments.remove(phi);
 
             if (incoming instanceof PhiInst incomingPhi && assignments.containsKey(incomingPhi)) {
