@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Stream;
 
-import top.tsxb.compiler.driver.CompilerConfig;
+import top.tsxb.compiler.CompilerTest;
 import top.tsxb.compiler.driver.Pipeline;
 import top.tsxb.compiler.model.TestCase;
 import top.tsxb.compiler.model.TestResult;
@@ -28,10 +28,10 @@ public class IrExecutionStrategy implements TestStrategy {
     @Override
     public void prepare() throws IOException {
         System.out.println("Prepareing SysY runtime library...");
-        Path libDir = CompilerConfig.LIBSYSY_DIR;
+        Path libDir = CompilerTest.LIBSYSY_DIR;
         Path libSource = libDir.resolve("libsysy.c").toAbsolutePath();
         this.precompiledLibIr = libDir.resolve("lib.ll").toAbsolutePath();
-        var command = new ProcessExecutor.Command(CompilerConfig.CLANG_PATH,
+        var command = new ProcessExecutor.Command(CompilerTest.CLANG_PATH,
             List.of("-S", "-emit-llvm", libSource.toString(), "-o", precompiledLibIr.toString()), libDir,
             Optional.empty());
         var result = executor.execute(command);
@@ -59,7 +59,7 @@ public class IrExecutionStrategy implements TestStrategy {
             logger.log("generated.ll", mainIr);
             Files.writeString(tmpDir.resolve("main.ll"), mainIr);
             Files.copy(precompiledLibIr, tmpDir.resolve("lib.ll"), StandardCopyOption.REPLACE_EXISTING);
-            var linkCommand = new ProcessExecutor.Command(CompilerConfig.LLVM_LINK_PATH,
+            var linkCommand = new ProcessExecutor.Command(CompilerTest.LLVM_LINK_PATH,
                 List.of("main.ll", "lib.ll", "-S", "-o", "out.ll"), tmpDir, Optional.empty());
             var linkResult = executor.execute(linkCommand);
             if (linkResult.exitCode() != 0) {
@@ -68,7 +68,7 @@ public class IrExecutionStrategy implements TestStrategy {
                     linkResult.stderr());
             }
             logger.log("out.ll", tmpDir.resolve("out.ll"));
-            var lliCommand = new ProcessExecutor.Command(CompilerConfig.LLI_PATH, List.of("out.ll"), tmpDir,
+            var lliCommand = new ProcessExecutor.Command(CompilerTest.LLI_PATH, List.of("out.ll"), tmpDir,
                 Optional.of(stdinContent));
             var lliResult = executor.execute(lliCommand);
             String actualOutput = lliResult.stdout();

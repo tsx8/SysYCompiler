@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Stream;
 
-import top.tsxb.compiler.driver.CompilerConfig;
+import top.tsxb.compiler.CompilerTest;
 import top.tsxb.compiler.driver.Pipeline;
 import top.tsxb.compiler.model.TestCase;
 import top.tsxb.compiler.model.TestResult;
@@ -44,7 +44,7 @@ public record MipsExecutionStrategy(ProcessExecutor executor) implements TestStr
             // Run MARS
             // java -jar assets/mars.jar nc test.asm
             var marsCommand = new ProcessExecutor.Command("java", List.of("-jar",
-                Paths.get(CompilerConfig.MARS_PATH).toAbsolutePath().toString(), "nc", mipsFile.toString()), tmpDir,
+                Paths.get(CompilerTest.MARS_PATH).toAbsolutePath().toString(), "nc", mipsFile.toString()), tmpDir,
                 Optional.of(stdinContent));
 
             var marsResult = executor.execute(marsCommand);
