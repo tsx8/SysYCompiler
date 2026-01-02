@@ -39,7 +39,7 @@ public class PassManager {
         manager.register(new FunctionInliningPass());
         manager.register(new GlobalLocalizationPass());
         manager.register(new Mem2RegPass());
-        manager.register(new ConstantFoldingPass());
+        manager.register(new SccpPass());
         manager.register(new GvnPass());
         manager.register(new SimplifyCfgPass());
         manager.register(new TailRecursionEliminationPass());
