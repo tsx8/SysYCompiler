@@ -51,6 +51,20 @@ public class LinearScanAllocator {
 
     private MipsRegister getMipsRegister(LiveInterval i) {
         MipsRegister reg = null;
+
+        // Try to use a hint register if available and free
+        for (LiveInterval hint : i.getHints()) {
+            MipsRegister hintReg = hint.getReg();
+            if (hintReg != null && freeRegs.contains(hintReg)) {
+                // If the interval spans a call, we prefer callee-saved registers.
+                // However, if a hint is available, using it to eliminate a move is often better.
+                // We'll use the hint if it's callee-saved OR if the interval doesn't span a call.
+                // If it spans a call and the hint is caller-saved, we might still use it
+                // but it's a trade-off. For simplicity, let's just use it if it's free.
+                return hintReg;
+            }
+        }
+
         if (i.isSpansCall()) {
             // Strongly prioritize callee-saved ($s) for intervals spanning calls
             for (MipsRegister r : freeRegs) {

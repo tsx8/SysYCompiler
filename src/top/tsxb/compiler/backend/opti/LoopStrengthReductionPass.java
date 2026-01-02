@@ -5,6 +5,7 @@ import top.tsxb.compiler.ir.constant.ConstInt;
 import top.tsxb.compiler.ir.inst.*;
 import top.tsxb.compiler.ir.structure.Module;
 import top.tsxb.compiler.ir.structure.*;
+import top.tsxb.compiler.ir.type.IntType;
 import top.tsxb.compiler.ir.type.PtrType;
 
 import java.util.*;
@@ -88,7 +89,40 @@ public class LoopStrengthReductionPass implements Pass {
         Map<PhiInst, Value> ivs = findInductionVariables(loop);
         if (ivs.isEmpty()) return false;
 
-        // 2. Find GetElementPtrInst (GEP) instructions that use IVs as indices
+        // 2. Find BinaryInst that are linear functions of IVs
+        List<BinaryInst> bins = new ArrayList<>();
+        for (BasicBlock bb : loop.blocks) {
+            for (Instruction inst : bb.getInstructions()) {
+                if (inst instanceof BinaryInst bin && (bin.getOpCode() == OpCode.MUL || bin.getOpCode() == OpCode.ADD)) {
+                    bins.add(bin);
+                }
+            }
+        }
+
+        int phisCreated = 0;
+        for (BinaryInst bin : bins) {
+            if (phisCreated >= 8) break;
+            if (isIvUpdate(bin, ivs, loop)) continue;
+            
+            LinearExpr expr = getLinearExpr(bin, ivs, loop);
+            if (expr != null && expr.iv != null) {
+                // Check if expr.iv is actually a Phi in the current loop header
+                if (expr.iv.getParent() != loop.header) continue;
+                
+                if (isWorthReducing(bin, expr)) {
+                    if (reduceBinaryInst(bin, expr, ivs, loop)) {
+                        changed = true;
+                        phisCreated++;
+                    }
+                }
+            }
+        }
+
+        if (changed) {
+            ivs = findInductionVariables(loop);
+        }
+
+        // 3. Find GetElementPtrInst (GEP) instructions that use IVs as indices
         // Group GEPs by (base, iv, ivIdx, otherIndices) to reuse Phis
         Map<LsrKey, List<GetElementPtrInst>> groups = new LinkedHashMap<>();
         for (BasicBlock bb : loop.blocks) {
@@ -102,12 +136,11 @@ public class LoopStrengthReductionPass implements Pass {
             }
         }
 
-        if (groups.isEmpty()) return false;
+        if (groups.isEmpty()) return changed;
 
-        // 3. Perform reduction for each group
-        int phisCreated = 0;
+        // 4. Perform reduction for each group
         for (Map.Entry<LsrKey, List<GetElementPtrInst>> entry : groups.entrySet()) {
-            if (phisCreated >= 8) break; // Limit register pressure
+            if (phisCreated >= 12) break; // Total limit
             if (!isWorthReducing(entry.getKey(), entry.getValue())) continue;
             
             if (reduceGroup(entry.getKey(), entry.getValue(), ivs, loop)) {
@@ -117,6 +150,150 @@ public class LoopStrengthReductionPass implements Pass {
         }
 
         return changed;
+    }
+
+    private boolean isWorthReducing(BinaryInst bin, LinearExpr expr) {
+        // Multiplication is always worth reducing to addition
+        if (bin.getOpCode() == OpCode.MUL) {
+            // Only reduce if scale is constant
+            return expr.scale instanceof ConstInt;
+        }
+        
+        // For addition, only if it's not a simple increment (which is already an IV)
+        // and it's used in a GEP or multiple times.
+        // For now, let's be conservative and only reduce MUL or complex ADD.
+        if (bin.getOpCode() == OpCode.ADD) {
+            if (!(expr.scale instanceof ConstInt ci && ci.getValue() == 1)) return true;
+            if (!(expr.offset instanceof ConstInt co && co.getValue() == 0)) return true;
+        }
+        return false;
+    }
+
+    private boolean reduceBinaryInst(BinaryInst bin, LinearExpr expr, Map<PhiInst, Value> primaryIvs, Loop loop) {
+        BasicBlock preheader = findPreheader(loop);
+        if (preheader == null) return false;
+
+        Value step = primaryIvs.get(expr.iv);
+        
+        // 1. Initial value in preheader: scale * initial_iv + offset
+        Value initialIv = expr.iv.getIncomingValue(preheader);
+        Value scaledInitial = simplifyMul(expr.scale, initialIv, preheader);
+        Value initialVal = simplifyAdd(scaledInitial, expr.offset, preheader);
+
+        // 2. Phi in header
+        PhiInst phi = new PhiInst(bin.getType(), "lsr.bin", null);
+        loop.header.addFirst(phi);
+        phi.setIncoming(preheader, initialVal);
+
+        // 3. Increment in latch: phi + (scale * step)
+        Value incAmount = simplifyMul(expr.scale, step, preheader);
+        BinaryInst nextVal = new BinaryInst(OpCode.ADD, phi, incAmount, null);
+        int latchBranchIdx = loop.latch.getInstructions().size();
+        if (latchBranchIdx > 0 && isTerminator(loop.latch.getInstructions().get(latchBranchIdx - 1))) {
+            latchBranchIdx--;
+        }
+        loop.latch.getInstructions().add(latchBranchIdx, nextVal);
+        nextVal.setParent(loop.latch);
+        loop.latch.getParent().resolveLocalName(nextVal);
+        
+        phi.setIncoming(loop.latch, nextVal);
+
+        // 4. Replace
+        bin.replaceAllUsesWith(phi);
+        bin.getParent().getInstructions().remove(bin);
+        return true;
+    }
+
+    private record LinearExpr(PhiInst iv, Value scale, Value offset) {}
+
+    private LinearExpr getLinearExpr(Value val, Map<PhiInst, Value> primaryIvs, Loop loop) {
+        if (val instanceof PhiInst phi && primaryIvs.containsKey(phi)) {
+            return new LinearExpr(phi, new ConstInt(IntType.I32, 1), new ConstInt(IntType.I32, 0));
+        }
+        if (isLoopInvariant(val, loop)) {
+            return new LinearExpr(null, new ConstInt(IntType.I32, 0), val);
+        }
+        if (val instanceof BinaryInst bin) {
+            LinearExpr left = getLinearExpr(bin.getOperand(0), primaryIvs, loop);
+            LinearExpr right = getLinearExpr(bin.getOperand(1), primaryIvs, loop);
+            if (left == null || right == null) return null;
+
+            if (bin.getOpCode() == OpCode.ADD) {
+                if (left.iv == null && right.iv != null) {
+                    Value newOffset = simplifyAdd(left.offset, right.offset, null);
+                    return newOffset != null ? new LinearExpr(right.iv, right.scale, newOffset) : null;
+                }
+                if (right.iv == null && left.iv != null) {
+                    Value newOffset = simplifyAdd(left.offset, right.offset, null);
+                    return newOffset != null ? new LinearExpr(left.iv, left.scale, newOffset) : null;
+                }
+                if (left.iv != null && left.iv == right.iv) {
+                    Value newScale = simplifyAdd(left.scale, right.scale, null);
+                    Value newOffset = simplifyAdd(left.offset, right.offset, null);
+                    return (newScale != null && newOffset != null) ? new LinearExpr(left.iv, newScale, newOffset) : null;
+                }
+            } else if (bin.getOpCode() == OpCode.MUL) {
+                if (left.iv == null && right.iv != null) {
+                    Value newScale = simplifyMul(left.offset, right.scale, null);
+                    Value newOffset = simplifyMul(left.offset, right.offset, null);
+                    return (newScale != null && newOffset != null) ? new LinearExpr(right.iv, newScale, newOffset) : null;
+                }
+                if (right.iv == null && left.iv != null) {
+                    Value newScale = simplifyMul(right.offset, left.scale, null);
+                    Value newOffset = simplifyMul(right.offset, left.offset, null);
+                    return (newScale != null && newOffset != null) ? new LinearExpr(left.iv, newScale, newOffset) : null;
+                }
+            }
+        }
+        return null;
+    }
+
+    private boolean isTerminator(Instruction inst) {
+        return inst.getOpCode() == OpCode.RET || inst.getOpCode() == OpCode.BR;
+    }
+
+    private Value simplifyAdd(Value a, Value b, BasicBlock insertAt) {
+        if (a instanceof ConstInt ca && b instanceof ConstInt cb) {
+            return new ConstInt(IntType.I32, ca.getValue() + cb.getValue());
+        }
+        if (a instanceof ConstInt ca && ca.getValue() == 0) return b;
+        if (b instanceof ConstInt cb && cb.getValue() == 0) return a;
+        if (insertAt == null) return null;
+        
+        BinaryInst bin = new BinaryInst(OpCode.ADD, a, b, null);
+        int idx = insertAt.getInstructions().size();
+        if (idx > 0 && isTerminator(insertAt.getInstructions().get(idx - 1))) {
+            idx--;
+        }
+        insertAt.getInstructions().add(idx, bin);
+        bin.setParent(insertAt);
+        insertAt.getParent().resolveLocalName(bin);
+        return bin;
+    }
+
+    private Value simplifyMul(Value a, Value b, BasicBlock insertAt) {
+        if (a instanceof ConstInt ca && b instanceof ConstInt cb) {
+            return new ConstInt(IntType.I32, ca.getValue() * cb.getValue());
+        }
+        if (a instanceof ConstInt ca) {
+            if (ca.getValue() == 0) return new ConstInt(IntType.I32, 0);
+            if (ca.getValue() == 1) return b;
+        }
+        if (b instanceof ConstInt cb) {
+            if (cb.getValue() == 0) return new ConstInt(IntType.I32, 0);
+            if (cb.getValue() == 1) return a;
+        }
+        if (insertAt == null) return null;
+        
+        BinaryInst bin = new BinaryInst(OpCode.MUL, a, b, null);
+        int idx = insertAt.getInstructions().size();
+        if (idx > 0 && isTerminator(insertAt.getInstructions().get(idx - 1))) {
+            idx--;
+        }
+        insertAt.getInstructions().add(idx, bin);
+        bin.setParent(insertAt);
+        insertAt.getParent().resolveLocalName(bin);
+        return bin;
     }
 
     private boolean isWorthReducing(LsrKey key, List<GetElementPtrInst> geps) {
@@ -149,11 +326,20 @@ public class LoopStrengthReductionPass implements Pass {
 
         for (int i = 1; i < gep.getNumOperands(); i++) {
             Value idx = gep.getOperand(i);
-            if (ivs.containsKey(idx)) {
+            LinearExpr expr = getLinearExpr(idx, ivs, loop);
+            if (expr != null && expr.iv != null) {
                 if (iv != null) return null; // Only one IV allowed
-                ivIdx = i;
-                iv = (PhiInst) idx;
-                otherIndices.add(null); // Placeholder for IV
+                // For GEP, we currently only support scale 1 and offset 0 for simplicity.
+                // If we have a non-zero offset or non-one scale, we rely on BinaryInst reduction
+                // to turn it into a primary IV first.
+                if (expr.scale instanceof ConstInt ci && ci.getValue() == 1 && 
+                    expr.offset instanceof ConstInt co && co.getValue() == 0) {
+                    ivIdx = i;
+                    iv = expr.iv;
+                    otherIndices.add(null);
+                } else {
+                    return null;
+                }
             } else if (isLoopInvariant(idx, loop)) {
                 otherIndices.add(idx);
             } else {
@@ -182,7 +368,10 @@ public class LoopStrengthReductionPass implements Pass {
             }
         }
         GetElementPtrInst initialGep = new GetElementPtrInst(key.base, initialIndices, null);
-        int branchIdx = preheader.getInstructions().size() - 1;
+        int branchIdx = preheader.getInstructions().size();
+        if (branchIdx > 0 && isTerminator(preheader.getInstructions().get(branchIdx - 1))) {
+            branchIdx--;
+        }
         preheader.getInstructions().add(branchIdx, initialGep);
         initialGep.setParent(preheader);
         preheader.getParent().resolveLocalName(initialGep);
@@ -212,7 +401,10 @@ public class LoopStrengthReductionPass implements Pass {
         // Incrementing i32* by step is (ptr, step).
         stepIndices.add(step);
         GetElementPtrInst nextPtr = new GetElementPtrInst(ptrPhi, stepIndices, null);
-        int latchBranchIdx = loop.latch.getInstructions().size() - 1;
+        int latchBranchIdx = loop.latch.getInstructions().size();
+        if (latchBranchIdx > 0 && isTerminator(loop.latch.getInstructions().get(latchBranchIdx - 1))) {
+            latchBranchIdx--;
+        }
         loop.latch.getInstructions().add(latchBranchIdx, nextPtr);
         nextPtr.setParent(loop.latch);
         loop.latch.getParent().resolveLocalName(nextPtr);
@@ -259,7 +451,12 @@ public class LoopStrengthReductionPass implements Pass {
         }
         return true;
     }
-
+    private boolean isIvUpdate(BinaryInst bin, Map<PhiInst, Value> ivs, Loop loop) {
+        for (PhiInst phi : ivs.keySet()) {
+            if (phi.getIncomingValue(loop.latch) == bin) return true;
+        }
+        return false;
+    }
     private BasicBlock findPreheader(Loop loop) {
         DominatorAnalysis.Cfg cfg = DominatorAnalysis.computeCfg(loop.header.getParent());
         List<BasicBlock> preds = cfg.predecessors().get(loop.header);

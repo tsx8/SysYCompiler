@@ -1,6 +1,8 @@
 package top.tsxb.compiler.backend.mips;
 
 import top.tsxb.compiler.ir.base.Value;
+import java.util.ArrayList;
+import java.util.List;
 
 public class LiveInterval implements Comparable<LiveInterval> {
     private final Value value;
@@ -11,6 +13,7 @@ public class LiveInterval implements Comparable<LiveInterval> {
     private boolean spilled;
     private boolean spansCall;
     private double weight;
+    private final List<LiveInterval> hints = new ArrayList<>();
 
     public LiveInterval(Value value) {
         this.value = value;
@@ -19,6 +22,16 @@ public class LiveInterval implements Comparable<LiveInterval> {
         this.spilled = false;
         this.spansCall = false;
         this.weight = 0.0;
+    }
+
+    public void addHint(LiveInterval interval) {
+        if (interval != null && !hints.contains(interval)) {
+            hints.add(interval);
+        }
+    }
+
+    public List<LiveInterval> getHints() {
+        return hints;
     }
 
     public Value getValue() {

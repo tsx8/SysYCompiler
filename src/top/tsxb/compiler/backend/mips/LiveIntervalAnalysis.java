@@ -3,6 +3,7 @@ package top.tsxb.compiler.backend.mips;
 import top.tsxb.compiler.ir.base.Value;
 import top.tsxb.compiler.ir.inst.Instruction;
 import top.tsxb.compiler.ir.inst.CallInst;
+import top.tsxb.compiler.ir.inst.PhiInst;
 import top.tsxb.compiler.ir.structure.BasicBlock;
 import top.tsxb.compiler.ir.structure.Function;
 import top.tsxb.compiler.ir.structure.Argument;
@@ -33,6 +34,27 @@ public class LiveIntervalAnalysis {
         linearize();
         computeIntervals();
         checkSpansCall();
+        collectHints();
+    }
+
+    private void collectHints() {
+        for (BasicBlock bb : function.getBasicBlocks()) {
+            for (Instruction inst : bb.getInstructions()) {
+                if (inst instanceof PhiInst phi) {
+                    LiveInterval phiInterval = intervals.get(phi);
+                    if (phiInterval == null) continue;
+
+                    for (int i = 0; i < phi.getNumOperands(); i++) {
+                        Value incoming = phi.getOperand(i);
+                        LiveInterval incomingInterval = intervals.get(incoming);
+                        if (incomingInterval != null) {
+                            phiInterval.addHint(incomingInterval);
+                            incomingInterval.addHint(phiInterval);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private void linearize() {
