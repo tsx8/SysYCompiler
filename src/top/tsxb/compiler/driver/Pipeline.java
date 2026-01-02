@@ -67,6 +67,9 @@ public class Pipeline {
     }
 
     private PipelineResult executeInternal(String sourceCode, String targetStage) {
+        if (targetStage.equals("llvm") && CompilerConfig.OPTIMIZE) {
+            targetStage = "optimize";
+        }
         ErrorReporter localReporter = new ErrorReporter();
         Object artefact = sourceCode;
         String currentReport = "";
