@@ -13,6 +13,9 @@ public class DominatorAnalysis {
 
     public record DominatorInfo(Map<BasicBlock, Set<BasicBlock>> dominators, Map<BasicBlock, BasicBlock> idom,
                                 Map<BasicBlock, List<BasicBlock>> domTree, Map<BasicBlock, Set<BasicBlock>> dominanceFrontier) {
+        public boolean dominates(BasicBlock a, BasicBlock b) {
+            return dominators.containsKey(b) && dominators.get(b).contains(a);
+        }
     }
 
     public static Cfg computeCfg(Function function) {

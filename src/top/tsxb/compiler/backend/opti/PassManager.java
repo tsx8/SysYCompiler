@@ -45,6 +45,7 @@ public class PassManager {
         manager.register(new TailRecursionEliminationPass());
         manager.register(new LoopUnrollingPass());
         manager.register(new LoopStrengthReductionPass());
+        manager.register(new LicmPass());
         manager.register(new GcmPass());
         manager.register(new DeadCodeEliminationPass());
         return manager;
