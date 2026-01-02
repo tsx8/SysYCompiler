@@ -33,7 +33,7 @@ Set `CompilerConfig.CURRENT_HOMEWORK`, `OBJECT_CODE`, and `OPTIMIZE` before runn
 Indent four spaces, keep `UpperCamelCase` classes, `lowerCamelCase` members, and `UPPER_SNAKE_CASE` constants. Implement new traversals by extending the existing `CstVisitor`/`AstVisitor` hierarchies and define grammar additions through the DSL utilities in `Parser.java`. Use `var` only when the type is obvious, prefer `final` for shared dependencies, emit diagnostics through `ErrorReporter`/`BacktrackMgr`, and extend `IrBuilder`/`MipsBuilder` incrementally instead of creating new output layers.
 
 ## Testing Guidelines
-`CompilerTest` picks cases from `testcases/<CURRENT_HOMEWORK>` and writes logs under `out/logs/<timestamp>`, so run it after every semantic, IR, or MIPS change. By default, it uses **parallel execution** to leverage multi-core processors. You can pass specific test case names as arguments to run only those cases (e.g., `java ... CompilerTest testcase1`). For manual LLVM integration and execution, use the `Runner` utility in the `common` package. Keep folder names short so console alignment remains readable, and version-control both `testfile.txt` and `ans.txt` for every new case. Capture `FinalCycle` measurements with `assets/mars.jar` whenever backend logic changes.
+`CompilerTest` picks cases from `testcases/<CURRENT_HOMEWORK>` and writes logs under `out/logs/<timestamp>`, so run it after every semantic, IR, or MIPS change. By default, it uses **parallel execution** to leverage multi-core processors. **Note: Parallel testing has a known bug where `mars.jar` may timeout and cause a CRASH; if this occurs, it can be ignored or the test can be re-run.** To avoid this and speed up the process, it is recommended to **test only a small subset of relevant testcases** by passing their names as arguments (e.g., `java ... CompilerTest testcase1 testcase2`). For manual LLVM integration and execution, use the `Runner` utility in the `common` package. Keep folder names short so console alignment remains readable, and version-control both `testfile.txt` and `ans.txt` for every new case. Capture `FinalCycle` measurements with `assets/mars.jar` whenever backend logic changes.
 
 ## Commit & Pull Request Guidelines
 Commits follow the `type: short imperative summary` style already in history (`feat:`, `refactor:`, `docs:`). Pull requests must call out the affected stage or builder, the compiler switches used (`CURRENT_HOMEWORK`, `OBJECT_CODE`, `OPTIMIZE`), the commands/tests executed, and any performance impact (FinalCycle or IR diff). Link homework issues when relevant and update `CHANGELOG` for stage milestones.
@@ -45,8 +45,8 @@ Commits follow the `type: short imperative summary` style already in history (`f
 Middle-end passes are managed by `PassManager` and run iteratively (up to 15 times) until convergence:
 - **Function Inlining**: Replaces function calls with the function body to reduce overhead.
 - **Mem2Reg**: Promotes `alloca` instructions to SSA registers using dominator tree analysis, significantly reducing memory operations.
-- **GVN (Global Value Numbering)**: Eliminates redundant computations by identifying and merging equivalent expressions.
-- **GCM (Global Code Motion)**: Moves instructions to the least frequently executed basic blocks (hoisting/sinking) while respecting data dependencies.
+- **GVN (Global Value Numbering)**: Eliminates redundant computations by identifying and merging equivalent expressions, and performs memory forwarding to eliminate redundant loads.
+- **GCM (Global Code Motion)**: Moves instructions to the least frequently executed basic blocks (hoisting/sinking) while respecting data dependencies and loop nesting levels.
 - **Loop Unrolling**: Expands loop bodies to reduce branch overhead and expose more optimization opportunities.
 - **Loop Strength Reduction**: Replaces expensive operations (e.g., induction variable multiplication) with cheaper ones (e.g., addition).
 - **Global Localization**: Promotes global variables to local ones within functions where possible, enabling further optimizations like Mem2Reg.
@@ -56,13 +56,13 @@ Middle-end passes are managed by `PassManager` and run iteratively (up to 15 tim
 
 ### Backend Optimizations (MIPS Level)
 Backend optimizations focus on efficient code generation and resource usage:
-- **Linear Scan Register Allocation**: Assigns physical registers to virtual registers based on live interval analysis, minimizing stack spills.
-- **Global Variable Register Allocation**: Assigns physical registers to frequently accessed global variables to reduce memory traffic.
-- **Global Address Caching**: Caches global variable addresses in registers within `MipsBuilder` to avoid redundant address calculations.
+- **Graph Coloring Register Allocation**: Assigns physical registers to virtual registers using an interference graph and heuristics (spill cost, hints), minimizing stack spills and maximizing register reuse.
+- **Global Variable Register Allocation**: Assigns physical registers to frequently accessed global variables (promoted or cached) to reduce memory traffic.
+- **Global Address Caching**: Caches global variable addresses in registers within `MipsBuilder` to avoid redundant `la` (load address) instructions.
 - **Liveness & Loop Analysis**: Provides data flow information and loop depth heuristics to prioritize register allocation for hot code paths.
 - **Stack Frame Optimization**: Eliminates the frame pointer (`$fp`) and optimizes stack space allocation to reduce function prologue/epilogue overhead.
-- **Division/Multiplication Optimization**: Replaces expensive `div` and `mult` instructions with sequences of `sll`, `sra`, `add`, and `sub` using magic numbers (via `DivOptimizer`).
+- **Division/Multiplication Optimization**: Replaces expensive `div` and `mult` instructions with sequences of `sll`, `sra`, `add`, and `sub` using magic numbers (via `DivOptimizer`) and constant multiplication heuristics.
 - **Block Reordering & Layout**: Reorders basic blocks to maximize fall-through branches and reduce explicit `j` instructions.
-- **Phi Elimination Optimization**: Minimizes redundant jumps and moves during SSA deconstruction.
+- **Phi Elimination Optimization**: Minimizes redundant jumps and moves during SSA deconstruction by intelligently ordering moves and handling cycles.
 
 Optimize toward the official score `FinalCycle = DIV*15 + MULT*5 + (JUMP/BRANCH)*2 + MEM*3 + OTHER*1`, prioritizing memory- and branch-reduction even if total instruction count rises slightly.
