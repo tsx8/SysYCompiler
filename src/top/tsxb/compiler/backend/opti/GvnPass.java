@@ -2,17 +2,17 @@ package top.tsxb.compiler.backend.opti;
 
 import top.tsxb.compiler.ir.base.Value;
 import top.tsxb.compiler.ir.inst.*;
-import top.tsxb.compiler.ir.structure.BasicBlock;
-import top.tsxb.compiler.ir.structure.Function;
-import top.tsxb.compiler.ir.structure.Module;
+import top.tsxb.compiler.ir.structure.*;
 
 import java.util.*;
 
 public class GvnPass implements Pass {
     private final Map<Value, Value> replacementMap = new IdentityHashMap<>();
+    private final Set<Function> pureFunctions = new HashSet<>();
 
     @Override
-    public boolean run(Module module) {
+    public boolean run(top.tsxb.compiler.ir.structure.Module module) {
+        analyzePureFunctions(module);
         boolean changed = false;
         for (Function function : module.getFunctionList()) {
             if (function.isDeclaration()) continue;
@@ -63,10 +63,12 @@ public class GvnPass implements Pass {
                 Value ptr = getCanonical(inst.getOperand(1));
                 localMemoryTable.put(ptr, val);
             } else if (inst.getOpCode() == OpCode.CALL) {
-                localMemoryTable.clear();
+                if (!isPureCall(inst)) {
+                    localMemoryTable.clear();
+                }
             }
 
-            if (inst.isPinned()) continue;
+            if (inst.isPinned() && !isPureCall(inst)) continue;
 
             GvnKey key = new GvnKey(inst, this);
             if (localTable.containsKey(key)) {
@@ -137,5 +139,97 @@ public class GvnPass implements Pass {
         public int hashCode() {
             return Objects.hash(op, extra, operands);
         }
+    }
+
+    private void analyzePureFunctions(top.tsxb.compiler.ir.structure.Module module) {
+        pureFunctions.clear();
+        Set<Function> nonPure = new HashSet<>();
+        Map<Function, Set<Function>> callGraph = new HashMap<>();
+
+        for (Function func : module.getFunctionList()) {
+            if (func.isDeclaration()) {
+                nonPure.add(func);
+                continue;
+            }
+
+            boolean sideEffect = false;
+            Set<Function> callees = new HashSet<>();
+            for (BasicBlock bb : func.getBasicBlocks()) {
+                for (Instruction inst : bb.getInstructions()) {
+                    if (inst.getOpCode() == OpCode.STORE) {
+                        Value ptr = inst.getOperand(1);
+                        if (isExternalPointer(ptr)) {
+                            sideEffect = true;
+                            break;
+                        }
+                    } else if (inst.getOpCode() == OpCode.LOAD) {
+                        Value ptr = inst.getOperand(0);
+                        if (isExternalPointer(ptr)) {
+                            if (isVolatilePointer(ptr)) {
+                                sideEffect = true;
+                                break;
+                            }
+                        }
+                    } else if (inst.getOpCode() == OpCode.CALL) {
+                        callees.add((Function) inst.getOperand(0));
+                    }
+                }
+                if (sideEffect) break;
+            }
+
+            if (sideEffect) {
+                nonPure.add(func);
+            } else {
+                callGraph.put(func, callees);
+            }
+        }
+
+        boolean changed = true;
+        while (changed) {
+            changed = false;
+            for (Function func : new ArrayList<>(callGraph.keySet())) {
+                for (Function callee : callGraph.get(func)) {
+                    if (nonPure.contains(callee)) {
+                        nonPure.add(func);
+                        callGraph.remove(func);
+                        changed = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        for (Function func : module.getFunctionList()) {
+            if (!nonPure.contains(func)) {
+                pureFunctions.add(func);
+            }
+        }
+    }
+
+    private boolean isExternalPointer(Value ptr) {
+        Value base = getBase(ptr);
+        return base instanceof GlobalVariable || base instanceof Argument;
+    }
+
+    private boolean isVolatilePointer(Value ptr) {
+        Value base = getBase(ptr);
+        if (base instanceof GlobalVariable gv) {
+            return !gv.isConst();
+        }
+        return base instanceof Argument;
+    }
+
+    private Value getBase(Value v) {
+        while (v instanceof GetElementPtrInst gep) {
+            v = gep.getOperand(0);
+        }
+        return v;
+    }
+
+    private boolean isPureCall(Instruction inst) {
+        if (inst.getOpCode() == OpCode.CALL) {
+            return pureFunctions.contains((Function) inst.getOperand(0));
+        }
+        return false;
     }
 }
