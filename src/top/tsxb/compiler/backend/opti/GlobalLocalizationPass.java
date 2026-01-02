@@ -18,7 +18,7 @@ public class GlobalLocalizationPass implements Pass {
     );
 
     private Map<GlobalVariable, Function> uniqueUserCache;
-    private final Set<String> localizedInFunc = new HashSet<>();
+    private final Set<String> localizedInFunc = new LinkedHashSet<>();
 
     @Override
     public boolean run(top.tsxb.compiler.ir.structure.Module module) {
@@ -33,7 +33,7 @@ public class GlobalLocalizationPass implements Pass {
     }
 
     private void buildUniqueUserCache(top.tsxb.compiler.ir.structure.Module module) {
-        uniqueUserCache = new HashMap<>();
+        uniqueUserCache = new LinkedHashMap<>();
         for (GlobalVariable gv : module.getGlobalList()) {
             Function uniqueFunc = null;
             boolean multiFunc = false;
@@ -76,8 +76,8 @@ public class GlobalLocalizationPass implements Pass {
     }
 
     private Set<GlobalVariable> findWorthItGlobals(Function func) {
-        Set<GlobalVariable> globalsInFunc = new HashSet<>();
-        Set<GlobalVariable> globalsInLoops = new HashSet<>();
+        Set<GlobalVariable> globalsInFunc = new LinkedHashSet<>();
+        Set<GlobalVariable> globalsInLoops = new LinkedHashSet<>();
         
         List<Loop> loops = findLoops(func);
         

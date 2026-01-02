@@ -33,20 +33,20 @@ public class GraphColoringRegAlloc {
     private final int K;
     private final List<MipsRegister> allocatableRegs;
     
-    private final Map<LiveInterval, Set<LiveInterval>> adjList = new HashMap<>();
-    private final Map<LiveInterval, Integer> degree = new HashMap<>();
+    private final Map<LiveInterval, Set<LiveInterval>> adjList = new LinkedHashMap<>();
+    private final Map<LiveInterval, Integer> degree = new LinkedHashMap<>();
 
     private final Set<LiveInterval> simplifyWorklist = new LinkedHashSet<>();
     private final Set<LiveInterval> spillWorklist = new LinkedHashSet<>();
     private final Set<LiveInterval> freezeWorklist = new LinkedHashSet<>();
     private final Stack<LiveInterval> selectStack = new Stack<>();
-    private final Set<LiveInterval> selectStackSet = new HashSet<>();
+    private final Set<LiveInterval> selectStackSet = new LinkedHashSet<>();
     
     // Coalescing fields
     private final Set<Move> worklistMoves = new LinkedHashSet<>();
-    private final Set<Move> activeMoves = new HashSet<>();
-    private final Map<LiveInterval, Set<Move>> moveList = new HashMap<>();
-    private final Map<LiveInterval, LiveInterval> alias = new HashMap<>();
+    private final Set<Move> activeMoves = new LinkedHashSet<>();
+    private final Map<LiveInterval, Set<Move>> moveList = new LinkedHashMap<>();
+    private final Map<LiveInterval, LiveInterval> alias = new LinkedHashMap<>();
     
     private final Map<Value, MipsRegister> regMapping = new LinkedHashMap<>();
     private final Set<MipsRegister> usedCalleeSaved = new LinkedHashSet<>();
@@ -86,9 +86,9 @@ public class GraphColoringRegAlloc {
 
     private void build() {
         for (LiveInterval interval : intervals) {
-            adjList.put(interval, new HashSet<>());
+            adjList.put(interval, new LinkedHashSet<>());
             degree.put(interval, 0);
-            moveList.put(interval, new HashSet<>());
+            moveList.put(interval, new LinkedHashSet<>());
             alias.put(interval, interval);
         }
 
@@ -174,7 +174,7 @@ public class GraphColoringRegAlloc {
     }
 
     private Set<Move> nodeMoves(LiveInterval n) {
-        Set<Move> res = new HashSet<>();
+        Set<Move> res = new LinkedHashSet<>();
         for (Move m : moveList.get(n)) {
             if (activeMoves.contains(m) || worklistMoves.contains(m)) {
                 res.add(m);
@@ -184,7 +184,7 @@ public class GraphColoringRegAlloc {
     }
 
     private Set<LiveInterval> adjacent(LiveInterval n) {
-        Set<LiveInterval> res = new HashSet<>();
+        Set<LiveInterval> res = new LinkedHashSet<>();
         Set<LiveInterval> adj = adjList.get(n);
         if (adj == null) return res;
         for (LiveInterval m : adj) {
@@ -213,7 +213,7 @@ public class GraphColoringRegAlloc {
         degree.put(m, d - 1);
         
         if (d == K) {
-            Set<LiveInterval> nodes = new HashSet<>(adjacent(m));
+            Set<LiveInterval> nodes = new LinkedHashSet<>(adjacent(m));
             nodes.add(m);
             for (LiveInterval node : nodes) {
                 enableMoves(node);
@@ -273,7 +273,7 @@ public class GraphColoringRegAlloc {
 
     private boolean conservative(LiveInterval u, LiveInterval v) {
         int k = 0;
-        Set<LiveInterval> union = new HashSet<>(adjacent(u));
+        Set<LiveInterval> union = new LinkedHashSet<>(adjacent(u));
         union.addAll(adjacent(v));
         for (LiveInterval n : union) {
             Integer nDeg = degree.get(n);
@@ -296,7 +296,7 @@ public class GraphColoringRegAlloc {
         moveList.get(u).addAll(moveList.get(v));
         enableMoves(v);
         
-        for (LiveInterval t : new HashSet<>(adjacent(v))) {
+        for (LiveInterval t : new LinkedHashSet<>(adjacent(v))) {
             addEdge(t, u);
             decrementDegree(t);
         }
@@ -315,7 +315,7 @@ public class GraphColoringRegAlloc {
     }
 
     private void freezeMoves(LiveInterval u) {
-        for (Move m : new HashSet<>(nodeMoves(u))) {
+        for (Move m : new LinkedHashSet<>(nodeMoves(u))) {
             LiveInterval x = m.u;
             LiveInterval y = m.v;
             LiveInterval v;
@@ -356,7 +356,7 @@ public class GraphColoringRegAlloc {
         while (!selectStack.isEmpty()) {
             LiveInterval n = selectStack.pop();
             selectStackSet.remove(n);
-            Set<MipsRegister> okColors = new HashSet<>(allocatableRegs);
+            Set<MipsRegister> okColors = new LinkedHashSet<>(allocatableRegs);
 
             for (LiveInterval w : adjList.get(n)) {
                 LiveInterval aliasW = getAlias(w);

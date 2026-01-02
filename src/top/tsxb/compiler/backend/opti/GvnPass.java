@@ -37,8 +37,8 @@ public class GvnPass implements Pass {
 
     private boolean runOnDomTree(BasicBlock bb, Map<GvnKey, Instruction> valueTable, Map<Value, Value> memoryTable, DominatorAnalysis.DominatorInfo domInfo) {
         boolean changed = false;
-        Map<GvnKey, Instruction> localTable = new HashMap<>(valueTable);
-        Map<Value, Value> localMemoryTable = new HashMap<>(memoryTable);
+        Map<GvnKey, Instruction> localTable = new LinkedHashMap<>(valueTable);
+        Map<Value, Value> localMemoryTable = new LinkedHashMap<>(memoryTable);
         
         Iterator<Instruction> it = bb.getInstructions().iterator();
         while (it.hasNext()) {

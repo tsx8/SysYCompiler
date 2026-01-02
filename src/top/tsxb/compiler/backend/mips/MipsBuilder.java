@@ -19,8 +19,8 @@ public class MipsBuilder {
     private Map<Value, LiveInterval> intervals = new LinkedHashMap<>();
     private Map<Instruction, Integer> instToId = new LinkedHashMap<>();
     private Set<MipsRegister> usedCalleeSaved = new LinkedHashSet<>();
-    private final Map<GlobalValue, String> globalAddrCache = new HashMap<>();
-    private final Map<String, GlobalValue> regToGlobal = new HashMap<>();
+    private final Map<GlobalValue, String> globalAddrCache = new LinkedHashMap<>();
+    private final Map<String, GlobalValue> regToGlobal = new LinkedHashMap<>();
     private int currentStackSize;
     private int brCounter = 0;
     private boolean isLeaf = false;
@@ -187,7 +187,7 @@ public class MipsBuilder {
     }
 
     private Map<BasicBlock, Integer> getPredecessorCounts(Function func) {
-        Map<BasicBlock, Integer> counts = new HashMap<>();
+        Map<BasicBlock, Integer> counts = new LinkedHashMap<>();
         for (BasicBlock bb : func.getBasicBlocks()) {
             counts.put(bb, 0);
         }
@@ -215,7 +215,7 @@ public class MipsBuilder {
 
         Map<BasicBlock, Integer> predCounts = getPredecessorCounts(func);
         List<BasicBlock> reordered = new ArrayList<>();
-        Set<BasicBlock> visited = new HashSet<>();
+        Set<BasicBlock> visited = new LinkedHashSet<>();
 
         BasicBlock current = original.get(0);
         reordered.add(current);
@@ -890,7 +890,7 @@ public class MipsBuilder {
         }
 
         Map<PhiInst, Value> assignments = new LinkedHashMap<>();
-        Map<PhiInst, Integer> useCount = new HashMap<>();
+        Map<PhiInst, Integer> useCount = new LinkedHashMap<>();
 
         for (PhiInst phi : phis) {
             Value incoming = phi.getIncomingValue(current);

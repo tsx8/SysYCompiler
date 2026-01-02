@@ -16,10 +16,10 @@ import java.util.*;
 
 public class GcmPass implements Pass {
     private DominatorAnalysis.DominatorInfo domInfo;
-    private final Map<Instruction, BasicBlock> earlyBlock = new HashMap<>();
-    private final Map<Instruction, BasicBlock> lateBlock = new HashMap<>();
-    private final Map<BasicBlock, Integer> domDepth = new HashMap<>();
-    private final Set<Instruction> visited = new HashSet<>();
+    private final Map<Instruction, BasicBlock> earlyBlock = new LinkedHashMap<>();
+    private final Map<Instruction, BasicBlock> lateBlock = new LinkedHashMap<>();
+    private final Map<BasicBlock, Integer> domDepth = new LinkedHashMap<>();
+    private final Set<Instruction> visited = new LinkedHashSet<>();
 
     @Override
     public boolean run(Module module) {
@@ -145,9 +145,9 @@ public class GcmPass implements Pass {
                 continue;
             }
 
-            Map<Instruction, Integer> inDegree = new HashMap<>();
-            Map<Instruction, List<Instruction>> adj = new HashMap<>();
-            Map<Instruction, Integer> originalIndex = new HashMap<>();
+            Map<Instruction, Integer> inDegree = new LinkedHashMap<>();
+            Map<Instruction, List<Instruction>> adj = new LinkedHashMap<>();
+            Map<Instruction, Integer> originalIndex = new LinkedHashMap<>();
 
             for (int i = 0; i < rest.size(); i++) {
                 Instruction inst = rest.get(i);
