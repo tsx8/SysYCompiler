@@ -80,6 +80,7 @@ public class GlobalLocalizationPass implements Pass {
         Set<GlobalVariable> globalsInLoops = new LinkedHashSet<>();
         
         List<Loop> loops = findLoops(func);
+        boolean isRecursive = isRecursive(func);
         
         for (BasicBlock bb : func.getBasicBlocks()) {
             boolean inLoop = false;
@@ -106,14 +107,33 @@ public class GlobalLocalizationPass implements Pass {
         Set<GlobalVariable> result = new HashSet<>();
         for (GlobalVariable gv : globalsInFunc) {
             if (isOnlyUsedIn(gv, func)) {
+                // If it's recursive and modified, localization might be bad due to syncs
+                if (isRecursive && isModifiedIn(gv, func)) {
+                    continue;
+                }
                 result.add(gv);
                 continue;
             }
             if (globalsInLoops.contains(gv)) {
+                // If it's recursive and modified, localization might be bad due to syncs
+                if (isRecursive && isModifiedIn(gv, func)) {
+                    continue;
+                }
                 result.add(gv);
             }
         }
         return result;
+    }
+
+    private boolean isRecursive(Function func) {
+        for (BasicBlock bb : func.getBasicBlocks()) {
+            for (Instruction inst : bb.getInstructions()) {
+                if (inst instanceof CallInst call && call.getOperand(0) == func) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private boolean isOnlyUsedIn(GlobalVariable gv, Function func) {

@@ -42,6 +42,7 @@ public class PassManager {
         manager.register(new ConstantFoldingPass());
         manager.register(new GvnPass());
         manager.register(new SimplifyCfgPass());
+        manager.register(new TailRecursionEliminationPass());
         manager.register(new LoopUnrollingPass());
         manager.register(new LoopStrengthReductionPass());
         manager.register(new GcmPass());
