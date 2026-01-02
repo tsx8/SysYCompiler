@@ -8,6 +8,11 @@ public class MipsGenStage implements CompilerStage<top.tsxb.compiler.ir.structur
     public StageResult<String> process(top.tsxb.compiler.ir.structure.Module module, ErrorReporter errorReporter) {
         MipsBuilder builder = new MipsBuilder(module);
         String mipsCode = builder.build();
+        
+        // Apply peephole optimization
+        PeepholeOptimizer optimizer = new PeepholeOptimizer(mipsCode);
+        mipsCode = optimizer.optimize();
+        
         return new StageResult<>(mipsCode, mipsCode);
     }
 }
