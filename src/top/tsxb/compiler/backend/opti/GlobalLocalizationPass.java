@@ -13,17 +13,17 @@ import top.tsxb.compiler.ir.constant.ConstInt;
 import java.util.*;
 
 public class GlobalLocalizationPass implements Pass {
-    private static final Set<String> LIB_FUNCS = Set.of(
-        "getint", "getch", "getarray", "putint", "putch", "putarray", "putf", "starttime", "stoptime"
-    );
 
     private Map<GlobalVariable, Function> uniqueUserCache;
     private final Set<String> localizedInFunc = new LinkedHashSet<>();
+    private SideEffectAnalysis sea;
 
     @Override
     public boolean run(top.tsxb.compiler.ir.structure.Module module) {
         localizedInFunc.clear();
         buildUniqueUserCache(module);
+        sea = new SideEffectAnalysis();
+        sea.analyze(module);
         boolean changed = false;
         for (Function func : module.getFunctionList()) {
             if (func.isDeclaration()) continue;
@@ -176,30 +176,31 @@ public class GlobalLocalizationPass implements Pass {
                 if (protectedInsts.contains(inst)) continue;
                 
                 if (inst instanceof CallInst call) {
-                    if (shouldStoreReloadAroundCall(gv, call, func)) {
-                        if (modified) {
-                            it.previous();
-                            LoadInst sLoad = new LoadInst(alloca, null);
-                            sLoad.setParent(bb);
-                            it.add(sLoad);
-                            StoreInst sStore = new StoreInst(sLoad, gv, null);
-                            sStore.setParent(bb);
-                            it.add(sStore);
-                            protectedInsts.add(sStore);
-                            it.next();
-                        }
-                        
-                        if (!isPrivate || modified) {
-                            LoadInst rLoad = new LoadInst(gv, null);
-                            rLoad.setParent(bb);
-                            it.add(rLoad);
-                            StoreInst rStore = new StoreInst(rLoad, alloca, null);
-                            rStore.setParent(bb);
-                            it.add(rStore);
-                            protectedInsts.add(rLoad);
-                        }
-                        continue;
+                    boolean storeNeeded = needsStore(gv, call) && modified;
+                    boolean reloadNeeded = needsReload(gv, call);
+                    
+                    if (storeNeeded) {
+                        it.previous();
+                        LoadInst sLoad = new LoadInst(alloca, null);
+                        sLoad.setParent(bb);
+                        it.add(sLoad);
+                        StoreInst sStore = new StoreInst(sLoad, gv, null);
+                        sStore.setParent(bb);
+                        it.add(sStore);
+                        protectedInsts.add(sStore);
+                        it.next();
                     }
+                    
+                    if (reloadNeeded) {
+                        LoadInst rLoad = new LoadInst(gv, null);
+                        rLoad.setParent(bb);
+                        it.add(rLoad);
+                        StoreInst rStore = new StoreInst(rLoad, alloca, null);
+                        rStore.setParent(bb);
+                        it.add(rStore);
+                        protectedInsts.add(rLoad);
+                    }
+                    if (storeNeeded || reloadNeeded) continue;
                 }
                 
                 for (int j = 0; j < inst.getNumOperands(); j++) {
@@ -332,6 +333,7 @@ public class GlobalLocalizationPass implements Pass {
         BasicBlock entry = func.getBasicBlocks().get(0);
         boolean modified = isModifiedIn(gv, func);
         boolean isPrivate = isOnlyUsedIn(gv, func);
+        Set<Instruction> protectedInsts = new HashSet<>();
 
         for (List<Value> indices : constantIndices) {
             if (isArrayLocalized(gv, func, indices)) continue;
@@ -351,6 +353,9 @@ public class GlobalLocalizationPass implements Pass {
             load.setParent(entry);
             entry.getInstructions().add(idx + 3, store);
             store.setParent(entry);
+            protectedInsts.add(tempGep);
+            protectedInsts.add(load);
+            protectedInsts.add(store);
         }
         if (indexToAlloca.isEmpty()) return false;
 
@@ -358,6 +363,7 @@ public class GlobalLocalizationPass implements Pass {
             ListIterator<Instruction> it = bb.getInstructions().listIterator();
             while (it.hasNext()) {
                 Instruction inst = it.next();
+                if (protectedInsts.contains(inst)) continue;
                 if (inst instanceof GetElementPtrInst gep && gep.getOperand(0) == gv) {
                     List<Value> indices = new ArrayList<>();
                     for (int i = 1; i < gep.getNumOperands(); i++) {
@@ -372,11 +378,14 @@ public class GlobalLocalizationPass implements Pass {
                 }
 
                 if (inst instanceof CallInst call) {
-                    if (shouldStoreReloadAroundCall(gv, call, func)) {
+                    boolean storeNeeded = needsStore(gv, call) && modified;
+                    boolean reloadNeeded = needsReload(gv, call);
+                    
+                    if (storeNeeded || reloadNeeded) {
                         for (Map.Entry<List<Value>, AllocaInst> entry_ : indexToAlloca.entrySet()) {
                             List<Value> indices = entry_.getKey();
                             AllocaInst alloca = entry_.getValue();
-                            if (modified) {
+                            if (storeNeeded) {
                                 it.previous();
                                 LoadInst sLoad = new LoadInst(alloca, null);
                                 sLoad.setParent(bb);
@@ -387,9 +396,11 @@ public class GlobalLocalizationPass implements Pass {
                                 StoreInst sStore = new StoreInst(sLoad, sGep, null);
                                 sStore.setParent(bb);
                                 it.add(sStore);
+                                protectedInsts.add(sGep);
+                                protectedInsts.add(sStore);
                                 it.next();
                             }
-                            if (!isPrivate || modified) {
+                            if (reloadNeeded) {
                                 GetElementPtrInst rGep = new GetElementPtrInst(gv, indices, null);
                                 rGep.setParent(bb);
                                 it.add(rGep);
@@ -399,8 +410,11 @@ public class GlobalLocalizationPass implements Pass {
                                 StoreInst rStore = new StoreInst(rLoad, alloca, null);
                                 rStore.setParent(bb);
                                 it.add(rStore);
+                                protectedInsts.add(rGep);
+                                protectedInsts.add(rLoad);
                             }
                         }
+                        continue;
                     }
                 }
             }
@@ -421,6 +435,8 @@ public class GlobalLocalizationPass implements Pass {
                         StoreInst retStore = new StoreInst(retLoad, retGep, null);
                         retStore.setParent(bb);
                         retIt.add(retStore);
+                        protectedInsts.add(retGep);
+                        protectedInsts.add(retStore);
                     }
                 }
             }
@@ -469,15 +485,102 @@ public class GlobalLocalizationPass implements Pass {
         return sb.toString();
     }
 
-    private boolean shouldStoreReloadAroundCall(GlobalVariable gv, CallInst call, Function currentFunc) {
+    private boolean needsStore(GlobalVariable gv, CallInst call) {
         Value callee = call.getOperand(0);
         if (callee instanceof Function f) {
-            if (LIB_FUNCS.contains(f.getName())) return false;
-            if (isOnlyUsedIn(gv, currentFunc)) {
-                return f == currentFunc;
+            for (int i = 1; i < call.getNumOperands(); i++) {
+                if (getGlobalVariable(call.getOperand(i)) == gv) return true;
             }
+            if (f.isDeclaration()) {
+                return f.getName().equals("putarray");
+            }
+            return sea.references(f, gv);
         }
         return true;
+    }
+
+    private boolean needsReload(GlobalVariable gv, CallInst call) {
+        Value callee = call.getOperand(0);
+        if (callee instanceof Function f) {
+            for (int i = 1; i < call.getNumOperands(); i++) {
+                if (getGlobalVariable(call.getOperand(i)) == gv) return true;
+            }
+            if (f.isDeclaration()) {
+                return f.getName().equals("getarray");
+            }
+            return sea.modifies(f, gv);
+        }
+        return true;
+    }
+
+    private static GlobalVariable getGlobalVariable(Value v) {
+        if (v instanceof GlobalVariable gv) return gv;
+        if (v instanceof GetElementPtrInst gep) {
+            return getGlobalVariable(gep.getOperand(0));
+        }
+        return null;
+    }
+
+    private static class SideEffectAnalysis {
+        private final Map<Function, Set<GlobalVariable>> modSet = new HashMap<>();
+        private final Map<Function, Set<GlobalVariable>> refSet = new HashMap<>();
+        private final Map<Function, Set<Function>> callGraph = new HashMap<>();
+
+        public void analyze(top.tsxb.compiler.ir.structure.Module module) {
+            for (Function func : module.getFunctionList()) {
+                modSet.put(func, new HashSet<>());
+                refSet.put(func, new HashSet<>());
+                callGraph.put(func, new HashSet<>());
+
+                if (func.isDeclaration()) continue;
+
+                for (BasicBlock bb : func.getBasicBlocks()) {
+                    for (Instruction inst : bb.getInstructions()) {
+                        if (inst instanceof LoadInst load) {
+                            GlobalVariable gv = getGlobalVariable(load.getOperand(0));
+                            if (gv != null) refSet.get(func).add(gv);
+                        } else if (inst instanceof StoreInst store) {
+                            GlobalVariable gv = getGlobalVariable(store.getOperand(1));
+                            if (gv != null) modSet.get(func).add(gv);
+                        } else if (inst instanceof CallInst call) {
+                            Value callee = call.getOperand(0);
+                            if (callee instanceof Function f) {
+                                callGraph.get(func).add(f);
+                                // If we pass a pointer to a global variable, assume it's modified/referenced
+                                for (int i = 1; i < call.getNumOperands(); i++) {
+                                    GlobalVariable gv = getGlobalVariable(call.getOperand(i));
+                                    if (gv != null) {
+                                        modSet.get(func).add(gv);
+                                        refSet.get(func).add(gv);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            boolean changed = true;
+            while (changed) {
+                changed = false;
+                for (Function func : module.getFunctionList()) {
+                    Set<GlobalVariable> funcMod = modSet.get(func);
+                    Set<GlobalVariable> funcRef = refSet.get(func);
+                    for (Function callee : callGraph.get(func)) {
+                        if (funcMod.addAll(modSet.get(callee))) changed = true;
+                        if (funcRef.addAll(refSet.get(callee))) changed = true;
+                    }
+                }
+            }
+        }
+
+        public boolean modifies(Function func, GlobalVariable gv) {
+            return modSet.getOrDefault(func, Collections.emptySet()).contains(gv);
+        }
+
+        public boolean references(Function func, GlobalVariable gv) {
+            return refSet.getOrDefault(func, Collections.emptySet()).contains(gv);
+        }
     }
 
     private boolean isModifiedIn(GlobalVariable gv, Function func) {
