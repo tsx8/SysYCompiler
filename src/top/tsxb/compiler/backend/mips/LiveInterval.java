@@ -9,8 +9,6 @@ public class LiveInterval implements Comparable<LiveInterval> {
     private int start;
     private int end;
     private MipsRegister reg;
-    private int stackOffset;
-    private boolean spilled;
     private boolean spansCall;
     private double weight;
     private final List<LiveInterval> hints = new ArrayList<>();
@@ -19,7 +17,6 @@ public class LiveInterval implements Comparable<LiveInterval> {
         this.value = value;
         this.start = Integer.MAX_VALUE;
         this.end = Integer.MIN_VALUE;
-        this.spilled = false;
         this.spansCall = false;
         this.weight = 0.0;
     }
@@ -40,10 +37,6 @@ public class LiveInterval implements Comparable<LiveInterval> {
 
     public double getWeight() {
         return weight;
-    }
-
-    public void setWeight(double weight) {
-        this.weight = weight;
     }
 
     public void addWeight(double weight) {
@@ -79,10 +72,6 @@ public class LiveInterval implements Comparable<LiveInterval> {
         this.reg = reg;
     }
 
-    public void setSpilled(boolean spilled) {
-        this.spilled = spilled;
-    }
-
     public boolean isSpansCall() {
         return spansCall;
     }
@@ -104,6 +93,6 @@ public class LiveInterval implements Comparable<LiveInterval> {
 
     @Override
     public String toString() {
-        return String.format("%s: [%d, %d] -> %s", value.getName(), start, end, reg != null ? reg : "stack(" + stackOffset + ")");
+        return String.format("%s: [%d, %d] -> %s", value.getName(), start, end, reg != null ? reg : "stack");
     }
 }

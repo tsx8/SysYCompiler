@@ -29,35 +29,13 @@ public class LoopAnalysis {
             for (BasicBlock d : successors) {
                 if (domInfo.dominators().get(n).contains(d)) {
                     // Found a back-edge n -> d, d is the loop header
-                    Set<BasicBlock> loopNodes = findLoopNodes(n, d, cfg.predecessors());
+                    Set<BasicBlock> loopNodes = DominatorAnalysis.findLoopBlocks(n, d, cfg.predecessors());
                     for (BasicBlock node : loopNodes) {
                         loopDepth.put(node, loopDepth.get(node) + 1);
                     }
                 }
             }
         }
-    }
-
-    private Set<BasicBlock> findLoopNodes(BasicBlock n, BasicBlock d, Map<BasicBlock, List<BasicBlock>> predecessors) {
-        Set<BasicBlock> loopNodes = new LinkedHashSet<>();
-        loopNodes.add(d);
-        loopNodes.add(n);
-
-        if (n == d) return loopNodes;
-
-        Queue<BasicBlock> queue = new LinkedList<>();
-        queue.add(n);
-
-        while (!queue.isEmpty()) {
-            BasicBlock curr = queue.poll();
-            for (BasicBlock pred : predecessors.getOrDefault(curr, List.of())) {
-                if (!loopNodes.contains(pred)) {
-                    loopNodes.add(pred);
-                    queue.add(pred);
-                }
-            }
-        }
-        return loopNodes;
     }
 
     public int getLoopDepth(BasicBlock bb) {

@@ -154,7 +154,6 @@ public class LinearScanAllocator {
             i.setReg(spill.getReg());
             regMapping.put(i.getValue(), i.getReg());
             regMapping.remove(spill.getValue());
-            spill.setSpilled(true);
             spill.setReg(null);
             active.remove(spill);
             active.add(i);
@@ -164,8 +163,6 @@ public class LinearScanAllocator {
                 }
                 return a.getValue().getName().compareTo(b.getValue().getName());
             });
-        } else {
-            i.setSpilled(true);
         }
     }
 

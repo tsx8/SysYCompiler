@@ -16,7 +16,6 @@ import java.util.*;
 
 public class GcmPass implements Pass {
     private DominatorAnalysis.DominatorInfo domInfo;
-    private LoopAnalysis loopAnalysis;
     private final Map<Instruction, BasicBlock> earlyBlock = new HashMap<>();
     private final Map<Instruction, BasicBlock> lateBlock = new HashMap<>();
     private final Map<BasicBlock, Integer> domDepth = new HashMap<>();
@@ -48,7 +47,7 @@ public class GcmPass implements Pass {
 
     private boolean runOnFunction(Function function) {
         domInfo = DominatorAnalysis.computeDominators(function);
-        loopAnalysis = new LoopAnalysis(function);
+        LoopAnalysis loopAnalysis = new LoopAnalysis(function);
         loopAnalysis.analyze();
         computeDomDepth(function.getBasicBlocks().get(0));
 

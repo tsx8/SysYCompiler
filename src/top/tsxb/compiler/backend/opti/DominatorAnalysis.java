@@ -174,4 +174,24 @@ public class DominatorAnalysis {
         }
         return finger1;
     }
+
+    public static Set<BasicBlock> findLoopBlocks(BasicBlock latch, BasicBlock header, Map<BasicBlock, List<BasicBlock>> predecessors) {
+        Set<BasicBlock> blocks = new LinkedHashSet<>();
+        blocks.add(header);
+        blocks.add(latch);
+        if (latch == header) return blocks;
+
+        Queue<BasicBlock> queue = new LinkedList<>();
+        queue.add(latch);
+        while (!queue.isEmpty()) {
+            BasicBlock curr = queue.poll();
+            for (BasicBlock pred : predecessors.getOrDefault(curr, List.of())) {
+                if (!blocks.contains(pred)) {
+                    blocks.add(pred);
+                    queue.add(pred);
+                }
+            }
+        }
+        return blocks;
+    }
 }

@@ -84,7 +84,7 @@ public class GlobalLocalizationPass implements Pass {
         for (BasicBlock bb : func.getBasicBlocks()) {
             boolean inLoop = false;
             for (Loop loop : loops) {
-                if (loop.blocks.contains(bb)) {
+                if (loop.blocks().contains(bb)) {
                     inLoop = true;
                     break;
                 }
@@ -296,7 +296,7 @@ public class GlobalLocalizationPass implements Pass {
 
         double constantRatio = geps.isEmpty() ? 0 : (double) constantCount / geps.size();
         boolean result;
-        if (allConstant && !uniqueConstantIndices.isEmpty() && constantRatio >= 0.5) {
+        if (allConstant && constantRatio >= 0.5) {
             result = localizeArrayElements(gv, func, uniqueConstantIndices);
         } else {
             result = hoistArrayBase(gv, func, geps);
@@ -480,14 +480,7 @@ public class GlobalLocalizationPass implements Pass {
         return false;
     }
 
-    private static class Loop {
-        BasicBlock header;
-        Set<BasicBlock> blocks;
-        Loop(BasicBlock header, Set<BasicBlock> blocks) {
-            this.header = header;
-            this.blocks = blocks;
-        }
-    }
+    private record Loop(BasicBlock header, Set<BasicBlock> blocks) {}
 
     private List<Loop> findLoops(Function function) {
         List<Loop> loops = new ArrayList<>();
@@ -498,31 +491,11 @@ public class GlobalLocalizationPass implements Pass {
             if (!domInfo.dominators().containsKey(n)) continue;
             for (BasicBlock d : cfg.successors().getOrDefault(n, List.of())) {
                 if (domInfo.dominators().get(n).contains(d)) {
-                    Set<BasicBlock> loopBlocks = findLoopBlocks(n, d, cfg.predecessors());
+                    Set<BasicBlock> loopBlocks = DominatorAnalysis.findLoopBlocks(n, d, cfg.predecessors());
                     loops.add(new Loop(d, loopBlocks));
                 }
             }
         }
         return loops;
-    }
-
-    private Set<BasicBlock> findLoopBlocks(BasicBlock latch, BasicBlock header, Map<BasicBlock, List<BasicBlock>> predecessors) {
-        Set<BasicBlock> blocks = new LinkedHashSet<>();
-        blocks.add(header);
-        blocks.add(latch);
-        if (latch == header) return blocks;
-
-        Queue<BasicBlock> queue = new LinkedList<>();
-        queue.add(latch);
-        while (!queue.isEmpty()) {
-            BasicBlock curr = queue.poll();
-            for (BasicBlock pred : predecessors.getOrDefault(curr, List.of())) {
-                if (!blocks.contains(pred)) {
-                    blocks.add(pred);
-                    queue.add(pred);
-                }
-            }
-        }
-        return blocks;
     }
 }

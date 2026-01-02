@@ -14,19 +14,7 @@ public class LoopUnrollingPass implements Pass {
     private static final int MAX_TRIP_COUNT = 32;
     private static final int MAX_TOTAL_INSTS = 128;
 
-    private static class Loop {
-        BasicBlock header;
-        BasicBlock latch;
-        Set<BasicBlock> blocks;
-        BasicBlock exit;
-
-        Loop(BasicBlock header, BasicBlock latch, Set<BasicBlock> blocks, BasicBlock exit) {
-            this.header = header;
-            this.latch = latch;
-            this.blocks = blocks;
-            this.exit = exit;
-        }
-    }
+    private record Loop(BasicBlock header, BasicBlock latch, Set<BasicBlock> blocks, BasicBlock exit) {}
 
     @Override
     public boolean run(Module module) {
@@ -42,7 +30,7 @@ public class LoopUnrollingPass implements Pass {
         boolean changed = false;
         List<Loop> loops = findLoops(function);
         // Sort loops by size (inner loops first)
-        loops.sort(Comparator.comparingInt(l -> l.blocks.size()));
+        loops.sort(Comparator.comparingInt(l -> l.blocks().size()));
 
         for (Loop loop : loops) {
             if (tryUnroll(loop)) {
@@ -62,7 +50,7 @@ public class LoopUnrollingPass implements Pass {
             for (BasicBlock d : cfg.successors().getOrDefault(n, List.of())) {
                 if (domInfo.dominators().get(n).contains(d)) {
                     // Back-edge n -> d found. d is header, n is latch.
-                    Set<BasicBlock> loopBlocks = findLoopBlocks(n, d, cfg.predecessors());
+                    Set<BasicBlock> loopBlocks = DominatorAnalysis.findLoopBlocks(n, d, cfg.predecessors());
                     BasicBlock exit = findSingleExit(loopBlocks, cfg.successors());
                     if (exit != null && isSimpleLoop(loopBlocks, cfg.successors())) {
                         loops.add(new Loop(d, n, loopBlocks, exit));
@@ -85,26 +73,6 @@ public class LoopUnrollingPass implements Pass {
         return exitEdges == 1;
     }
 
-    private Set<BasicBlock> findLoopBlocks(BasicBlock latch, BasicBlock header, Map<BasicBlock, List<BasicBlock>> predecessors) {
-        Set<BasicBlock> blocks = new LinkedHashSet<>();
-        blocks.add(header);
-        blocks.add(latch);
-        if (latch == header) return blocks;
-
-        Queue<BasicBlock> queue = new LinkedList<>();
-        queue.add(latch);
-        while (!queue.isEmpty()) {
-            BasicBlock curr = queue.poll();
-            for (BasicBlock pred : predecessors.getOrDefault(curr, List.of())) {
-                if (!blocks.contains(pred)) {
-                    blocks.add(pred);
-                    queue.add(pred);
-                }
-            }
-        }
-        return blocks;
-    }
-
     private BasicBlock findSingleExit(Set<BasicBlock> loopBlocks, Map<BasicBlock, List<BasicBlock>> successors) {
         Set<BasicBlock> exits = new LinkedHashSet<>();
         for (BasicBlock bb : loopBlocks) {
@@ -119,13 +87,13 @@ public class LoopUnrollingPass implements Pass {
 
     private boolean tryUnroll(Loop loop) {
         // Only unroll simple loops for now
-        if (loop.blocks.size() != 2) return false;
+        if (loop.blocks().size() != 2) return false;
 
         // 1. Find induction variable
         PhiInst iv = null;
-        for (Instruction inst : loop.header.getInstructions()) {
+        for (Instruction inst : loop.header().getInstructions()) {
             if (inst instanceof PhiInst phi) {
-                Value latchVal = phi.getIncomingValue(loop.latch);
+                Value latchVal = phi.getIncomingValue(loop.latch());
                 if (latchVal instanceof BinaryInst bin && bin.getOpCode() == OpCode.ADD) {
                     if (bin.getOperand(0) == phi || bin.getOperand(1) == phi) {
                         iv = phi;
@@ -137,7 +105,7 @@ public class LoopUnrollingPass implements Pass {
         if (iv == null) return false;
 
         // 2. Find loop condition
-        Instruction last = loop.header.getInstructions().get(loop.header.getInstructions().size() - 1);
+        Instruction last = loop.header().getInstructions().get(loop.header().getInstructions().size() - 1);
         if (!(last instanceof BrInst br) || br.getNumOperands() != 3) return false;
         Value cond = br.getOperand(0);
         if (!(cond instanceof IcmpInst icmp)) return false;
@@ -148,7 +116,7 @@ public class LoopUnrollingPass implements Pass {
 
         // 4. Check total instructions
         int bodyInsts = 0;
-        for (BasicBlock bb : loop.blocks) {
+        for (BasicBlock bb : loop.blocks()) {
             bodyInsts += bb.getInstructions().size();
         }
         if (bodyInsts * tripCount > MAX_TOTAL_INSTS) return false;
@@ -161,7 +129,7 @@ public class LoopUnrollingPass implements Pass {
     private Integer calculateTripCount(PhiInst iv, IcmpInst icmp, Loop loop) {
         Value initVal = null;
         for (Map.Entry<BasicBlock, Value> entry : iv.getIncoming().entrySet()) {
-            if (!loop.blocks.contains(entry.getKey())) {
+            if (!loop.blocks().contains(entry.getKey())) {
                 initVal = entry.getValue();
                 break;
             }
@@ -169,7 +137,7 @@ public class LoopUnrollingPass implements Pass {
         if (!(initVal instanceof ConstInt constInit)) return null;
         int init = constInit.getValue();
 
-        Value nextVal = iv.getIncomingValue(loop.latch);
+        Value nextVal = iv.getIncomingValue(loop.latch());
         if (!(nextVal instanceof BinaryInst bin) || bin.getOpCode() != OpCode.ADD) return null;
         Value stepVal = (bin.getOperand(0) == iv) ? bin.getOperand(1) : bin.getOperand(0);
         if (!(stepVal instanceof ConstInt constStep)) return null;
@@ -217,12 +185,12 @@ public class LoopUnrollingPass implements Pass {
     }
 
     private void unroll(Loop loop, PhiInst iv, int tripCount) {
-        Function function = loop.header.getParent();
+        Function function = loop.header().getParent();
         DominatorAnalysis.Cfg cfg = DominatorAnalysis.computeCfg(function);
 
         List<BasicBlock> preHeaders = new ArrayList<>();
-        for (BasicBlock pred : cfg.predecessors().getOrDefault(loop.header, List.of())) {
-            if (!loop.blocks.contains(pred)) {
+        for (BasicBlock pred : cfg.predecessors().getOrDefault(loop.header(), List.of())) {
+            if (!loop.blocks().contains(pred)) {
                 preHeaders.add(pred);
             }
         }
@@ -233,25 +201,25 @@ public class LoopUnrollingPass implements Pass {
             for (BasicBlock ph : preHeaders) {
                 Instruction phLast = ph.getInstructions().get(ph.getInstructions().size() - 1);
                 for (int j = 0; j < phLast.getNumOperands(); j++) {
-                    if (phLast.getOperand(j) == loop.header) {
-                        phLast.setOperand(j, loop.exit);
+                    if (phLast.getOperand(j) == loop.header()) {
+                        phLast.setOperand(j, loop.exit());
                     }
                 }
             }
             // Update exit Phis
-            for (Instruction inst : loop.exit.getInstructions()) {
+            for (Instruction inst : loop.exit().getInstructions()) {
                 if (inst instanceof PhiInst phi) {
-                    Value loopVal = phi.getIncomingValue(loop.header);
+                    Value loopVal = phi.getIncomingValue(loop.header());
                     if (loopVal != null) {
                         for (BasicBlock ph : preHeaders) {
                             phi.setIncoming(ph, loopVal);
                         }
-                        phi.removeIncoming(loop.header);
+                        phi.removeIncoming(loop.header());
                     }
                 }
             }
             // Remove old blocks
-            for (BasicBlock bb : loop.blocks) {
+            for (BasicBlock bb : loop.blocks()) {
                 for (Instruction inst : new ArrayList<>(bb.getInstructions())) {
                     inst.dropAllReferences();
                 }
@@ -261,14 +229,14 @@ public class LoopUnrollingPass implements Pass {
         }
 
         Map<PhiInst, Value> currentPhiValues = new HashMap<>();
-        for (Instruction inst : loop.header.getInstructions()) {
+        for (Instruction inst : loop.header().getInstructions()) {
             if (inst instanceof PhiInst phi) {
                 currentPhiValues.put(phi, phi.getIncomingValue(preHeader));
             }
         }
 
         int init = ((ConstInt) iv.getIncomingValue(preHeader)).getValue();
-        BinaryInst nextVal = (BinaryInst) iv.getIncomingValue(loop.latch);
+        BinaryInst nextVal = (BinaryInst) iv.getIncomingValue(loop.latch());
         Value stepVal = (nextVal.getOperand(0) == iv) ? nextVal.getOperand(1) : nextVal.getOperand(0);
         int step = ((ConstInt) stepVal).getValue();
 
@@ -287,13 +255,13 @@ public class LoopUnrollingPass implements Pass {
                 }
             }
 
-            for (BasicBlock bb : loop.blocks) {
+            for (BasicBlock bb : loop.blocks()) {
                 BasicBlock newBb = new BasicBlock(bb.getName() + ".u" + i, function);
                 blockMapping.put(bb, newBb);
             }
             allBlockMappings.add(blockMapping);
 
-            for (BasicBlock bb : loop.blocks) {
+            for (BasicBlock bb : loop.blocks()) {
                 BasicBlock newBb = blockMapping.get(bb);
                 for (Instruction inst : bb.getInstructions()) {
                     if (inst instanceof PhiInst) continue;
@@ -305,7 +273,7 @@ public class LoopUnrollingPass implements Pass {
             }
             allValueMappings.add(iterationMapping);
 
-            for (BasicBlock bb : loop.blocks) {
+            for (BasicBlock bb : loop.blocks()) {
                 BasicBlock newBb = blockMapping.get(bb);
                 for (Instruction newInst : newBb.getInstructions()) {
                     for (int j = 0; j < newInst.getNumOperands(); j++) {
@@ -319,9 +287,9 @@ public class LoopUnrollingPass implements Pass {
                 }
             }
 
-            for (Instruction inst : loop.header.getInstructions()) {
+            for (Instruction inst : loop.header().getInstructions()) {
                 if (inst instanceof PhiInst phi) {
-                    Value latchVal = phi.getIncomingValue(loop.latch);
+                    Value latchVal = phi.getIncomingValue(loop.latch());
                     Value nextValue = iterationMapping.getOrDefault(latchVal, latchVal);
                     currentPhiValues.put(phi, nextValue);
                 }
@@ -331,21 +299,21 @@ public class LoopUnrollingPass implements Pass {
         for (BasicBlock ph : preHeaders) {
             Instruction phLast = ph.getInstructions().get(ph.getInstructions().size() - 1);
             for (int j = 0; j < phLast.getNumOperands(); j++) {
-                if (phLast.getOperand(j) == loop.header) {
-                    phLast.setOperand(j, allBlockMappings.get(0).get(loop.header));
+                if (phLast.getOperand(j) == loop.header()) {
+                    phLast.setOperand(j, allBlockMappings.get(0).get(loop.header()));
                 }
             }
         }
 
         for (int i = 0; i < tripCount; i++) {
-            BasicBlock currentHeader = allBlockMappings.get(i).get(loop.header);
-            BasicBlock currentLatch = allBlockMappings.get(i).get(loop.latch);
+            BasicBlock currentHeader = allBlockMappings.get(i).get(loop.header());
+            BasicBlock currentLatch = allBlockMappings.get(i).get(loop.latch());
             
             Instruction headerLast = currentHeader.getInstructions().get(currentHeader.getInstructions().size() - 1);
             if (headerLast instanceof BrInst br && br.getNumOperands() == 3) {
-                Instruction origHeaderLast = loop.header.getInstructions().get(loop.header.getInstructions().size() - 1);
+                Instruction origHeaderLast = loop.header().getInstructions().get(loop.header().getInstructions().size() - 1);
                 BasicBlock origBody = (BasicBlock) origHeaderLast.getOperand(1);
-                if (!loop.blocks.contains(origBody)) {
+                if (!loop.blocks().contains(origBody)) {
                     origBody = (BasicBlock) origHeaderLast.getOperand(2);
                 }
                 
@@ -356,27 +324,27 @@ public class LoopUnrollingPass implements Pass {
 
             Instruction latchLast = currentLatch.getInstructions().get(currentLatch.getInstructions().size() - 1);
             if (i < tripCount - 1) {
-                latchLast.setOperand(0, allBlockMappings.get(i + 1).get(loop.header));
+                latchLast.setOperand(0, allBlockMappings.get(i + 1).get(loop.header()));
             } else {
-                latchLast.setOperand(0, loop.exit);
+                latchLast.setOperand(0, loop.exit());
             }
         }
 
-        for (Instruction inst : loop.exit.getInstructions()) {
+        for (Instruction inst : loop.exit().getInstructions()) {
             if (inst instanceof PhiInst phi) {
-                Value val = phi.getIncomingValue(loop.header);
+                Value val = phi.getIncomingValue(loop.header());
                 if (val != null) {
                     Value lastVal = allValueMappings.get(tripCount - 1).getOrDefault(val, val);
-                    phi.removeIncoming(loop.header);
-                    phi.setIncoming(allBlockMappings.get(tripCount - 1).get(loop.latch), lastVal);
+                    phi.removeIncoming(loop.header());
+                    phi.setIncoming(allBlockMappings.get(tripCount - 1).get(loop.latch()), lastVal);
                 }
             }
         }
 
-        for (BasicBlock bb : loop.blocks) {
+        for (BasicBlock bb : loop.blocks()) {
             for (Instruction inst : new ArrayList<>(bb.getInstructions())) {
                 Value replacement;
-                if (inst instanceof PhiInst phi && bb == loop.header) {
+                if (inst instanceof PhiInst phi && bb == loop.header()) {
                     replacement = currentPhiValues.get(phi);
                 } else {
                     replacement = allValueMappings.get(tripCount - 1).get(inst);
@@ -387,7 +355,7 @@ public class LoopUnrollingPass implements Pass {
             }
         }
 
-        for (BasicBlock bb : loop.blocks) {
+        for (BasicBlock bb : loop.blocks()) {
             for (Instruction inst : new ArrayList<>(bb.getInstructions())) {
                 inst.dropAllReferences();
             }

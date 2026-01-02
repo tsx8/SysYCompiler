@@ -17,7 +17,6 @@ public class LiveIntervalAnalysis {
     private final Function function;
     private final LivenessAnalysis liveness;
     private final LoopAnalysis loopAnalysis;
-    private final List<Instruction> linearizedInsts = new ArrayList<>();
     private final Map<Instruction, Integer> instToId = new LinkedHashMap<>();
     private final Map<Value, LiveInterval> intervals = new LinkedHashMap<>();
     private final Map<BasicBlock, Integer> blockStart = new LinkedHashMap<>();
@@ -62,12 +61,11 @@ public class LiveIntervalAnalysis {
         for (BasicBlock bb : function.getBasicBlocks()) {
             blockStart.put(bb, id);
             for (Instruction inst : bb.getInstructions()) {
-                linearizedInsts.add(inst);
                 instToId.put(inst, id);
                 if (inst instanceof CallInst) {
                     callInstIds.add(id);
                 }
-                id += 2; // Use step 2 to allow insertions if needed
+                id += 2;
             }
             blockEnd.put(bb, id - 1);
         }

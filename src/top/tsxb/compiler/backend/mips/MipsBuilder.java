@@ -48,24 +48,24 @@ public class MipsBuilder {
         }
     }
 
-    private void loadMem(String dest, int offset, String base) {
+    private void loadStack(String dest, int offset) {
         invalidateCache(dest);
         if (offset >= -32768 && offset <= 32767) {
-            currentSb.append("    lw ").append(dest).append(", ").append(offset).append("(").append(base).append(")\n");
+            currentSb.append("    lw ").append(dest).append(", ").append(offset).append("($sp)\n");
         } else {
             invalidateCache("$at");
             currentSb.append("    li $at, ").append(offset).append("\n");
-            currentSb.append("    addu $at, ").append(base).append(", $at\n");
+            currentSb.append("    addu $at, $sp, $at\n");
             currentSb.append("    lw ").append(dest).append(", 0($at)\n");
         }
     }
 
-    private void storeMem(String src, int offset, String base) {
+    private void storeStack(String src, int offset) {
         if (offset >= -32768 && offset <= 32767) {
-            currentSb.append("    sw ").append(src).append(", ").append(offset).append("(").append(base).append(")\n");
+            currentSb.append("    sw ").append(src).append(", ").append(offset).append("($sp)\n");
         } else {
             currentSb.append("    li $at, ").append(offset).append("\n");
-            currentSb.append("    addu $at, ").append(base).append(", $at\n");
+            currentSb.append("    addu $at, $sp, $at\n");
             currentSb.append("    sw ").append(src).append(", 0($at)\n");
         }
     }
@@ -302,13 +302,13 @@ public class MipsBuilder {
             addI("$sp", "$sp", -currentStackSize);
         }
         if (!isLeaf) {
-            storeMem("$ra", currentStackSize - 4, "$sp");
+            storeStack("$ra", currentStackSize - 4);
         }
         
         // Save callee-saved registers
         int regOffset = currentStackSize - (isLeaf ? 4 : 8);
         for (MipsRegister reg : usedCalleeSaved) {
-            storeMem(reg.getName(), regOffset, "$sp");
+            storeStack(reg.getName(), regOffset);
             regOffset -= 4;
         }
 
@@ -329,17 +329,17 @@ public class MipsBuilder {
                 if (i < 4) {
                     currentSb.append("    move ").append(reg.getName()).append(", $a").append(i).append("\n");
                 } else {
-                    loadMem(reg.getName(), currentStackSize + (i - 4) * 4, "$sp");
+                    loadStack(reg.getName(), currentStackSize + (i - 4) * 4);
                 }
             } else {
                 // Spilled or not used
                 Integer offset = stackOffsets.get(arg);
                 if (offset != null) {
                     if (i < 4) {
-                        storeMem("$a" + i, offset, "$sp");
+                        storeStack("$a" + i, offset);
                     } else {
-                        loadMem("$t0", currentStackSize + (i - 4) * 4, "$sp");
-                        storeMem("$t0", offset, "$sp");
+                        loadStack("$t0", currentStackSize + (i - 4) * 4);
+                        storeStack("$t0", offset);
                     }
                 }
             }
@@ -481,7 +481,7 @@ public class MipsBuilder {
             if (offset == null) {
                 throw new RuntimeException("Value not found in stack or register: " + val);
             }
-            loadMem(reg, offset + spShift, "$sp");
+            loadStack(reg, offset + spShift);
         }
     }
 
@@ -495,7 +495,7 @@ public class MipsBuilder {
         } else {
             Integer offset = stackOffsets.get(inst);
             if (offset != null) {
-                storeMem(reg, offset + spShift, "$sp");
+                storeStack(reg, offset + spShift);
             }
         }
     }
@@ -625,7 +625,7 @@ public class MipsBuilder {
 
         loadValue(multiplicand, "$t0");
         invalidateCache("$t2");
-        emitMulTerm("$t2", "$t0", firstTerm);
+        emitMulTerm(firstTerm);
         if (!firstTerm.positive) {
             invalidateCache("$t2");
             currentSb.append("    subu $t2, $zero, $t2\n");
@@ -718,11 +718,11 @@ public class MipsBuilder {
         return true;
     }
 
-    private void emitMulTerm(String dest, String source, MulTerm term) {
+    private void emitMulTerm(MulTerm term) {
         if (term.shift == 0) {
-            currentSb.append("    addu ").append(dest).append(", ").append(source).append(", $zero\n");
+            currentSb.append("    addu $t2, $t0, $zero\n");
         } else {
-            currentSb.append("    sll ").append(dest).append(", ").append(source).append(", ").append(term.shift).append("\n");
+            currentSb.append("    sll $t2, $t0, ").append(term.shift).append("\n");
         }
     }
 
@@ -764,6 +764,7 @@ public class MipsBuilder {
         storeValue(inst, "$t2");
     }
 
+    @SuppressWarnings("EmptyMethod")
     private void genAlloca() {
         // Space reserved in calculateStackFrame
     }
@@ -780,7 +781,7 @@ public class MipsBuilder {
         Value addr = inst.getOperand(0);
         if (addr instanceof AllocaInst alloca) {
             int dataOffset = getAllocaDataOffset(alloca);
-            loadMem("$t1", dataOffset + spShift, "$sp");
+            loadStack("$t1", dataOffset + spShift);
         } else {
             loadValue(addr, "$t0");
             invalidateCache("$t1");
@@ -794,7 +795,7 @@ public class MipsBuilder {
         Value addr = inst.getOperand(1);
         if (addr instanceof AllocaInst alloca) {
             int dataOffset = getAllocaDataOffset(alloca);
-            storeMem("$t0", dataOffset + spShift, "$sp");
+            storeStack("$t0", dataOffset + spShift);
         } else {
             loadValue(addr, "$t1");
             currentSb.append("    sw $t0, 0($t1)\n");
@@ -934,12 +935,12 @@ public class MipsBuilder {
                 PhiInst phi = cyclePhis.get(i);
                 Value incoming = assignments.get(phi);
                 loadValue(incoming, "$t0");
-                storeMem("$t0", i * 4, "$sp");
+                storeStack("$t0", i * 4);
             }
 
             for (int i = 0; i < cyclePhis.size(); i++) {
                 PhiInst phi = cyclePhis.get(i);
-                loadMem("$t0", i * 4, "$sp");
+                loadStack("$t0", i * 4);
                 storeValue(phi, "$t0");
             }
 
@@ -957,12 +958,12 @@ public class MipsBuilder {
             // Restore callee-saved registers
             int regOffset = currentStackSize - (isLeaf ? 4 : 8);
             for (MipsRegister reg : usedCalleeSaved) {
-                loadMem(reg.getName(), regOffset, "$sp");
+                loadStack(reg.getName(), regOffset);
                 regOffset -= 4;
             }
             
             if (!isLeaf) {
-                loadMem("$ra", currentStackSize - 4, "$sp");
+                loadStack("$ra", currentStackSize - 4);
             }
             addI("$sp", "$sp", currentStackSize);
         }
@@ -992,7 +993,7 @@ public class MipsBuilder {
             addI("$sp", "$sp", -shift);
             spShift += shift;
             for (int i = 0; i < toSave.size(); i++) {
-                storeMem(toSave.get(i).getName(), i * 4, "$sp");
+                storeStack(toSave.get(i).getName(), i * 4);
             }
         }
 
@@ -1011,7 +1012,7 @@ public class MipsBuilder {
             } else {
                 loadValue(arg, "$t0");
                 int offset = (i - 1 - 4) * 4;
-                storeMem("$t0", offset, "$sp");
+                storeStack("$t0", offset);
             }
         }
         currentSb.append("    jal ").append(getLabel(target)).append("\n");
@@ -1026,7 +1027,7 @@ public class MipsBuilder {
         if (!toSave.isEmpty()) {
             int shift = toSave.size() * 4;
             for (int i = 0; i < toSave.size(); i++) {
-                loadMem(toSave.get(i).getName(), i * 4, "$sp");
+                loadStack(toSave.get(i).getName(), i * 4);
             }
             addI("$sp", "$sp", shift);
             spShift -= shift;
