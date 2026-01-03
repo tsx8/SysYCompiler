@@ -1,8 +1,8 @@
 package top.tsxb.compiler.ir.inst;
 
-import top.tsxb.compiler.ir.type.PtrType;
-import top.tsxb.compiler.ir.structure.BasicBlock;
 import top.tsxb.compiler.ir.base.Value;
+import top.tsxb.compiler.ir.structure.BasicBlock;
+import top.tsxb.compiler.ir.type.PtrType;
 
 public class LoadInst extends Instruction {
     public LoadInst(Value ptr, BasicBlock parent) {

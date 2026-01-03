@@ -1,10 +1,24 @@
 package top.tsxb.compiler.backend.opti;
 
-import top.tsxb.compiler.ir.base.Value;
-import top.tsxb.compiler.ir.inst.*;
-import top.tsxb.compiler.ir.structure.*;
+import java.util.ArrayList;
+import java.util.IdentityHashMap;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 
-import java.util.*;
+import top.tsxb.compiler.ir.base.Value;
+import top.tsxb.compiler.ir.inst.GetElementPtrInst;
+import top.tsxb.compiler.ir.inst.IcmpInst;
+import top.tsxb.compiler.ir.inst.Instruction;
+import top.tsxb.compiler.ir.inst.OpCode;
+import top.tsxb.compiler.ir.structure.Argument;
+import top.tsxb.compiler.ir.structure.BasicBlock;
+import top.tsxb.compiler.ir.structure.Function;
+import top.tsxb.compiler.ir.structure.GlobalVariable;
 
 public class GvnPass implements Pass {
     private final Map<Value, Value> replacementMap = new IdentityHashMap<>();
@@ -15,7 +29,8 @@ public class GvnPass implements Pass {
         analyzePureFunctions(module);
         boolean changed = false;
         for (Function function : module.getFunctionList()) {
-            if (function.isDeclaration()) continue;
+            if (function.isDeclaration())
+                continue;
             replacementMap.clear();
             changed |= runOnFunction(function);
         }
@@ -30,16 +45,18 @@ public class GvnPass implements Pass {
     }
 
     private boolean runOnFunction(Function function) {
-        if (function.getBasicBlocks().isEmpty()) return false;
+        if (function.getBasicBlocks().isEmpty())
+            return false;
         DominatorAnalysis.DominatorInfo domInfo = DominatorAnalysis.computeDominators(function);
         return runOnDomTree(function.getBasicBlocks().get(0), new LinkedHashMap<>(), new LinkedHashMap<>(), domInfo);
     }
 
-    private boolean runOnDomTree(BasicBlock bb, Map<GvnKey, Instruction> valueTable, Map<Value, Value> memoryTable, DominatorAnalysis.DominatorInfo domInfo) {
+    private boolean runOnDomTree(BasicBlock bb, Map<GvnKey, Instruction> valueTable, Map<Value, Value> memoryTable,
+        DominatorAnalysis.DominatorInfo domInfo) {
         boolean changed = false;
         Map<GvnKey, Instruction> localTable = new LinkedHashMap<>(valueTable);
         Map<Value, Value> localMemoryTable = new LinkedHashMap<>(memoryTable);
-        
+
         Iterator<Instruction> it = bb.getInstructions().iterator();
         while (it.hasNext()) {
             Instruction inst = it.next();
@@ -68,7 +85,8 @@ public class GvnPass implements Pass {
                 }
             }
 
-            if (inst.isPinned() && !isPureCall(inst)) continue;
+            if (inst.isPinned() && !isPureCall(inst))
+                continue;
 
             GvnKey key = new GvnKey(inst, this);
             if (localTable.containsKey(key)) {
@@ -87,58 +105,6 @@ public class GvnPass implements Pass {
             changed |= runOnDomTree(child, localTable, localMemoryTable, domInfo);
         }
         return changed;
-    }
-
-    private static class GvnKey {
-        private final OpCode op;
-        private final Object extra;
-        private final List<Value> operands;
-
-        public GvnKey(Instruction inst, GvnPass pass) {
-            this.op = inst.getOpCode();
-            this.operands = new ArrayList<>();
-            for (int i = 0; i < inst.getNumOperands(); i++) {
-                operands.add(pass.getCanonical(inst.getOperand(i)));
-            }
-            
-            if (inst instanceof IcmpInst icmp) {
-                this.extra = icmp.getPredicate();
-            } else {
-                this.extra = null;
-            }
-
-            if (isCommutative(inst) && operands.size() == 2) {
-                Value v1 = operands.get(0);
-                Value v2 = operands.get(1);
-                if (System.identityHashCode(v1) > System.identityHashCode(v2)) {
-                    operands.set(0, v2);
-                    operands.set(1, v1);
-                }
-            }
-        }
-
-        private boolean isCommutative(Instruction inst) {
-            OpCode op = inst.getOpCode();
-            if (op == OpCode.ADD || op == OpCode.MUL) return true;
-            if (inst instanceof IcmpInst icmp) {
-                IcmpInst.CondCode pred = icmp.getPredicate();
-                return pred == IcmpInst.CondCode.EQ || pred == IcmpInst.CondCode.NE;
-            }
-            return false;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            GvnKey gvnKey = (GvnKey) o;
-            return op == gvnKey.op && Objects.equals(extra, gvnKey.extra) && Objects.equals(operands, gvnKey.operands);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(op, extra, operands);
-        }
     }
 
     private void analyzePureFunctions(top.tsxb.compiler.ir.structure.Module module) {
@@ -171,10 +137,11 @@ public class GvnPass implements Pass {
                             }
                         }
                     } else if (inst.getOpCode() == OpCode.CALL) {
-                        callees.add((Function) inst.getOperand(0));
+                        callees.add((Function)inst.getOperand(0));
                     }
                 }
-                if (sideEffect) break;
+                if (sideEffect)
+                    break;
             }
 
             if (sideEffect) {
@@ -228,8 +195,63 @@ public class GvnPass implements Pass {
 
     private boolean isPureCall(Instruction inst) {
         if (inst.getOpCode() == OpCode.CALL) {
-            return pureFunctions.contains((Function) inst.getOperand(0));
+            return pureFunctions.contains((Function)inst.getOperand(0));
         }
         return false;
+    }
+
+    private static class GvnKey {
+        private final OpCode op;
+        private final Object extra;
+        private final List<Value> operands;
+
+        public GvnKey(Instruction inst, GvnPass pass) {
+            this.op = inst.getOpCode();
+            this.operands = new ArrayList<>();
+            for (int i = 0; i < inst.getNumOperands(); i++) {
+                operands.add(pass.getCanonical(inst.getOperand(i)));
+            }
+
+            if (inst instanceof IcmpInst icmp) {
+                this.extra = icmp.getPredicate();
+            } else {
+                this.extra = null;
+            }
+
+            if (isCommutative(inst) && operands.size() == 2) {
+                Value v1 = operands.get(0);
+                Value v2 = operands.get(1);
+                if (System.identityHashCode(v1) > System.identityHashCode(v2)) {
+                    operands.set(0, v2);
+                    operands.set(1, v1);
+                }
+            }
+        }
+
+        private boolean isCommutative(Instruction inst) {
+            OpCode op = inst.getOpCode();
+            if (op == OpCode.ADD || op == OpCode.MUL)
+                return true;
+            if (inst instanceof IcmpInst icmp) {
+                IcmpInst.CondCode pred = icmp.getPredicate();
+                return pred == IcmpInst.CondCode.EQ || pred == IcmpInst.CondCode.NE;
+            }
+            return false;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o)
+                return true;
+            if (o == null || getClass() != o.getClass())
+                return false;
+            GvnKey gvnKey = (GvnKey)o;
+            return op == gvnKey.op && Objects.equals(extra, gvnKey.extra) && Objects.equals(operands, gvnKey.operands);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(op, extra, operands);
+        }
     }
 }

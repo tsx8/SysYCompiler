@@ -4,9 +4,9 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import top.tsxb.compiler.ir.base.Value;
 import top.tsxb.compiler.ir.structure.BasicBlock;
 import top.tsxb.compiler.ir.type.IrType;
-import top.tsxb.compiler.ir.base.Value;
 
 public class PhiInst extends Instruction {
     private final Map<BasicBlock, Integer> incomingIndex = new LinkedHashMap<>();

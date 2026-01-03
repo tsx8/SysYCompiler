@@ -6,10 +6,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import top.tsxb.compiler.ir.base.Value;
 import top.tsxb.compiler.ir.type.FuncType;
 import top.tsxb.compiler.ir.type.IrType;
 import top.tsxb.compiler.ir.type.NoneType;
-import top.tsxb.compiler.ir.base.Value;
 
 public class Function extends GlobalValue {
     private final List<BasicBlock> basicBlocks = new LinkedList<>();
@@ -72,7 +72,7 @@ public class Function extends GlobalValue {
 
     @Override
     public String toString() {
-        FuncType funcType = (FuncType) getValueType();
+        FuncType funcType = (FuncType)getValueType();
         StringBuilder sb = new StringBuilder();
         if (isDeclaration()) {
             sb.append("declare ");

@@ -1,12 +1,18 @@
 package top.tsxb.compiler.backend.opti;
 
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+
+import top.tsxb.compiler.backend.mips.LoopAnalysis;
 import top.tsxb.compiler.ir.base.Value;
 import top.tsxb.compiler.ir.inst.*;
-import top.tsxb.compiler.ir.structure.*;
+import top.tsxb.compiler.ir.structure.Argument;
+import top.tsxb.compiler.ir.structure.BasicBlock;
+import top.tsxb.compiler.ir.structure.Function;
+import top.tsxb.compiler.ir.structure.GlobalVariable;
 import top.tsxb.compiler.ir.structure.Module;
-import top.tsxb.compiler.backend.mips.LoopAnalysis;
-
-import java.util.*;
 
 public class LicmPass implements Pass {
     private DominatorAnalysis.DominatorInfo domInfo;
@@ -16,7 +22,8 @@ public class LicmPass implements Pass {
     public boolean run(Module module) {
         boolean changed = false;
         for (Function function : module.getFunctionList()) {
-            if (function.isDeclaration()) continue;
+            if (function.isDeclaration())
+                continue;
             changed |= runOnFunction(function);
         }
         return changed;
@@ -33,7 +40,8 @@ public class LicmPass implements Pass {
 
             List<Loop> loops = findLoops(function);
             // Sort loops by depth (deepest first) to hoist out of nested loops step by step
-            loops.sort((l1, l2) -> Integer.compare(loopAnalysis.getLoopDepth(l2.header), loopAnalysis.getLoopDepth(l1.header)));
+            loops.sort((l1, l2) -> Integer.compare(loopAnalysis.getLoopDepth(l2.header),
+                loopAnalysis.getLoopDepth(l1.header)));
 
             for (Loop loop : loops) {
                 localChanged |= hoistInvariants(loop, function);
@@ -43,13 +51,12 @@ public class LicmPass implements Pass {
         return changed;
     }
 
-    private record Loop(BasicBlock header, Set<BasicBlock> blocks) {}
-
     private List<Loop> findLoops(Function function) {
         List<Loop> loops = new ArrayList<>();
         DominatorAnalysis.Cfg cfg = DominatorAnalysis.computeCfg(function);
         for (BasicBlock n : function.getBasicBlocks()) {
-            if (!domInfo.dominators().containsKey(n)) continue;
+            if (!domInfo.dominators().containsKey(n))
+                continue;
             for (BasicBlock d : cfg.successors().getOrDefault(n, List.of())) {
                 if (domInfo.dominators().get(n).contains(d)) {
                     Set<BasicBlock> loopBlocks = DominatorAnalysis.findLoopBlocks(n, d, cfg.predecessors());
@@ -62,7 +69,8 @@ public class LicmPass implements Pass {
 
     private boolean hoistInvariants(Loop loop, Function function) {
         BasicBlock preHeader = getOrCreatePreHeader(loop, function);
-        if (preHeader == null) return false;
+        if (preHeader == null)
+            return false;
 
         Set<Instruction> invariants = new LinkedHashSet<>();
         boolean changed = false;
@@ -71,7 +79,8 @@ public class LicmPass implements Pass {
             found = false;
             for (BasicBlock bb : loop.blocks) {
                 for (Instruction inst : bb.getInstructions()) {
-                    if (invariants.contains(inst)) continue;
+                    if (invariants.contains(inst))
+                        continue;
                     if (isInvariant(inst, loop, invariants)) {
                         invariants.add(inst);
                         found = true;
@@ -81,7 +90,8 @@ public class LicmPass implements Pass {
             }
         } while (found);
 
-        if (invariants.isEmpty()) return changed;
+        if (invariants.isEmpty())
+            return changed;
 
         // Move invariants to pre-header
         List<Instruction> preHeaderInsts = preHeader.getInstructions();
@@ -111,7 +121,8 @@ public class LicmPass implements Pass {
     }
 
     private boolean isInvariant(Instruction inst, Loop loop, Set<Instruction> invariants) {
-        if (inst instanceof PhiInst || inst instanceof BrInst || inst instanceof ReturnInst || inst instanceof StoreInst || inst instanceof AllocaInst) {
+        if (inst instanceof PhiInst || inst instanceof BrInst || inst instanceof ReturnInst || inst instanceof StoreInst
+            || inst instanceof AllocaInst) {
             return false;
         }
 
@@ -173,26 +184,26 @@ public class LicmPass implements Pass {
 
     private boolean isReadOnly(Function func) {
         String name = func.getName();
-        return name.equals("putint") || name.equals("putch") || name.equals("putf") ||
-               name.equals("starttime") || name.equals("stoptime") || name.equals("putarray") ||
-               name.equals("getint") || name.equals("getch");
+        return name.equals("putint") || name.equals("putch") || name.equals("putf") || name.equals("starttime")
+            || name.equals("stoptime") || name.equals("putarray") || name.equals("getint") || name.equals("getch");
     }
 
     private boolean mayAlias(Value p1, Value p2) {
-        if (p1 == p2) return true;
-        
+        if (p1 == p2)
+            return true;
+
         Value b1 = getBase(p1);
         Value b2 = getBase(p2);
-        
+
         if (b1 != b2) {
-            if ((b1 instanceof AllocaInst || b1 instanceof GlobalVariable) &&
-                (b2 instanceof AllocaInst || b2 instanceof GlobalVariable)) {
+            if ((b1 instanceof AllocaInst || b1 instanceof GlobalVariable)
+                && (b2 instanceof AllocaInst || b2 instanceof GlobalVariable)) {
                 return false;
             }
-            return (!(b1 instanceof Argument) || !(b2 instanceof AllocaInst)) &&
-                   (!(b2 instanceof Argument) || !(b1 instanceof AllocaInst));
+            return (!(b1 instanceof Argument) || !(b2 instanceof AllocaInst))
+                && (!(b2 instanceof Argument) || !(b1 instanceof AllocaInst));
         }
-        
+
         if (p1 instanceof GetElementPtrInst gep1 && p2 instanceof GetElementPtrInst gep2) {
             if (gep1.getNumOperands() == gep2.getNumOperands()) {
                 boolean allConst = true;
@@ -200,8 +211,8 @@ public class LicmPass implements Pass {
                 for (int i = 1; i < gep1.getNumOperands(); i++) {
                     Value idx1 = gep1.getOperand(i);
                     Value idx2 = gep2.getOperand(i);
-                    if (idx1 instanceof top.tsxb.compiler.ir.constant.ConstInt c1 && 
-                        idx2 instanceof top.tsxb.compiler.ir.constant.ConstInt c2) {
+                    if (idx1 instanceof top.tsxb.compiler.ir.constant.ConstInt c1
+                        && idx2 instanceof top.tsxb.compiler.ir.constant.ConstInt c2) {
                         if (c1.getValue() != c2.getValue()) {
                             allEqual = false;
                         }
@@ -213,7 +224,7 @@ public class LicmPass implements Pass {
                 return !allConst || allEqual;
             }
         }
-        
+
         return true;
     }
 
@@ -236,5 +247,8 @@ public class LicmPass implements Pass {
             }
         }
         return true;
+    }
+
+    private record Loop(BasicBlock header, Set<BasicBlock> blocks) {
     }
 }

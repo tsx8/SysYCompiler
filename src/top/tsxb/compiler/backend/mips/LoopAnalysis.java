@@ -1,10 +1,14 @@
 package top.tsxb.compiler.backend.mips;
 
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
 import top.tsxb.compiler.backend.opti.DominatorAnalysis;
 import top.tsxb.compiler.ir.structure.BasicBlock;
 import top.tsxb.compiler.ir.structure.Function;
-
-import java.util.*;
 
 public class LoopAnalysis {
     private final Function function;
@@ -25,7 +29,8 @@ public class LoopAnalysis {
 
         // Find back-edges (n -> d where d dominates n)
         for (BasicBlock n : function.getBasicBlocks()) {
-            if (!domInfo.dominators().containsKey(n)) continue;
+            if (!domInfo.dominators().containsKey(n))
+                continue;
             List<BasicBlock> successors = cfg.successors().getOrDefault(n, List.of());
             for (BasicBlock d : successors) {
                 if (domInfo.dominators().get(n).contains(d)) {

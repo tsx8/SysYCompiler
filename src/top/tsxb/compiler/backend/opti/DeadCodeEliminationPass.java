@@ -1,12 +1,24 @@
 package top.tsxb.compiler.backend.opti;
 
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.ListIterator;
+import java.util.Queue;
+import java.util.Set;
+
 import top.tsxb.compiler.ir.base.Value;
-import top.tsxb.compiler.ir.inst.*;
+import top.tsxb.compiler.ir.inst.BrInst;
+import top.tsxb.compiler.ir.inst.CallInst;
+import top.tsxb.compiler.ir.inst.GetElementPtrInst;
+import top.tsxb.compiler.ir.inst.Instruction;
+import top.tsxb.compiler.ir.inst.LoadInst;
+import top.tsxb.compiler.ir.inst.ReturnInst;
+import top.tsxb.compiler.ir.inst.StoreInst;
 import top.tsxb.compiler.ir.structure.BasicBlock;
 import top.tsxb.compiler.ir.structure.Function;
 import top.tsxb.compiler.ir.structure.Module;
-
-import java.util.*;
 
 public class DeadCodeEliminationPass implements Pass {
     @Override
@@ -94,7 +106,8 @@ public class DeadCodeEliminationPass implements Pass {
     }
 
     private boolean mayAlias(Value v1, Value v2) {
-        if (v1 == v2) return true;
+        if (v1 == v2)
+            return true;
         Value base1 = getUnderlyingObject(v1);
         Value base2 = getUnderlyingObject(v2);
         return base1 == base2;
@@ -108,9 +121,7 @@ public class DeadCodeEliminationPass implements Pass {
     }
 
     private boolean isCritical(Instruction inst) {
-        return inst instanceof StoreInst ||
-               inst instanceof CallInst ||
-               inst instanceof BrInst ||
-               inst instanceof ReturnInst;
+        return inst instanceof StoreInst || inst instanceof CallInst || inst instanceof BrInst
+            || inst instanceof ReturnInst;
     }
 }

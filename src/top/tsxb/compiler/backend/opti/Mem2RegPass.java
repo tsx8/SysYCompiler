@@ -93,8 +93,8 @@ public class Mem2RegPass implements Pass {
                 for (int i = 0; i < instruction.getNumOperands(); i++) {
                     Value operand = instruction.getOperand(i);
                     if (operand instanceof AllocaInst alloca && vars.containsKey(alloca)) {
-                        boolean isPointerUse = (instruction instanceof LoadInst && i == 0)
-                            || (instruction instanceof StoreInst && i == 1);
+                        boolean isPointerUse =
+                            (instruction instanceof LoadInst && i == 0) || (instruction instanceof StoreInst && i == 1);
                         if (!isPointerUse) {
                             vars.get(alloca).promotable = false;
                         }
@@ -105,7 +105,7 @@ public class Mem2RegPass implements Pass {
     }
 
     private Map<BasicBlock, Map<AllocaInst, PhiInst>> insertPhiNodes(Map<AllocaInst, VarInfo> vars,
-            Set<AllocaInst> promotable, Map<BasicBlock, Set<BasicBlock>> dominanceFrontier) {
+        Set<AllocaInst> promotable, Map<BasicBlock, Set<BasicBlock>> dominanceFrontier) {
         Map<BasicBlock, Map<AllocaInst, PhiInst>> phiMap = new LinkedHashMap<>();
         for (AllocaInst alloca : promotable) {
             VarInfo info = vars.get(alloca);
@@ -135,9 +135,8 @@ public class Mem2RegPass implements Pass {
     }
 
     private void rename(BasicBlock block, Map<AllocaInst, Deque<Value>> stacks,
-            Map<BasicBlock, List<BasicBlock>> successors, Map<BasicBlock, List<BasicBlock>> domTree,
-            Map<BasicBlock, Map<AllocaInst, PhiInst>> phiMap, Map<AllocaInst, VarInfo> vars,
-            Set<AllocaInst> promotable) {
+        Map<BasicBlock, List<BasicBlock>> successors, Map<BasicBlock, List<BasicBlock>> domTree,
+        Map<BasicBlock, Map<AllocaInst, PhiInst>> phiMap, Map<AllocaInst, VarInfo> vars, Set<AllocaInst> promotable) {
         Map<AllocaInst, Integer> pushCounts = new LinkedHashMap<>();
         Map<AllocaInst, PhiInst> blockPhis = phiMap.getOrDefault(block, Map.of());
         for (Map.Entry<AllocaInst, PhiInst> entry : blockPhis.entrySet()) {

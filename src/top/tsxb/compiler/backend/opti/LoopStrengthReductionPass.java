@@ -1,21 +1,32 @@
 package top.tsxb.compiler.backend.opti;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
 import top.tsxb.compiler.ir.base.Value;
 import top.tsxb.compiler.ir.constant.ConstInt;
-import top.tsxb.compiler.ir.inst.*;
-import top.tsxb.compiler.ir.structure.*;
+import top.tsxb.compiler.ir.inst.BinaryInst;
+import top.tsxb.compiler.ir.inst.GetElementPtrInst;
+import top.tsxb.compiler.ir.inst.Instruction;
+import top.tsxb.compiler.ir.inst.OpCode;
+import top.tsxb.compiler.ir.inst.PhiInst;
+import top.tsxb.compiler.ir.structure.Argument;
+import top.tsxb.compiler.ir.structure.BasicBlock;
+import top.tsxb.compiler.ir.structure.Function;
+import top.tsxb.compiler.ir.structure.GlobalValue;
 import top.tsxb.compiler.ir.type.IntType;
 
-import java.util.*;
-
 public class LoopStrengthReductionPass implements Pass {
-    private record Loop(BasicBlock header, BasicBlock latch, Set<BasicBlock> blocks) {}
-
     @Override
     public boolean run(top.tsxb.compiler.ir.structure.Module module) {
         boolean changed = false;
         for (Function function : module.getFunctionList()) {
-            if (function.isDeclaration()) continue;
+            if (function.isDeclaration())
+                continue;
             changed |= runOnFunction(function);
         }
         return changed;
@@ -38,7 +49,8 @@ public class LoopStrengthReductionPass implements Pass {
         DominatorAnalysis.DominatorInfo domInfo = DominatorAnalysis.computeDominators(function);
 
         for (BasicBlock n : function.getBasicBlocks()) {
-            if (!domInfo.dominators().containsKey(n)) continue;
+            if (!domInfo.dominators().containsKey(n))
+                continue;
             for (BasicBlock d : cfg.successors().getOrDefault(n, List.of())) {
                 if (domInfo.dominators().get(n).contains(d)) {
                     Set<BasicBlock> loopBlocks = DominatorAnalysis.findLoopBlocks(n, d, cfg.predecessors());
@@ -52,12 +64,14 @@ public class LoopStrengthReductionPass implements Pass {
     private boolean runOnLoop(Loop loop) {
         boolean changed = false;
         Map<PhiInst, Value> ivs = findInductionVariables(loop);
-        if (ivs.isEmpty()) return false;
+        if (ivs.isEmpty())
+            return false;
 
         List<BinaryInst> bins = new ArrayList<>();
         for (BasicBlock bb : loop.blocks()) {
             for (Instruction inst : bb.getInstructions()) {
-                if (inst instanceof BinaryInst bin && (bin.getOpCode() == OpCode.MUL || bin.getOpCode() == OpCode.ADD)) {
+                if (inst instanceof BinaryInst bin
+                    && (bin.getOpCode() == OpCode.MUL || bin.getOpCode() == OpCode.ADD)) {
                     bins.add(bin);
                 }
             }
@@ -65,13 +79,16 @@ public class LoopStrengthReductionPass implements Pass {
 
         int phisCreated = 0;
         for (BinaryInst bin : bins) {
-            if (phisCreated >= 8) break;
-            if (isIvUpdate(bin, ivs, loop)) continue;
-            
+            if (phisCreated >= 8)
+                break;
+            if (isIvUpdate(bin, ivs, loop))
+                continue;
+
             LinearExpr expr = getLinearExpr(bin, ivs, loop);
             if (expr != null && expr.iv != null) {
-                if (expr.iv.getParent() != loop.header()) continue;
-                
+                if (expr.iv.getParent() != loop.header())
+                    continue;
+
                 if (isWorthReducing(bin, expr)) {
                     if (reduceBinaryInst(bin, expr, ivs, loop)) {
                         changed = true;
@@ -97,12 +114,15 @@ public class LoopStrengthReductionPass implements Pass {
             }
         }
 
-        if (groups.isEmpty()) return changed;
+        if (groups.isEmpty())
+            return changed;
 
         for (Map.Entry<LsrKey, List<GetElementPtrInst>> entry : groups.entrySet()) {
-            if (phisCreated >= 12) break; // Total limit
-            if (!isWorthReducing(entry.getKey(), entry.getValue())) continue;
-            
+            if (phisCreated >= 12)
+                break; // Total limit
+            if (!isWorthReducing(entry.getKey(), entry.getValue()))
+                continue;
+
             if (reduceGroup(entry.getKey(), entry.getValue(), ivs, loop)) {
                 changed = true;
                 phisCreated++;
@@ -118,7 +138,8 @@ public class LoopStrengthReductionPass implements Pass {
             return expr.scale instanceof ConstInt;
         }
         if (bin.getOpCode() == OpCode.ADD) {
-            if (!(expr.scale instanceof ConstInt ci && ci.getValue() == 1)) return true;
+            if (!(expr.scale instanceof ConstInt ci && ci.getValue() == 1))
+                return true;
             return !(expr.offset instanceof ConstInt co && co.getValue() == 0);
         }
         return false;
@@ -126,10 +147,11 @@ public class LoopStrengthReductionPass implements Pass {
 
     private boolean reduceBinaryInst(BinaryInst bin, LinearExpr expr, Map<PhiInst, Value> primaryIvs, Loop loop) {
         BasicBlock preheader = findPreheader(loop);
-        if (preheader == null) return false;
+        if (preheader == null)
+            return false;
 
         Value step = primaryIvs.get(expr.iv);
-        
+
         Value initialIv = expr.iv.getIncomingValue(preheader);
         Value scaledInitial = simplifyMul(expr.scale, initialIv, preheader);
         Value initialVal = simplifyAdd(scaledInitial, expr.offset, preheader);
@@ -147,15 +169,13 @@ public class LoopStrengthReductionPass implements Pass {
         loop.latch().getInstructions().add(latchBranchIdx, nextVal);
         nextVal.setParent(loop.latch());
         loop.latch().getParent().resolveLocalName(nextVal);
-        
+
         phi.setIncoming(loop.latch(), nextVal);
 
         bin.replaceAllUsesWith(phi);
         bin.getParent().getInstructions().remove(bin);
         return true;
     }
-
-    private record LinearExpr(PhiInst iv, Value scale, Value offset) {}
 
     private LinearExpr getLinearExpr(Value val, Map<PhiInst, Value> primaryIvs, Loop loop) {
         if (val instanceof PhiInst phi && primaryIvs.containsKey(phi)) {
@@ -167,7 +187,8 @@ public class LoopStrengthReductionPass implements Pass {
         if (val instanceof BinaryInst bin) {
             LinearExpr left = getLinearExpr(bin.getOperand(0), primaryIvs, loop);
             LinearExpr right = getLinearExpr(bin.getOperand(1), primaryIvs, loop);
-            if (left == null || right == null) return null;
+            if (left == null || right == null)
+                return null;
 
             if (bin.getOpCode() == OpCode.ADD) {
                 if (left.iv == null && right.iv != null) {
@@ -181,18 +202,21 @@ public class LoopStrengthReductionPass implements Pass {
                 if (left.iv != null && left.iv == right.iv) {
                     Value newScale = simplifyAdd(left.scale, right.scale, null);
                     Value newOffset = simplifyAdd(left.offset, right.offset, null);
-                    return (newScale != null && newOffset != null) ? new LinearExpr(left.iv, newScale, newOffset) : null;
+                    return (newScale != null && newOffset != null) ? new LinearExpr(left.iv, newScale, newOffset)
+                        : null;
                 }
             } else if (bin.getOpCode() == OpCode.MUL) {
                 if (left.iv == null && right.iv != null) {
                     Value newScale = simplifyMul(left.offset, right.scale, null);
                     Value newOffset = simplifyMul(left.offset, right.offset, null);
-                    return (newScale != null && newOffset != null) ? new LinearExpr(right.iv, newScale, newOffset) : null;
+                    return (newScale != null && newOffset != null) ? new LinearExpr(right.iv, newScale, newOffset)
+                        : null;
                 }
                 if (right.iv == null && left.iv != null) {
                     Value newScale = simplifyMul(right.offset, left.scale, null);
                     Value newOffset = simplifyMul(right.offset, left.offset, null);
-                    return (newScale != null && newOffset != null) ? new LinearExpr(left.iv, newScale, newOffset) : null;
+                    return (newScale != null && newOffset != null) ? new LinearExpr(left.iv, newScale, newOffset)
+                        : null;
                 }
             }
         }
@@ -207,10 +231,13 @@ public class LoopStrengthReductionPass implements Pass {
         if (a instanceof ConstInt ca && b instanceof ConstInt cb) {
             return new ConstInt(IntType.I32, ca.getValue() + cb.getValue());
         }
-        if (a instanceof ConstInt ca && ca.getValue() == 0) return b;
-        if (b instanceof ConstInt cb && cb.getValue() == 0) return a;
-        if (insertAt == null) return null;
-        
+        if (a instanceof ConstInt ca && ca.getValue() == 0)
+            return b;
+        if (b instanceof ConstInt cb && cb.getValue() == 0)
+            return a;
+        if (insertAt == null)
+            return null;
+
         BinaryInst bin = new BinaryInst(OpCode.ADD, a, b, null);
         int idx = insertAt.getInstructions().size();
         if (idx > 0 && isTerminator(insertAt.getInstructions().get(idx - 1))) {
@@ -227,15 +254,20 @@ public class LoopStrengthReductionPass implements Pass {
             return new ConstInt(IntType.I32, ca.getValue() * cb.getValue());
         }
         if (a instanceof ConstInt ca) {
-            if (ca.getValue() == 0) return new ConstInt(IntType.I32, 0);
-            if (ca.getValue() == 1) return b;
+            if (ca.getValue() == 0)
+                return new ConstInt(IntType.I32, 0);
+            if (ca.getValue() == 1)
+                return b;
         }
         if (b instanceof ConstInt cb) {
-            if (cb.getValue() == 0) return new ConstInt(IntType.I32, 0);
-            if (cb.getValue() == 1) return a;
+            if (cb.getValue() == 0)
+                return new ConstInt(IntType.I32, 0);
+            if (cb.getValue() == 1)
+                return a;
         }
-        if (insertAt == null) return null;
-        
+        if (insertAt == null)
+            return null;
+
         BinaryInst bin = new BinaryInst(OpCode.MUL, a, b, null);
         int idx = insertAt.getInstructions().size();
         if (idx > 0 && isTerminator(insertAt.getInstructions().get(idx - 1))) {
@@ -248,16 +280,17 @@ public class LoopStrengthReductionPass implements Pass {
     }
 
     private boolean isWorthReducing(LsrKey key, List<GetElementPtrInst> geps) {
-        if (key.base instanceof GlobalValue) return true;
-        if (geps.size() > 1) return true;
+        if (key.base instanceof GlobalValue)
+            return true;
+        if (geps.size() > 1)
+            return true;
         return key.otherIndices.size() > 2;
     }
 
-    private record LsrKey(Value base, PhiInst iv, int ivIdx, List<Value> otherIndices) {}
-
     private LsrKey getLsrKey(GetElementPtrInst gep, Map<PhiInst, Value> ivs, Loop loop) {
         Value base = gep.getOperand(0);
-        if (!isLoopInvariant(base, loop)) return null;
+        if (!isLoopInvariant(base, loop))
+            return null;
 
         int ivIdx = -1;
         PhiInst iv = null;
@@ -267,9 +300,10 @@ public class LoopStrengthReductionPass implements Pass {
             Value idx = gep.getOperand(i);
             LinearExpr expr = getLinearExpr(idx, ivs, loop);
             if (expr != null && expr.iv != null) {
-                if (iv != null) return null;
-                if (expr.scale instanceof ConstInt ci && ci.getValue() == 1 && 
-                    expr.offset instanceof ConstInt co && co.getValue() == 0) {
+                if (iv != null)
+                    return null;
+                if (expr.scale instanceof ConstInt ci && ci.getValue() == 1 && expr.offset instanceof ConstInt co
+                    && co.getValue() == 0) {
                     ivIdx = i;
                     iv = expr.iv;
                     otherIndices.add(null);
@@ -288,7 +322,8 @@ public class LoopStrengthReductionPass implements Pass {
 
     private boolean reduceGroup(LsrKey key, List<GetElementPtrInst> geps, Map<PhiInst, Value> ivs, Loop loop) {
         BasicBlock preheader = findPreheader(loop);
-        if (preheader == null) return false;
+        if (preheader == null)
+            return false;
 
         Value step = ivs.get(key.iv);
         GetElementPtrInst firstGep = geps.get(0);
@@ -325,7 +360,7 @@ public class LoopStrengthReductionPass implements Pass {
         loop.latch().getInstructions().add(latchBranchIdx, nextPtr);
         nextPtr.setParent(loop.latch());
         loop.latch().getParent().resolveLocalName(nextPtr);
-        
+
         ptrPhi.setIncoming(loop.latch(), nextPtr);
 
         for (GetElementPtrInst gep : geps) {
@@ -359,30 +394,46 @@ public class LoopStrengthReductionPass implements Pass {
     }
 
     private boolean isLoopInvariant(Value val, Loop loop) {
-        if (val instanceof ConstInt) return true;
-        if (val instanceof GlobalValue) return true;
-        if (val instanceof Argument) return true;
+        if (val instanceof ConstInt)
+            return true;
+        if (val instanceof GlobalValue)
+            return true;
+        if (val instanceof Argument)
+            return true;
         if (val instanceof Instruction inst) {
             return !loop.blocks().contains(inst.getParent());
         }
         return true;
     }
+
     private boolean isIvUpdate(BinaryInst bin, Map<PhiInst, Value> ivs, Loop loop) {
         for (PhiInst phi : ivs.keySet()) {
-            if (phi.getIncomingValue(loop.latch()) == bin) return true;
+            if (phi.getIncomingValue(loop.latch()) == bin)
+                return true;
         }
         return false;
     }
+
     private BasicBlock findPreheader(Loop loop) {
         DominatorAnalysis.Cfg cfg = DominatorAnalysis.computeCfg(loop.header().getParent());
         List<BasicBlock> preds = cfg.predecessors().get(loop.header());
         BasicBlock preheader = null;
         for (BasicBlock pred : preds) {
             if (!loop.blocks().contains(pred)) {
-                if (preheader != null) return null;
+                if (preheader != null)
+                    return null;
                 preheader = pred;
             }
         }
         return preheader;
+    }
+
+    private record Loop(BasicBlock header, BasicBlock latch, Set<BasicBlock> blocks) {
+    }
+
+    private record LinearExpr(PhiInst iv, Value scale, Value offset) {
+    }
+
+    private record LsrKey(Value base, PhiInst iv, int ivIdx, List<Value> otherIndices) {
     }
 }

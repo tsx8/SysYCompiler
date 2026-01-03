@@ -1,17 +1,21 @@
 package top.tsxb.compiler.backend.mips;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
 import top.tsxb.compiler.ir.base.Value;
-import top.tsxb.compiler.ir.inst.Instruction;
+import top.tsxb.compiler.ir.constant.Constant;
 import top.tsxb.compiler.ir.inst.CallInst;
+import top.tsxb.compiler.ir.inst.Instruction;
 import top.tsxb.compiler.ir.inst.PhiInst;
+import top.tsxb.compiler.ir.structure.Argument;
 import top.tsxb.compiler.ir.structure.BasicBlock;
 import top.tsxb.compiler.ir.structure.Function;
-import top.tsxb.compiler.ir.structure.Argument;
 import top.tsxb.compiler.ir.structure.GlobalVariable;
 import top.tsxb.compiler.ir.type.NoneType;
-import top.tsxb.compiler.ir.constant.Constant;
-
-import java.util.*;
 
 public class LiveIntervalAnalysis {
     private final Function function;
@@ -41,7 +45,8 @@ public class LiveIntervalAnalysis {
             for (Instruction inst : bb.getInstructions()) {
                 if (inst instanceof PhiInst phi) {
                     LiveInterval phiInterval = intervals.get(phi);
-                    if (phiInterval == null) continue;
+                    if (phiInterval == null)
+                        continue;
 
                     for (int i = 0; i < phi.getNumOperands(); i++) {
                         Value incoming = phi.getOperand(i);
@@ -144,10 +149,14 @@ public class LiveIntervalAnalysis {
     }
 
     private boolean isAllocatable(Value val) {
-        if (val == null) return false;
-        if (val instanceof GlobalVariable) return false;
-        if (val instanceof top.tsxb.compiler.ir.inst.AllocaInst) return false;
-        if (val instanceof Constant || val instanceof BasicBlock) return false;
+        if (val == null)
+            return false;
+        if (val instanceof GlobalVariable)
+            return false;
+        if (val instanceof top.tsxb.compiler.ir.inst.AllocaInst)
+            return false;
+        if (val instanceof Constant || val instanceof BasicBlock)
+            return false;
         return !(val instanceof Instruction inst) || !(inst.getType() instanceof NoneType);
     }
 

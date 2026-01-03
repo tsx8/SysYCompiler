@@ -107,9 +107,8 @@ public class Pipeline {
     }
 
     private String formatErrorReport(ErrorReporter reporter) {
-        return reporter.getErrors().stream()
-        .map(ErrorEntry::submission)
-        .collect(Collectors.joining(System.lineSeparator()));
+        return reporter.getErrors().stream().map(ErrorEntry::submission)
+            .collect(Collectors.joining(System.lineSeparator()));
     }
 
     private record PipelineResult(String report, boolean hasErrors) {

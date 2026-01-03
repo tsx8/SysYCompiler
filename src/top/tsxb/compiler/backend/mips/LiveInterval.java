@@ -1,18 +1,19 @@
 package top.tsxb.compiler.backend.mips;
 
-import top.tsxb.compiler.ir.base.Value;
 import java.util.ArrayList;
 import java.util.List;
 
+import top.tsxb.compiler.ir.base.Value;
+
 public class LiveInterval implements Comparable<LiveInterval> {
     private final Value value;
+    private final List<LiveInterval> hints = new ArrayList<>();
+    private final List<LiveInterval> phiHints = new ArrayList<>();
     private int start;
     private int end;
     private MipsRegister reg;
     private boolean spansCall;
     private double weight;
-    private final List<LiveInterval> hints = new ArrayList<>();
-    private final List<LiveInterval> phiHints = new ArrayList<>();
 
     public LiveInterval(Value value) {
         this.value = value;

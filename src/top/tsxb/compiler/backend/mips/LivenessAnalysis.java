@@ -1,16 +1,22 @@
 package top.tsxb.compiler.backend.mips;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
 import top.tsxb.compiler.ir.base.Value;
-import top.tsxb.compiler.ir.inst.Instruction;
+import top.tsxb.compiler.ir.constant.Constant;
 import top.tsxb.compiler.ir.inst.BrInst;
+import top.tsxb.compiler.ir.inst.Instruction;
 import top.tsxb.compiler.ir.inst.PhiInst;
 import top.tsxb.compiler.ir.structure.BasicBlock;
 import top.tsxb.compiler.ir.structure.Function;
 import top.tsxb.compiler.ir.structure.GlobalVariable;
 import top.tsxb.compiler.ir.type.NoneType;
-import top.tsxb.compiler.ir.constant.Constant;
-
-import java.util.*;
 
 public class LivenessAnalysis {
     private final Function function;
@@ -41,14 +47,15 @@ public class LivenessAnalysis {
 
         for (BasicBlock bb : function.getBasicBlocks()) {
             List<Instruction> insts = bb.getInstructions();
-            if (insts.isEmpty()) continue;
+            if (insts.isEmpty())
+                continue;
             Instruction last = insts.get(insts.size() - 1);
             if (last instanceof BrInst br) {
                 if (br.getNumOperands() == 3) {
-                    addEdge(bb, (BasicBlock) br.getOperand(1));
-                    addEdge(bb, (BasicBlock) br.getOperand(2));
+                    addEdge(bb, (BasicBlock)br.getOperand(1));
+                    addEdge(bb, (BasicBlock)br.getOperand(2));
                 } else {
-                    addEdge(bb, (BasicBlock) br.getOperand(0));
+                    addEdge(bb, (BasicBlock)br.getOperand(0));
                 }
             }
         }
@@ -89,7 +96,7 @@ public class LivenessAnalysis {
             liveIn.put(bb, new LinkedHashSet<>());
             liveOut.put(bb, new LinkedHashSet<>());
         }
-        
+
         // Compute Phi uses: for each predecessor, collect the values used by Phi in successors
         for (BasicBlock bb : function.getBasicBlocks()) {
             for (Instruction inst : bb.getInstructions()) {
@@ -110,10 +117,14 @@ public class LivenessAnalysis {
     }
 
     private boolean isAllocatable(Value val) {
-        if (val == null) return false;
-        if (val instanceof GlobalVariable) return false;
-        if (val instanceof top.tsxb.compiler.ir.inst.AllocaInst) return false;
-        if (val instanceof Constant || val instanceof BasicBlock) return false;
+        if (val == null)
+            return false;
+        if (val instanceof GlobalVariable)
+            return false;
+        if (val instanceof top.tsxb.compiler.ir.inst.AllocaInst)
+            return false;
+        if (val instanceof Constant || val instanceof BasicBlock)
+            return false;
         return !(val instanceof Instruction inst) || !(inst.getType() instanceof NoneType);
     }
 

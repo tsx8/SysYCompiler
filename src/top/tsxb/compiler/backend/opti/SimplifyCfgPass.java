@@ -1,21 +1,27 @@
 package top.tsxb.compiler.backend.opti;
 
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Queue;
+import java.util.Set;
+
+import top.tsxb.compiler.ir.base.Value;
 import top.tsxb.compiler.ir.inst.BrInst;
 import top.tsxb.compiler.ir.inst.Instruction;
 import top.tsxb.compiler.ir.inst.PhiInst;
-import top.tsxb.compiler.ir.base.Value;
 import top.tsxb.compiler.ir.structure.BasicBlock;
 import top.tsxb.compiler.ir.structure.Function;
 import top.tsxb.compiler.ir.structure.Module;
-
-import java.util.*;
 
 public class SimplifyCfgPass implements Pass {
     @Override
     public boolean run(Module module) {
         boolean anyChanged = false;
         for (Function function : module.getFunctionList()) {
-            if (function.isDeclaration()) continue;
+            if (function.isDeclaration())
+                continue;
             boolean changed = true;
             while (changed) {
                 changed = false;
@@ -40,17 +46,21 @@ public class SimplifyCfgPass implements Pass {
         boolean changed = false;
         List<BasicBlock> blocks = new ArrayList<>(function.getBasicBlocks());
         for (BasicBlock bb : blocks) {
-            if (bb == function.getBasicBlocks().get(0)) continue;
-            if (bb.getInstructions().size() != 1) continue;
+            if (bb == function.getBasicBlocks().get(0))
+                continue;
+            if (bb.getInstructions().size() != 1)
+                continue;
             Instruction inst = bb.getInstructions().get(0);
             if (inst instanceof BrInst br && br.getNumOperands() == 1) {
-                BasicBlock target = (BasicBlock) br.getOperand(0);
-                if (target == bb) continue;
+                BasicBlock target = (BasicBlock)br.getOperand(0);
+                if (target == bb)
+                    continue;
 
                 List<BasicBlock> predecessors = getPredecessors(bb, function);
 
                 if (getPredecessorCount(target, function) > 1) {
-                    if (predecessors.size() > 1) continue;
+                    if (predecessors.size() > 1)
+                        continue;
                     if (predecessors.size() == 1) {
                         BasicBlock pred = predecessors.get(0);
                         if (!pred.getInstructions().isEmpty()) {
@@ -61,7 +71,7 @@ public class SimplifyCfgPass implements Pass {
                         }
                     }
                 }
-                
+
                 boolean safe = true;
                 for (Instruction targetInst : target.getInstructions()) {
                     if (targetInst instanceof PhiInst phi) {
@@ -76,9 +86,11 @@ public class SimplifyCfgPass implements Pass {
                             }
                         }
                     }
-                    if (!safe) break;
+                    if (!safe)
+                        break;
                 }
-                if (!safe) continue;
+                if (!safe)
+                    continue;
 
                 for (BasicBlock pred : predecessors) {
                     Instruction predLast = pred.getInstructions().get(pred.getInstructions().size() - 1);
@@ -116,7 +128,8 @@ public class SimplifyCfgPass implements Pass {
     private List<BasicBlock> getPredecessors(BasicBlock target, Function function) {
         List<BasicBlock> preds = new ArrayList<>();
         for (BasicBlock bb : function.getBasicBlocks()) {
-            if (bb.getInstructions().isEmpty()) continue;
+            if (bb.getInstructions().isEmpty())
+                continue;
             Instruction inst = bb.getInstructions().get(bb.getInstructions().size() - 1);
             if (inst instanceof BrInst br) {
                 for (int i = 0; i < br.getNumOperands(); i++) {
@@ -131,15 +144,16 @@ public class SimplifyCfgPass implements Pass {
     }
 
     private boolean removeUnreachableBlocks(Function function) {
-        if (function.getBasicBlocks().isEmpty()) return false;
-        
+        if (function.getBasicBlocks().isEmpty())
+            return false;
+
         Set<BasicBlock> reachable = new LinkedHashSet<>();
         Queue<BasicBlock> queue = new LinkedList<>();
-        
+
         BasicBlock entry = function.getBasicBlocks().get(0);
         reachable.add(entry);
         queue.add(entry);
-        
+
         while (!queue.isEmpty()) {
             BasicBlock bb = queue.poll();
             for (Instruction inst : bb.getInstructions()) {
@@ -154,9 +168,10 @@ public class SimplifyCfgPass implements Pass {
                 }
             }
         }
-        
-        if (reachable.size() == function.getBasicBlocks().size()) return false;
-        
+
+        if (reachable.size() == function.getBasicBlocks().size())
+            return false;
+
         List<BasicBlock> allBlocks = new ArrayList<>(function.getBasicBlocks());
         boolean changed = false;
         for (BasicBlock bb : allBlocks) {
@@ -195,15 +210,16 @@ public class SimplifyCfgPass implements Pass {
         List<BasicBlock> blocks = new ArrayList<>(function.getBasicBlocks());
         for (int i = 0; i < blocks.size(); i++) {
             BasicBlock bb = blocks.get(i);
-            if (bb.getInstructions().isEmpty()) continue;
+            if (bb.getInstructions().isEmpty())
+                continue;
             Instruction last = bb.getInstructions().get(bb.getInstructions().size() - 1);
             if (last instanceof BrInst br && br.getNumOperands() == 1) {
-                BasicBlock target = (BasicBlock) br.getOperand(0);
+                BasicBlock target = (BasicBlock)br.getOperand(0);
                 if (target != bb && getPredecessorCount(target, function) == 1) {
                     // Merge target into bb
                     bb.getInstructions().remove(last);
                     br.dropAllReferences();
-                    
+
                     // Get successors before moving instructions
                     List<BasicBlock> successors = getSuccessors(target);
 
@@ -222,7 +238,7 @@ public class SimplifyCfgPass implements Pass {
                         bb.addInstruction(inst);
                         inst.setParent(bb);
                     }
-                    
+
                     // Update Phis in successors of target
                     for (BasicBlock successor : successors) {
                         for (Instruction inst : successor.getInstructions()) {
@@ -250,7 +266,8 @@ public class SimplifyCfgPass implements Pass {
 
     private List<BasicBlock> getSuccessors(BasicBlock bb) {
         List<BasicBlock> successors = new ArrayList<>();
-        if (bb.getInstructions().isEmpty()) return successors;
+        if (bb.getInstructions().isEmpty())
+            return successors;
         Instruction last = bb.getInstructions().get(bb.getInstructions().size() - 1);
         if (last instanceof BrInst br) {
             for (int i = 0; i < br.getNumOperands(); i++) {
@@ -265,7 +282,8 @@ public class SimplifyCfgPass implements Pass {
     private int getPredecessorCount(BasicBlock target, Function function) {
         int count = 0;
         for (BasicBlock bb : function.getBasicBlocks()) {
-            if (bb.getInstructions().isEmpty()) continue;
+            if (bb.getInstructions().isEmpty())
+                continue;
             Instruction inst = bb.getInstructions().get(bb.getInstructions().size() - 1);
             if (inst instanceof BrInst br) {
                 for (int i = 0; i < br.getNumOperands(); i++) {

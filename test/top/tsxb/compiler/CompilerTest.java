@@ -42,17 +42,17 @@ public class CompilerTest {
     private static final Path LOGS_ROOT =
         Paths.get("out", "logs", LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")));
     private static final Path PREVIOUS_LOGS_ROOT = findPreviousLogDirectory();
-    private static final Map<String, Double> currentFinalCycles = new ConcurrentHashMap<>();
     private static final Map<String, Double> previousFinalCycles = loadPreviousFinalCycles();
+    private static final Map<String, Double> currentFinalCycles = new ConcurrentHashMap<>();
 
     private static Path findPreviousLogDirectory() {
         Path logsParent = Paths.get("out", "logs");
-        if (!Files.exists(logsParent)) return null;
+        if (!Files.exists(logsParent))
+            return null;
         try (Stream<Path> paths = Files.list(logsParent)) {
             return paths.filter(Files::isDirectory)
                 .filter(p -> !p.getFileName().toString().equals(LOGS_ROOT.getFileName().toString()))
-                .max(Comparator.comparing(p -> p.getFileName().toString()))
-                .orElse(null);
+                .max(Comparator.comparing(p -> p.getFileName().toString())).orElse(null);
         } catch (IOException e) {
             return null;
         }
@@ -60,7 +60,8 @@ public class CompilerTest {
 
     private static Map<String, Double> loadPreviousFinalCycles() {
         Map<String, Double> results = new HashMap<>();
-        if (PREVIOUS_LOGS_ROOT == null) return results;
+        if (PREVIOUS_LOGS_ROOT == null)
+            return results;
         try (Stream<Path> paths = Files.list(PREVIOUS_LOGS_ROOT)) {
             paths.filter(Files::isDirectory).forEach(caseDir -> {
                 Double cycle = extractFinalCycle(caseDir);
@@ -68,13 +69,15 @@ public class CompilerTest {
                     results.put(caseDir.getFileName().toString(), cycle);
                 }
             });
-        } catch (IOException ignored) {}
+        } catch (IOException ignored) {
+        }
         return results;
     }
 
     private static Double extractFinalCycle(Path caseLogDir) {
         Path statsFile = caseLogDir.resolve("InstructionStatistics.txt");
-        if (!Files.exists(statsFile)) return null;
+        if (!Files.exists(statsFile))
+            return null;
         try {
             List<String> lines = Files.readAllLines(statsFile);
             for (String line : lines) {
@@ -82,7 +85,8 @@ public class CompilerTest {
                     return Double.parseDouble(line.substring("Final Cycle:".length()).trim());
                 }
             }
-        } catch (IOException | NumberFormatException ignored) {}
+        } catch (IOException | NumberFormatException ignored) {
+        }
         return null;
     }
 
@@ -131,8 +135,8 @@ public class CompilerTest {
             customThreadPool.submit(() -> testDirs.parallelStream().forEach(testDir -> {
                 String testName = testDir.getFileName().toString();
                 try {
-                    TestCase testCase = new TestCase(testName, testDir.resolve("testfile.txt"), testDir.resolve("ans.txt"),
-                        testDir.resolve("in.txt"));
+                    TestCase testCase = new TestCase(testName, testDir.resolve("testfile.txt"),
+                        testDir.resolve("ans.txt"), testDir.resolve("in.txt"));
                     Path caseLogDir = LOGS_ROOT.resolve(testCase.name());
                     TestLogger logger = new TestLogger(caseLogDir);
 
@@ -156,10 +160,12 @@ public class CompilerTest {
                             System.out.printf("--- [%-15s] \u001B[32m[PASSED]\u001B[0m%s%n", testName, cycleInfo);
                             passed.increment();
                         } else if (result instanceof TestResult.Failed f) {
-                            System.out.printf("--- [%-15s] \u001B[31m[FAILED]\u001B[0m%s - %s%n", testName, cycleInfo, f.reason());
+                            System.out.printf("--- [%-15s] \u001B[31m[FAILED]\u001B[0m%s - %s%n", testName, cycleInfo,
+                                f.reason());
                             failed.increment();
                         } else if (result instanceof TestResult.ExecutionError e) {
-                            System.out.printf("--- [%-15s] \u001B[31m[ERROR]\u001B[0m%s - %s%n", testName, cycleInfo, e.summary());
+                            System.out.printf("--- [%-15s] \u001B[31m[ERROR]\u001B[0m%s - %s%n", testName, cycleInfo,
+                                e.summary());
                             failed.increment();
                         }
                     }
@@ -206,8 +212,7 @@ public class CompilerTest {
         var executor = new ProcessExecutor();
 
         return switch (CompilerConfig.CURRENT_HOMEWORK) {
-            case "lexer", "parser", "semantic" ->
-                new LegacyFileCompareStrategy(CompilerConfig.CURRENT_HOMEWORK);
+            case "lexer", "parser", "semantic" -> new LegacyFileCompareStrategy(CompilerConfig.CURRENT_HOMEWORK);
             case "llvm" -> new IrExecutionStrategy(executor);
             case "mips" -> new MipsExecutionStrategy(executor);
             default -> throw new IllegalStateException(
@@ -265,7 +270,8 @@ public class CompilerTest {
             if (commonCount > 0 && totalPreviousCommon > 0) {
                 double diffPercent = (totalCurrentCommon - totalPreviousCommon) / totalPreviousCommon * 100.0;
                 if (diffPercent != 0) {
-                    System.out.printf(" (%s%.2f%% vs previous %d common cases)", diffPercent > 0 ? "+" : "", diffPercent, commonCount);
+                    System.out.printf(" (%s%.2f%% vs previous %d common cases)", diffPercent > 0 ? "+" : "",
+                        diffPercent, commonCount);
                 }
             }
             System.out.println();

@@ -10,6 +10,24 @@ import top.tsxb.compiler.ir.structure.Module;
 public class PassManager {
     private final List<Pass> passes = new ArrayList<>();
 
+    public static PassManager createDefault() {
+        PassManager manager = new PassManager();
+        manager.register(new FunctionInliningPass());
+        manager.register(new GlobalLocalizationPass());
+        manager.register(new Mem2RegPass());
+        manager.register(new SccpPass());
+        manager.register(new IpsccpPass());
+        manager.register(new GvnPass());
+        manager.register(new SimplifyCfgPass());
+        manager.register(new TailRecursionEliminationPass());
+        manager.register(new LoopUnrollingPass());
+        manager.register(new LoopStrengthReductionPass());
+        manager.register(new LicmPass());
+        manager.register(new GcmPass());
+        manager.register(new DeadCodeEliminationPass());
+        return manager;
+    }
+
     public PassManager register(Pass pass) {
         passes.add(Objects.requireNonNull(pass, "pass"));
         return this;
@@ -32,23 +50,5 @@ public class PassManager {
             }
             iterations++;
         }
-    }
-
-    public static PassManager createDefault() {
-        PassManager manager = new PassManager();
-        manager.register(new FunctionInliningPass());
-        manager.register(new GlobalLocalizationPass());
-        manager.register(new Mem2RegPass());
-        manager.register(new SccpPass());
-        manager.register(new IpsccpPass());
-        manager.register(new GvnPass());
-        manager.register(new SimplifyCfgPass());
-        manager.register(new TailRecursionEliminationPass());
-        manager.register(new LoopUnrollingPass());
-        manager.register(new LoopStrengthReductionPass());
-        manager.register(new LicmPass());
-        manager.register(new GcmPass());
-        manager.register(new DeadCodeEliminationPass());
-        return manager;
     }
 }

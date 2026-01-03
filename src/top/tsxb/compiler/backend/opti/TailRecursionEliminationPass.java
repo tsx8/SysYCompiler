@@ -1,7 +1,17 @@
 package top.tsxb.compiler.backend.opti;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import top.tsxb.compiler.ir.base.Value;
-import top.tsxb.compiler.ir.inst.*;
+import top.tsxb.compiler.ir.inst.AllocaInst;
+import top.tsxb.compiler.ir.inst.BrInst;
+import top.tsxb.compiler.ir.inst.CallInst;
+import top.tsxb.compiler.ir.inst.GetElementPtrInst;
+import top.tsxb.compiler.ir.inst.Instruction;
+import top.tsxb.compiler.ir.inst.PhiInst;
+import top.tsxb.compiler.ir.inst.ReturnInst;
+import top.tsxb.compiler.ir.inst.StoreInst;
 import top.tsxb.compiler.ir.structure.Argument;
 import top.tsxb.compiler.ir.structure.BasicBlock;
 import top.tsxb.compiler.ir.structure.Function;
@@ -10,15 +20,13 @@ import top.tsxb.compiler.ir.structure.Module;
 import top.tsxb.compiler.ir.type.FuncType;
 import top.tsxb.compiler.ir.type.NoneType;
 
-import java.util.ArrayList;
-import java.util.List;
-
 public class TailRecursionEliminationPass implements Pass {
     @Override
     public boolean run(Module module) {
         boolean anyChanged = false;
         for (Function function : module.getFunctionList()) {
-            if (function.isDeclaration()) continue;
+            if (function.isDeclaration())
+                continue;
             if (processFunction(function)) {
                 anyChanged = true;
             }
@@ -31,7 +39,7 @@ public class TailRecursionEliminationPass implements Pass {
         if (tailCalls.isEmpty()) {
             return false;
         }
-        
+
         List<CallInst> allRecursiveCalls = findAllRecursiveCalls(function);
         if (allRecursiveCalls.size() != tailCalls.size()) {
             return false;
@@ -44,7 +52,7 @@ public class TailRecursionEliminationPass implements Pass {
         BasicBlock oldEntry = function.getBasicBlocks().get(0);
         BasicBlock treHeader = new BasicBlock("tre_header", function);
         BasicBlock oldEntryBody = new BasicBlock("old_entry_body", function);
-        
+
         function.getBasicBlocks().remove(treHeader);
         function.getBasicBlocks().remove(oldEntryBody);
         function.getBasicBlocks().add(1, treHeader);
@@ -75,19 +83,19 @@ public class TailRecursionEliminationPass implements Pass {
             for (int i = 0; i < phis.size(); i++) {
                 phis.get(i).setIncoming(bb, call.getOperand(i + 1));
             }
-            
+
             List<Instruction> insts = bb.getInstructions();
             int callIdx = insts.indexOf(call);
-            
+
             BrInst br = new BrInst(treHeader, null);
             insts.set(callIdx, br);
             br.setParent(bb);
-            
+
             if (callIdx + 1 < insts.size() && insts.get(callIdx + 1) instanceof ReturnInst) {
                 Instruction ret = insts.remove(callIdx + 1);
                 ret.dropAllReferences();
             }
-            
+
             call.dropAllReferences();
         }
 
@@ -98,15 +106,16 @@ public class TailRecursionEliminationPass implements Pass {
         List<CallInst> tailCalls = new ArrayList<>();
         for (BasicBlock bb : function.getBasicBlocks()) {
             List<Instruction> insts = bb.getInstructions();
-            if (insts.isEmpty()) continue;
+            if (insts.isEmpty())
+                continue;
             Instruction last = insts.get(insts.size() - 1);
             if (last instanceof ReturnInst ret) {
                 if (insts.size() >= 2) {
                     Instruction prev = insts.get(insts.size() - 2);
                     if (prev instanceof CallInst call && call.getOperand(0) == function) {
                         if (function.getValueType() instanceof FuncType funcType) {
-                            if (funcType.getReturnType() instanceof NoneType || 
-                                (ret.getNumOperands() > 0 && ret.getOperand(0) == call)) {
+                            if (funcType.getReturnType() instanceof NoneType
+                                || (ret.getNumOperands() > 0 && ret.getOperand(0) == call)) {
                                 tailCalls.add(call);
                             }
                         }

@@ -5,8 +5,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import top.tsxb.compiler.ir.constant.ConstString;
 import top.tsxb.compiler.ir.base.Value;
+import top.tsxb.compiler.ir.constant.ConstString;
 
 public class Module {
     private final List<GlobalVariable> globalList = new ArrayList<>();

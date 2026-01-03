@@ -1,23 +1,21 @@
 package top.tsxb.compiler.backend.opti;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Queue;
+import java.util.Set;
+
+import top.tsxb.compiler.ir.inst.BrInst;
+import top.tsxb.compiler.ir.inst.Instruction;
 import top.tsxb.compiler.ir.structure.BasicBlock;
 import top.tsxb.compiler.ir.structure.Function;
-import top.tsxb.compiler.ir.inst.Instruction;
-import top.tsxb.compiler.ir.inst.BrInst;
-
-import java.util.*;
 
 public class DominatorAnalysis {
-    public record Cfg(Map<BasicBlock, List<BasicBlock>> successors, Map<BasicBlock, List<BasicBlock>> predecessors) {
-    }
-
-    public record DominatorInfo(Map<BasicBlock, Set<BasicBlock>> dominators, Map<BasicBlock, BasicBlock> idom,
-                                Map<BasicBlock, List<BasicBlock>> domTree, Map<BasicBlock, Set<BasicBlock>> dominanceFrontier) {
-        public boolean dominates(BasicBlock a, BasicBlock b) {
-            return dominators.containsKey(b) && dominators.get(b).contains(a);
-        }
-    }
-
     public static Cfg computeCfg(Function function) {
         Map<BasicBlock, List<BasicBlock>> successors = new LinkedHashMap<>();
         Map<BasicBlock, List<BasicBlock>> predecessors = new LinkedHashMap<>();
@@ -29,21 +27,23 @@ public class DominatorAnalysis {
 
         for (BasicBlock bb : function.getBasicBlocks()) {
             List<Instruction> insts = bb.getInstructions();
-            if (insts.isEmpty()) continue;
+            if (insts.isEmpty())
+                continue;
             Instruction last = insts.get(insts.size() - 1);
             if (last instanceof BrInst br) {
                 if (br.getNumOperands() == 3) {
-                    addEdge(bb, (BasicBlock) br.getOperand(1), successors, predecessors);
-                    addEdge(bb, (BasicBlock) br.getOperand(2), successors, predecessors);
+                    addEdge(bb, (BasicBlock)br.getOperand(1), successors, predecessors);
+                    addEdge(bb, (BasicBlock)br.getOperand(2), successors, predecessors);
                 } else {
-                    addEdge(bb, (BasicBlock) br.getOperand(0), successors, predecessors);
+                    addEdge(bb, (BasicBlock)br.getOperand(0), successors, predecessors);
                 }
             }
         }
         return new Cfg(successors, predecessors);
     }
 
-    private static void addEdge(BasicBlock from, BasicBlock to, Map<BasicBlock, List<BasicBlock>> successors, Map<BasicBlock, List<BasicBlock>> predecessors) {
+    private static void addEdge(BasicBlock from, BasicBlock to, Map<BasicBlock, List<BasicBlock>> successors,
+        Map<BasicBlock, List<BasicBlock>> predecessors) {
         successors.get(from).add(to);
         predecessors.computeIfAbsent(to, k -> new ArrayList<>()).add(from);
     }
@@ -141,7 +141,8 @@ public class DominatorAnalysis {
         return new DominatorInfo(dominators, idom, domTree, frontier);
     }
 
-    private static List<BasicBlock> getReversePostOrder(BasicBlock entry, Map<BasicBlock, List<BasicBlock>> successors) {
+    private static List<BasicBlock> getReversePostOrder(BasicBlock entry,
+        Map<BasicBlock, List<BasicBlock>> successors) {
         List<BasicBlock> postOrder = new ArrayList<>();
         Set<BasicBlock> visited = new LinkedHashSet<>();
         dfsPostOrder(entry, successors, visited, postOrder);
@@ -149,8 +150,8 @@ public class DominatorAnalysis {
         return postOrder;
     }
 
-    private static void dfsPostOrder(BasicBlock block, Map<BasicBlock, List<BasicBlock>> successors, Set<BasicBlock> visited,
-                                     List<BasicBlock> postOrder) {
+    private static void dfsPostOrder(BasicBlock block, Map<BasicBlock, List<BasicBlock>> successors,
+        Set<BasicBlock> visited, List<BasicBlock> postOrder) {
         visited.add(block);
         for (BasicBlock succ : successors.getOrDefault(block, List.of())) {
             if (!visited.contains(succ)) {
@@ -161,7 +162,7 @@ public class DominatorAnalysis {
     }
 
     private static BasicBlock intersect(Map<BasicBlock, BasicBlock> idom, Map<BasicBlock, Integer> order,
-                                        BasicBlock first, BasicBlock second) {
+        BasicBlock first, BasicBlock second) {
         BasicBlock finger1 = first;
         BasicBlock finger2 = second;
         while (finger1 != finger2) {
@@ -178,11 +179,13 @@ public class DominatorAnalysis {
         return finger1;
     }
 
-    public static Set<BasicBlock> findLoopBlocks(BasicBlock latch, BasicBlock header, Map<BasicBlock, List<BasicBlock>> predecessors) {
+    public static Set<BasicBlock> findLoopBlocks(BasicBlock latch, BasicBlock header,
+        Map<BasicBlock, List<BasicBlock>> predecessors) {
         Set<BasicBlock> blocks = new LinkedHashSet<>();
         blocks.add(header);
         blocks.add(latch);
-        if (latch == header) return blocks;
+        if (latch == header)
+            return blocks;
 
         Queue<BasicBlock> queue = new LinkedList<>();
         queue.add(latch);
@@ -196,5 +199,15 @@ public class DominatorAnalysis {
             }
         }
         return blocks;
+    }
+
+    public record Cfg(Map<BasicBlock, List<BasicBlock>> successors, Map<BasicBlock, List<BasicBlock>> predecessors) {
+    }
+
+    public record DominatorInfo(Map<BasicBlock, Set<BasicBlock>> dominators, Map<BasicBlock, BasicBlock> idom,
+        Map<BasicBlock, List<BasicBlock>> domTree, Map<BasicBlock, Set<BasicBlock>> dominanceFrontier) {
+        public boolean dominates(BasicBlock a, BasicBlock b) {
+            return dominators.containsKey(b) && dominators.get(b).contains(a);
+        }
     }
 }

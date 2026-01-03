@@ -1,17 +1,13 @@
 package top.tsxb.compiler.backend.mips;
 
 public final class DivOptimizer {
-    private DivOptimizer() {
-    }
-
-    public record MultiplierInfo(long multiplier, int shift) {
-    }
+    private DivOptimizer() {}
 
     public static MultiplierInfo chooseMultiplier(int d) {
         if (d == 0) {
             throw new IllegalArgumentException("Division by zero");
         }
-        long ad = Math.abs((long) d);
+        long ad = Math.abs((long)d);
         long two31 = 1L << 31;
         long t = two31 + (d < 0 ? 1L : 0L);
         long anc = t - 1 - (t % ad);
@@ -42,7 +38,10 @@ public final class DivOptimizer {
         if (d < 0) {
             multiplier = -multiplier;
         }
-        int shift = (int) (p - 32);
+        int shift = (int)(p - 32);
         return new MultiplierInfo(multiplier, shift);
+    }
+
+    public record MultiplierInfo(long multiplier, int shift) {
     }
 }

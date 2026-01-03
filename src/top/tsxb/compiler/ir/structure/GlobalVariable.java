@@ -1,7 +1,7 @@
 package top.tsxb.compiler.ir.structure;
 
-import top.tsxb.compiler.ir.type.IrType;
 import top.tsxb.compiler.ir.constant.Constant;
+import top.tsxb.compiler.ir.type.IrType;
 
 public class GlobalVariable extends GlobalValue {
     private final boolean isConst;

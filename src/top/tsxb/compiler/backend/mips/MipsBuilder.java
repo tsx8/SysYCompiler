@@ -1,32 +1,46 @@
 package top.tsxb.compiler.backend.mips;
 
-import top.tsxb.compiler.ir.structure.*;
-import top.tsxb.compiler.ir.inst.*;
-import top.tsxb.compiler.ir.base.*;
-import top.tsxb.compiler.ir.constant.*;
-import top.tsxb.compiler.ir.structure.Module;
-import top.tsxb.compiler.ir.type.*;
-
 import java.util.*;
+
+import top.tsxb.compiler.ir.base.Use;
+import top.tsxb.compiler.ir.base.User;
+import top.tsxb.compiler.ir.base.Value;
+import top.tsxb.compiler.ir.constant.ConstArray;
+import top.tsxb.compiler.ir.constant.ConstInt;
+import top.tsxb.compiler.ir.constant.ConstString;
+import top.tsxb.compiler.ir.constant.ConstZero;
+import top.tsxb.compiler.ir.constant.Constant;
+import top.tsxb.compiler.ir.inst.*;
+import top.tsxb.compiler.ir.structure.Argument;
+import top.tsxb.compiler.ir.structure.BasicBlock;
+import top.tsxb.compiler.ir.structure.Function;
+import top.tsxb.compiler.ir.structure.GlobalValue;
+import top.tsxb.compiler.ir.structure.GlobalVariable;
+import top.tsxb.compiler.ir.structure.Module;
+import top.tsxb.compiler.ir.type.ArrType;
+import top.tsxb.compiler.ir.type.IntType;
+import top.tsxb.compiler.ir.type.IrType;
+import top.tsxb.compiler.ir.type.NoneType;
+import top.tsxb.compiler.ir.type.PtrType;
 
 public class MipsBuilder {
     private final Module module;
     private final StringBuilder sb = new StringBuilder();
-    private StringBuilder currentSb = sb;
     private final StringBuilder pendingBridges = new StringBuilder();
     private final Map<Value, Integer> stackOffsets = new LinkedHashMap<>();
+    private final Map<GlobalValue, String> globalAddrCache = new LinkedHashMap<>();
+    private final Map<String, GlobalValue> regToGlobal = new LinkedHashMap<>();
+    private final Set<BasicBlock> frameRegion = new LinkedHashSet<>();
+    private final Map<BasicBlock, List<BasicBlock>> predecessorsMap = new LinkedHashMap<>();
+    private StringBuilder currentSb = sb;
     private Map<Value, MipsRegister> regMapping = new LinkedHashMap<>();
     private Map<Value, LiveInterval> intervals = new LinkedHashMap<>();
     private Map<Instruction, Integer> instToId = new LinkedHashMap<>();
     private Set<MipsRegister> usedCalleeSaved = new LinkedHashSet<>();
-    private final Map<GlobalValue, String> globalAddrCache = new LinkedHashMap<>();
-    private final Map<String, GlobalValue> regToGlobal = new LinkedHashMap<>();
     private int currentStackSize;
     private int brCounter = 0;
     private boolean isLeaf = false;
     private int spShift = 0;
-    private final Set<BasicBlock> frameRegion = new LinkedHashSet<>();
-    private final Map<BasicBlock, List<BasicBlock>> predecessorsMap = new LinkedHashMap<>();
     private Function currentFunction;
     private BasicBlock currentBlock;
 
@@ -118,10 +132,10 @@ public class MipsBuilder {
             currentSb.append(".align 2\n");
             currentSb.append(getLabel(gv)).append(": ");
             if (gv.isDeclaration()) {
-                IrType type = ((PtrType) gv.getType()).getPointeeType();
+                IrType type = ((PtrType)gv.getType()).getPointeeType();
                 currentSb.append(".space ").append(getSize(type)).append("\n");
             } else {
-                Constant init = (Constant) gv.getOperand(0);
+                Constant init = (Constant)gv.getOperand(0);
                 genConstant(init);
             }
         }
@@ -142,7 +156,8 @@ public class MipsBuilder {
             int size = getSize(cz.getType());
             currentSb.append(".space ").append(size).append("\n");
         } else if (constant instanceof ConstString cs) {
-            currentSb.append(".asciiz \"").append(cs.getContent().replace("\n", "\\n").replace("\"", "\\\"")).append("\"\n");
+            currentSb.append(".asciiz \"").append(cs.getContent().replace("\n", "\\n").replace("\"", "\\\""))
+                .append("\"\n");
         }
     }
 
@@ -151,7 +166,8 @@ public class MipsBuilder {
             return ci.getValue() == 0;
         } else if (constant instanceof ConstArray ca) {
             for (Constant val : ca.getValues()) {
-                if (!isAllZero(val)) return false;
+                if (!isAllZero(val))
+                    return false;
             }
             return true;
         } else
@@ -190,32 +206,10 @@ public class MipsBuilder {
         currentSb.append("putstr:\n    li $v0, 4\n    syscall\n    jr $ra\n");
     }
 
-    private Map<BasicBlock, Integer> getPredecessorCounts(Function func) {
-        Map<BasicBlock, Integer> counts = new LinkedHashMap<>();
-        for (BasicBlock bb : func.getBasicBlocks()) {
-            counts.put(bb, 0);
-        }
-        for (BasicBlock bb : func.getBasicBlocks()) {
-            if (bb.getInstructions().isEmpty()) continue;
-            Instruction last = bb.getInstructions().get(bb.getInstructions().size() - 1);
-            if (last instanceof BrInst br) {
-                if (br.getNumOperands() == 1) {
-                    BasicBlock target = (BasicBlock) br.getOperand(0);
-                    counts.put(target, counts.getOrDefault(target, 0) + 1);
-                } else {
-                    BasicBlock targetTrue = (BasicBlock) br.getOperand(1);
-                    BasicBlock targetFalse = (BasicBlock) br.getOperand(2);
-                    counts.put(targetTrue, counts.getOrDefault(targetTrue, 0) + 1);
-                    counts.put(targetFalse, counts.getOrDefault(targetFalse, 0) + 1);
-                }
-            }
-        }
-        return counts;
-    }
-
     private List<BasicBlock> reorderBlocks(Function func, LoopAnalysis loopAnalysis) {
         List<BasicBlock> original = func.getBasicBlocks();
-        if (original.isEmpty()) return original;
+        if (original.isEmpty())
+            return original;
 
         List<BasicBlock> reordered = new ArrayList<>();
         Set<BasicBlock> visited = new HashSet<>();
@@ -223,7 +217,8 @@ public class MipsBuilder {
         PriorityQueue<BasicBlock> candidates = new PriorityQueue<>((b1, b2) -> {
             int d1 = loopAnalysis.getLoopDepth(b1);
             int d2 = loopAnalysis.getLoopDepth(b2);
-            if (d1 != d2) return Integer.compare(d2, d1); // Descending depth
+            if (d1 != d2)
+                return Integer.compare(d2, d1); // Descending depth
             return 0;
         });
         candidates.addAll(original);
@@ -241,13 +236,13 @@ public class MipsBuilder {
                     Instruction lastInst = current.getInstructions().get(current.getInstructions().size() - 1);
                     if (lastInst instanceof BrInst br) {
                         if (br.getNumOperands() == 1) {
-                            BasicBlock target = (BasicBlock) br.getOperand(0);
+                            BasicBlock target = (BasicBlock)br.getOperand(0);
                             if (!visited.contains(target)) {
                                 next = target;
                             }
                         } else {
-                            BasicBlock targetTrue = (BasicBlock) br.getOperand(1);
-                            BasicBlock targetFalse = (BasicBlock) br.getOperand(2);
+                            BasicBlock targetTrue = (BasicBlock)br.getOperand(1);
+                            BasicBlock targetFalse = (BasicBlock)br.getOperand(2);
                             boolean trueUnvisited = !visited.contains(targetTrue);
                             boolean falseUnvisited = !visited.contains(targetFalse);
 
@@ -267,8 +262,12 @@ public class MipsBuilder {
                                     } else if (!trueIsHeader && falseIsHeader) {
                                         next = targetFalse;
                                     } else {
-                                        boolean trueIsExit = !targetTrue.getInstructions().isEmpty() && targetTrue.getInstructions().get(targetTrue.getInstructions().size() - 1) instanceof ReturnInst;
-                                        boolean falseIsExit = !targetFalse.getInstructions().isEmpty() && targetFalse.getInstructions().get(targetFalse.getInstructions().size() - 1) instanceof ReturnInst;
+                                        boolean trueIsExit =
+                                            !targetTrue.getInstructions().isEmpty() && targetTrue.getInstructions()
+                                                .get(targetTrue.getInstructions().size() - 1) instanceof ReturnInst;
+                                        boolean falseIsExit =
+                                            !targetFalse.getInstructions().isEmpty() && targetFalse.getInstructions()
+                                                .get(targetFalse.getInstructions().size() - 1) instanceof ReturnInst;
 
                                         if (!trueIsExit && falseIsExit) {
                                             next = targetTrue;
@@ -386,14 +385,15 @@ public class MipsBuilder {
 
     private List<BasicBlock> getSuccessors(BasicBlock bb) {
         List<BasicBlock> succs = new ArrayList<>();
-        if (bb.getInstructions().isEmpty()) return succs;
+        if (bb.getInstructions().isEmpty())
+            return succs;
         Instruction last = bb.getInstructions().get(bb.getInstructions().size() - 1);
         if (last instanceof BrInst br) {
             if (br.getNumOperands() == 1) {
-                succs.add((BasicBlock) br.getOperand(0));
+                succs.add((BasicBlock)br.getOperand(0));
             } else {
-                succs.add((BasicBlock) br.getOperand(1));
-                succs.add((BasicBlock) br.getOperand(2));
+                succs.add((BasicBlock)br.getOperand(1));
+                succs.add((BasicBlock)br.getOperand(2));
             }
         }
         return succs;
@@ -413,19 +413,25 @@ public class MipsBuilder {
 
     private boolean blockNeedsFrame(Function func, BasicBlock bb) {
         for (Instruction inst : bb.getInstructions()) {
-            if (inst instanceof CallInst) return true;
-            if (inst instanceof AllocaInst) return true;
-            if (stackOffsets.containsKey(inst)) return true;
+            if (inst instanceof CallInst)
+                return true;
+            if (inst instanceof AllocaInst)
+                return true;
+            if (stackOffsets.containsKey(inst))
+                return true;
             for (int i = 0; i < inst.getNumOperands(); i++) {
                 Value op = inst.getOperand(i);
-                if (stackOffsets.containsKey(op)) return true;
+                if (stackOffsets.containsKey(op))
+                    return true;
                 if (op instanceof Argument arg) {
                     int argIndex = func.getArguments().indexOf(arg);
-                    if (argIndex >= 4) return true;
+                    if (argIndex >= 4)
+                        return true;
                 }
             }
             MipsRegister reg = regMapping.get(inst);
-            if (reg != null && reg.isCalleeSaved() && usedCalleeSaved.contains(reg)) return true;
+            if (reg != null && reg.isCalleeSaved() && usedCalleeSaved.contains(reg))
+                return true;
         }
         for (BasicBlock succ : getSuccessors(bb)) {
             for (Instruction inst : succ.getInstructions()) {
@@ -433,11 +439,14 @@ public class MipsBuilder {
                     Value incoming = phi.getIncomingValue(bb);
                     if (incoming != null) {
                         MipsRegister phiReg = regMapping.get(phi);
-                        if (phiReg != null && phiReg.isCalleeSaved() && usedCalleeSaved.contains(phiReg)) return true;
-                        if (!regMapping.containsKey(phi) && stackOffsets.containsKey(phi)) return true;
+                        if (phiReg != null && phiReg.isCalleeSaved() && usedCalleeSaved.contains(phiReg))
+                            return true;
+                        if (!regMapping.containsKey(phi) && stackOffsets.containsKey(phi))
+                            return true;
                         if (incoming instanceof Argument arg) {
                             int argIndex = func.getArguments().indexOf(arg);
-                            if (argIndex >= 4) return true;
+                            if (argIndex >= 4)
+                                return true;
                         }
                     }
                 } else {
@@ -547,7 +556,7 @@ public class MipsBuilder {
         for (BasicBlock bb : func.getBasicBlocks()) {
             for (Instruction inst : bb.getInstructions()) {
                 if (inst instanceof AllocaInst alloca) {
-                    int size = getSize(((PtrType) alloca.getType()).getPointeeType());
+                    int size = getSize(((PtrType)alloca.getType()).getPointeeType());
                     size = (size + 3) / 4 * 4; // Align to 4 bytes
                     stackOffsets.put(inst, offset);
                     offset += size;
@@ -584,18 +593,18 @@ public class MipsBuilder {
     }
 
     private void genInstruction(Instruction inst, BasicBlock nextBb) {
-        // currentSb.append("    # ").append(inst.toString()).append("\n");
+        // currentSb.append(" # ").append(inst.toString()).append("\n");
         switch (inst.getOpCode()) {
             case ADD, SUB, MUL, SDIV, SREM -> genBinary(inst);
-            case ICMP -> genIcmp((IcmpInst) inst);
+            case ICMP -> genIcmp((IcmpInst)inst);
             case ALLOCA -> genAlloca();
-            case LOAD -> genLoad((LoadInst) inst);
-            case STORE -> genStore((StoreInst) inst);
-            case BR -> genBr((BrInst) inst, nextBb);
-            case RET -> genRet((ReturnInst) inst);
-            case CALL -> genCall((CallInst) inst);
-            case ZEXT -> genZext((ZextInst) inst);
-            case GEP -> genGep((GetElementPtrInst) inst);
+            case LOAD -> genLoad((LoadInst)inst);
+            case STORE -> genStore((StoreInst)inst);
+            case BR -> genBr((BrInst)inst, nextBb);
+            case RET -> genRet((ReturnInst)inst);
+            case CALL -> genCall((CallInst)inst);
+            case ZEXT -> genZext((ZextInst)inst);
+            case GEP -> genGep((GetElementPtrInst)inst);
             case PHI -> {
             } // Handled by predecessors
         }
@@ -659,7 +668,8 @@ public class MipsBuilder {
 
     private String getValueReg(Value val, String tempReg) {
         if (val instanceof ConstInt ci) {
-            if (ci.getValue() == 0) return "$zero";
+            if (ci.getValue() == 0)
+                return "$zero";
             invalidateCache(tempReg);
             currentSb.append("    li ").append(tempReg).append(", ").append(ci.getValue()).append("\n");
             return tempReg;
@@ -730,7 +740,8 @@ public class MipsBuilder {
 
         if (inst.getOpCode() == OpCode.SDIV && op2 instanceof ConstInt ci) {
             if (emitConstDivision(op1, ci.getValue(), rd)) {
-                if (!regMapping.containsKey(inst)) storeStack(rd, stackOffsets.get(inst) + spShift);
+                if (!regMapping.containsKey(inst))
+                    storeStack(rd, stackOffsets.get(inst) + spShift);
                 return;
             }
         }
@@ -744,7 +755,8 @@ public class MipsBuilder {
                 currentSb.append("    mul $t1, $t2, $t3\n");
                 invalidateCache(rd);
                 currentSb.append("    subu ").append(rd).append(", $t0, $t1\n");
-                if (!regMapping.containsKey(inst)) storeStack(rd, stackOffsets.get(inst) + spShift);
+                if (!regMapping.containsKey(inst))
+                    storeStack(rd, stackOffsets.get(inst) + spShift);
                 return;
             }
         }
@@ -785,11 +797,16 @@ public class MipsBuilder {
             String r2 = getValueReg(op2, tempForR2);
             invalidateCache(rd);
             switch (inst.getOpCode()) {
-                case ADD -> currentSb.append("    addu ").append(rd).append(", ").append(r1).append(", ").append(r2).append("\n");
-                case SUB -> currentSb.append("    subu ").append(rd).append(", ").append(r1).append(", ").append(r2).append("\n");
-                case MUL -> currentSb.append("    mul ").append(rd).append(", ").append(r1).append(", ").append(r2).append("\n");
-                case SDIV -> currentSb.append("    div ").append(r1).append(", ").append(r2).append("\n    mflo ").append(rd).append("\n");
-                case SREM -> currentSb.append("    div ").append(r1).append(", ").append(r2).append("\n    mfhi ").append(rd).append("\n");
+                case ADD -> currentSb.append("    addu ").append(rd).append(", ").append(r1).append(", ").append(r2)
+                    .append("\n");
+                case SUB -> currentSb.append("    subu ").append(rd).append(", ").append(r1).append(", ").append(r2)
+                    .append("\n");
+                case MUL -> currentSb.append("    mul ").append(rd).append(", ").append(r1).append(", ").append(r2)
+                    .append("\n");
+                case SDIV -> currentSb.append("    div ").append(r1).append(", ").append(r2).append("\n    mflo ")
+                    .append(rd).append("\n");
+                case SREM -> currentSb.append("    div ").append(r1).append(", ").append(r2).append("\n    mfhi ")
+                    .append(rd).append("\n");
             }
             if (!regMapping.containsKey(inst)) {
                 storeStack(rd, stackOffsets.get(inst) + spShift);
@@ -805,18 +822,16 @@ public class MipsBuilder {
         return 31 - Integer.numberOfLeadingZeros(n);
     }
 
-    private record MulTerm(int shift, boolean positive) {
-    }
-
     private boolean tryConstMul(Instruction inst, Value multiplicand, int constant, String destReg) {
         if (constant == 0) {
             invalidateCache(destReg);
             currentSb.append("    addu ").append(destReg).append(", $zero, $zero\n");
-            if (!regMapping.containsKey(inst)) storeStack(destReg, stackOffsets.get(inst) + spShift);
+            if (!regMapping.containsKey(inst))
+                storeStack(destReg, stackOffsets.get(inst) + spShift);
             return true;
         }
 
-        long absConst = Math.abs((long) constant);
+        long absConst = Math.abs((long)constant);
         List<MulTerm> terms = buildConstMulTerms(absConst);
         if (terms.isEmpty()) {
             return false;
@@ -891,7 +906,8 @@ public class MipsBuilder {
             invalidateCache(destReg);
             currentSb.append("    subu ").append(destReg).append(", $zero, ").append(destReg).append("\n");
         }
-        if (!regMapping.containsKey(inst)) storeStack(destReg, stackOffsets.get(inst) + spShift);
+        if (!regMapping.containsKey(inst))
+            storeStack(destReg, stackOffsets.get(inst) + spShift);
         return true;
     }
 
@@ -911,7 +927,7 @@ public class MipsBuilder {
             currentSb.append("    subu ").append(destReg).append(", $zero, $t0\n");
             return true;
         }
-        long absDiv = Math.abs((long) divisor);
+        long absDiv = Math.abs((long)divisor);
         if ((absDiv & absDiv - 1) == 0) {
             int shift = Long.numberOfTrailingZeros(absDiv);
             if (shift > 0) {
@@ -932,7 +948,7 @@ public class MipsBuilder {
         }
         DivOptimizer.MultiplierInfo info = DivOptimizer.chooseMultiplier(divisor);
         loadValue(dividend, "$t0");
-        int magic = (int) info.multiplier();
+        int magic = (int)info.multiplier();
         invalidateCache("$t1");
         currentSb.append("    li $t1, ").append(magic).append("\n");
         invalidateCache(destReg);
@@ -944,7 +960,8 @@ public class MipsBuilder {
         }
         if (info.shift() > 0) {
             invalidateCache(destReg);
-            currentSb.append("    sra ").append(destReg).append(", ").append(destReg).append(", ").append(info.shift()).append("\n");
+            currentSb.append("    sra ").append(destReg).append(", ").append(destReg).append(", ").append(info.shift())
+                .append("\n");
         }
         invalidateCache("$t3");
         currentSb.append("    srl $t3, $t0, 31\n");
@@ -1033,14 +1050,21 @@ public class MipsBuilder {
         String cond = inst.getPredicate().toString();
         String rd = getDestReg(inst, "$t2");
         switch (cond) {
-            case "eq" -> currentSb.append("    seq ").append(rd).append(", ").append(r0).append(", ").append(r1).append("\n");
-            case "ne" -> currentSb.append("    sne ").append(rd).append(", ").append(r0).append(", ").append(r1).append("\n");
-            case "sgt" -> currentSb.append("    sgt ").append(rd).append(", ").append(r0).append(", ").append(r1).append("\n");
-            case "sge" -> currentSb.append("    sge ").append(rd).append(", ").append(r0).append(", ").append(r1).append("\n");
-            case "slt" -> currentSb.append("    slt ").append(rd).append(", ").append(r0).append(", ").append(r1).append("\n");
-            case "sle" -> currentSb.append("    sle ").append(rd).append(", ").append(r0).append(", ").append(r1).append("\n");
+            case "eq" ->
+                currentSb.append("    seq ").append(rd).append(", ").append(r0).append(", ").append(r1).append("\n");
+            case "ne" ->
+                currentSb.append("    sne ").append(rd).append(", ").append(r0).append(", ").append(r1).append("\n");
+            case "sgt" ->
+                currentSb.append("    sgt ").append(rd).append(", ").append(r0).append(", ").append(r1).append("\n");
+            case "sge" ->
+                currentSb.append("    sge ").append(rd).append(", ").append(r0).append(", ").append(r1).append("\n");
+            case "slt" ->
+                currentSb.append("    slt ").append(rd).append(", ").append(r0).append(", ").append(r1).append("\n");
+            case "sle" ->
+                currentSb.append("    sle ").append(rd).append(", ").append(r0).append(", ").append(r1).append("\n");
         }
-        if (!regMapping.containsKey(inst)) storeStack(rd, stackOffsets.get(inst) + spShift);
+        if (!regMapping.containsKey(inst))
+            storeStack(rd, stackOffsets.get(inst) + spShift);
     }
 
     @SuppressWarnings("EmptyMethod")
@@ -1066,7 +1090,7 @@ public class MipsBuilder {
     }
 
     private int calculateTotalOffset(GetElementPtrInst gep) {
-        IrType currentType = ((PtrType) gep.getOperand(0).getType()).getPointeeType();
+        IrType currentType = ((PtrType)gep.getOperand(0).getType()).getPointeeType();
         int totalOffset = 0;
 
         for (int i = 1; i < gep.getNumOperands(); i++) {
@@ -1109,7 +1133,8 @@ public class MipsBuilder {
             int offset = calculateTotalOffset(gep);
             if (offset >= -32768 && offset <= 32767) {
                 String baseReg = getValueReg(gep.getOperand(0), "$t0");
-                currentSb.append("    lw ").append(destReg).append(", ").append(offset).append("(").append(baseReg).append(")\n");
+                currentSb.append("    lw ").append(destReg).append(", ").append(offset).append("(").append(baseReg)
+                    .append(")\n");
             } else {
                 String addrReg = getValueReg(addr, "$t0");
                 currentSb.append("    lw ").append(destReg).append(", 0(").append(addrReg).append(")\n");
@@ -1137,7 +1162,8 @@ public class MipsBuilder {
             int offset = calculateTotalOffset(gep);
             if (offset >= -32768 && offset <= 32767) {
                 String baseReg = getValueReg(gep.getOperand(0), "$t1");
-                currentSb.append("    sw ").append(valReg).append(", ").append(offset).append("(").append(baseReg).append(")\n");
+                currentSb.append("    sw ").append(valReg).append(", ").append(offset).append("(").append(baseReg)
+                    .append(")\n");
             } else {
                 String addrReg = getValueReg(addr, "$t1");
                 currentSb.append("    sw ").append(valReg).append(", 0(").append(addrReg).append(")\n");
@@ -1148,7 +1174,8 @@ public class MipsBuilder {
         }
     }
 
-    private void emitConditionalBranch(IcmpInst icmp, String r0, String r1, boolean jumpIfTrue, BasicBlock target, boolean hasPhis, BasicBlock current) {
+    private void emitConditionalBranch(IcmpInst icmp, String r0, String r1, boolean jumpIfTrue, BasicBlock target,
+        boolean hasPhis, BasicBlock current) {
         String label = getJumpTarget(current, target);
         String branchLabel = label;
         if (hasPhis) {
@@ -1157,10 +1184,12 @@ public class MipsBuilder {
 
         if (icmp != null) {
             String bInst = getBranchInst(icmp.getPredicate().toString(), jumpIfTrue);
-            currentSb.append("    ").append(bInst).append(" ").append(r0).append(", ").append(r1).append(", ").append(branchLabel).append("\n");
+            currentSb.append("    ").append(bInst).append(" ").append(r0).append(", ").append(r1).append(", ")
+                .append(branchLabel).append("\n");
         } else {
             String bInst = jumpIfTrue ? "bne" : "beq";
-            currentSb.append("    ").append(bInst).append(" ").append(r0).append(", $zero, ").append(branchLabel).append("\n");
+            currentSb.append("    ").append(bInst).append(" ").append(r0).append(", $zero, ").append(branchLabel)
+                .append("\n");
         }
 
         if (hasPhis) {
@@ -1175,7 +1204,7 @@ public class MipsBuilder {
 
     private void genBr(BrInst inst, BasicBlock nextBb) {
         if (inst.getNumOperands() == 1) {
-            BasicBlock target = (BasicBlock) inst.getOperand(0);
+            BasicBlock target = (BasicBlock)inst.getOperand(0);
             fillPhis(inst.getParent(), target);
             if (target != nextBb) {
                 currentSb.append("    j ").append(getJumpTarget(inst.getParent(), target)).append("\n");
@@ -1184,12 +1213,12 @@ public class MipsBuilder {
             }
         } else {
             Value cond = inst.getOperand(0);
-            BasicBlock targetTrue = (BasicBlock) inst.getOperand(1);
-            BasicBlock targetFalse = (BasicBlock) inst.getOperand(2);
+            BasicBlock targetTrue = (BasicBlock)inst.getOperand(1);
+            BasicBlock targetFalse = (BasicBlock)inst.getOperand(2);
 
             IcmpInst icmp = null;
-            if (cond instanceof IcmpInst && isFusableIcmp((IcmpInst) cond)) {
-                icmp = (IcmpInst) cond;
+            if (cond instanceof IcmpInst && isFusableIcmp((IcmpInst)cond)) {
+                icmp = (IcmpInst)cond;
             }
 
             String r0;
@@ -1343,7 +1372,7 @@ public class MipsBuilder {
     }
 
     private void genCall(CallInst inst) {
-        Function target = (Function) inst.getOperand(0);
+        Function target = (Function)inst.getOperand(0);
         int numArgs = inst.getNumOperands() - 1;
 
         // Save caller-saved registers that are live across this call
@@ -1419,7 +1448,8 @@ public class MipsBuilder {
     private void genZext(ZextInst inst) {
         String dst = getDestReg(inst, "$t0");
         loadValue(inst.getOperand(0), dst);
-        if (!regMapping.containsKey(inst)) storeStack(dst, stackOffsets.get(inst) + spShift);
+        if (!regMapping.containsKey(inst))
+            storeStack(dst, stackOffsets.get(inst) + spShift);
     }
 
     private void genGep(GetElementPtrInst inst) {
@@ -1456,7 +1486,7 @@ public class MipsBuilder {
 
         loadValue(inst.getOperand(0), accum);
 
-        IrType currentType = ((PtrType) inst.getOperand(0).getType()).getPointeeType();
+        IrType currentType = ((PtrType)inst.getOperand(0).getType()).getPointeeType();
 
         for (int i = 1; i < inst.getNumOperands(); i++) {
             Value index = inst.getOperand(i);
@@ -1481,10 +1511,12 @@ public class MipsBuilder {
                 String idxReg = getValueReg(index, "$t1");
                 if (elementSize == 1) {
                     invalidateCache(accum);
-                    currentSb.append("    addu ").append(accum).append(", ").append(accum).append(", ").append(idxReg).append("\n");
+                    currentSb.append("    addu ").append(accum).append(", ").append(accum).append(", ").append(idxReg)
+                        .append("\n");
                 } else if (isPowerOfTwo(elementSize)) {
                     invalidateCache("$t1");
-                    currentSb.append("    sll $t1, ").append(idxReg).append(", ").append(log2(elementSize)).append("\n");
+                    currentSb.append("    sll $t1, ").append(idxReg).append(", ").append(log2(elementSize))
+                        .append("\n");
                     invalidateCache(accum);
                     currentSb.append("    addu ").append(accum).append(", ").append(accum).append(", $t1\n");
                 } else {
@@ -1498,12 +1530,16 @@ public class MipsBuilder {
                 }
             }
         }
-        
+
         if (conflict) {
             invalidateCache(dst);
             currentSb.append("    move ").append(dst).append(", ").append(accum).append("\n");
         }
-        
-        if (!regMapping.containsKey(inst)) storeStack(dst, stackOffsets.get(inst) + spShift);
+
+        if (!regMapping.containsKey(inst))
+            storeStack(dst, stackOffsets.get(inst) + spShift);
+    }
+
+    private record MulTerm(int shift, boolean positive) {
     }
 }

@@ -2,11 +2,11 @@ package top.tsxb.compiler.ir.inst;
 
 import java.util.List;
 
-import top.tsxb.compiler.ir.type.FuncType;
-import top.tsxb.compiler.ir.type.NoneType;
+import top.tsxb.compiler.ir.base.Value;
 import top.tsxb.compiler.ir.structure.BasicBlock;
 import top.tsxb.compiler.ir.structure.Function;
-import top.tsxb.compiler.ir.base.Value;
+import top.tsxb.compiler.ir.type.FuncType;
+import top.tsxb.compiler.ir.type.NoneType;
 
 public class CallInst extends Instruction {
     public CallInst(Function func, List<Value> args, BasicBlock parent) {

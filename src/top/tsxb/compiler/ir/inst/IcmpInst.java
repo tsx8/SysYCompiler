@@ -1,8 +1,8 @@
 package top.tsxb.compiler.ir.inst;
 
-import top.tsxb.compiler.ir.type.IntType;
-import top.tsxb.compiler.ir.structure.BasicBlock;
 import top.tsxb.compiler.ir.base.Value;
+import top.tsxb.compiler.ir.structure.BasicBlock;
+import top.tsxb.compiler.ir.type.IntType;
 
 public class IcmpInst extends Instruction {
     private final CondCode predicate;

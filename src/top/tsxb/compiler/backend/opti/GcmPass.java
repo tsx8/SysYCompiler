@@ -1,31 +1,32 @@
 package top.tsxb.compiler.backend.opti;
 
-import top.tsxb.compiler.ir.base.Value;
+import java.util.*;
+
+import top.tsxb.compiler.backend.mips.LoopAnalysis;
 import top.tsxb.compiler.ir.base.Use;
 import top.tsxb.compiler.ir.base.User;
+import top.tsxb.compiler.ir.base.Value;
+import top.tsxb.compiler.ir.inst.BrInst;
 import top.tsxb.compiler.ir.inst.Instruction;
 import top.tsxb.compiler.ir.inst.PhiInst;
-import top.tsxb.compiler.ir.inst.BrInst;
 import top.tsxb.compiler.ir.inst.ReturnInst;
 import top.tsxb.compiler.ir.structure.BasicBlock;
 import top.tsxb.compiler.ir.structure.Function;
 import top.tsxb.compiler.ir.structure.Module;
-import top.tsxb.compiler.backend.mips.LoopAnalysis;
-
-import java.util.*;
 
 public class GcmPass implements Pass {
-    private DominatorAnalysis.DominatorInfo domInfo;
     private final Map<Instruction, BasicBlock> earlyBlock = new LinkedHashMap<>();
     private final Map<Instruction, BasicBlock> lateBlock = new LinkedHashMap<>();
     private final Map<BasicBlock, Integer> domDepth = new LinkedHashMap<>();
     private final Set<Instruction> visited = new LinkedHashSet<>();
+    private DominatorAnalysis.DominatorInfo domInfo;
 
     @Override
     public boolean run(Module module) {
         boolean changed = false;
         for (Function function : module.getFunctionList()) {
-            if (function.isDeclaration()) continue;
+            if (function.isDeclaration())
+                continue;
             changed |= runOnFunction(function);
         }
         return changed;
@@ -89,11 +90,13 @@ public class GcmPass implements Pass {
         // Move instructions
         boolean changed = false;
         for (Instruction inst : allInsts) {
-            if (inst.isPinned()) continue;
+            if (inst.isPinned())
+                continue;
 
             BasicBlock early = earlyBlock.get(inst);
             BasicBlock late = lateBlock.get(inst);
-            if (early == null || late == null) continue;
+            if (early == null || late == null)
+                continue;
 
             BasicBlock best = late;
             BasicBlock curr = late;
@@ -119,7 +122,8 @@ public class GcmPass implements Pass {
     private void scheduleWithinBlocks(Function function) {
         for (BasicBlock bb : function.getBasicBlocks()) {
             List<Instruction> insts = new ArrayList<>(bb.getInstructions());
-            if (insts.isEmpty()) continue;
+            if (insts.isEmpty())
+                continue;
 
             List<PhiInst> phis = new ArrayList<>();
             Instruction terminator = null;
@@ -141,7 +145,8 @@ public class GcmPass implements Pass {
             }
 
             if (rest.isEmpty()) {
-                if (terminator != null) bb.addInstruction(terminator);
+                if (terminator != null)
+                    bb.addInstruction(terminator);
                 continue;
             }
 
@@ -203,12 +208,14 @@ public class GcmPass implements Pass {
                 }
             }
 
-            if (terminator != null) bb.addInstruction(terminator);
+            if (terminator != null)
+                bb.addInstruction(terminator);
         }
     }
 
     private void scheduleEarly(Instruction inst, BasicBlock root) {
-        if (visited.contains(inst)) return;
+        if (visited.contains(inst))
+            return;
         visited.add(inst);
 
         BasicBlock best = root;
@@ -228,7 +235,8 @@ public class GcmPass implements Pass {
     }
 
     private void scheduleLate(Instruction inst) {
-        if (visited.contains(inst)) return;
+        if (visited.contains(inst))
+            return;
         visited.add(inst);
 
         BasicBlock best = null;
@@ -256,16 +264,20 @@ public class GcmPass implements Pass {
     }
 
     private BasicBlock findLca(BasicBlock b1, BasicBlock b2) {
-        if (b1 == null) return b2;
-        if (b2 == null) return b1;
-        if (b1 == b2) return b1;
+        if (b1 == null)
+            return b2;
+        if (b2 == null)
+            return b1;
+        if (b1 == b2)
+            return b1;
 
         List<BasicBlock> path1 = new ArrayList<>();
         BasicBlock curr = b1;
         while (curr != null) {
             path1.add(curr);
             BasicBlock next = domInfo.idom().get(curr);
-            if (next == curr) break;
+            if (next == curr)
+                break;
             curr = next;
         }
 
@@ -274,7 +286,8 @@ public class GcmPass implements Pass {
         while (curr != null) {
             path2.add(curr);
             BasicBlock next = domInfo.idom().get(curr);
-            if (next == curr) break;
+            if (next == curr)
+                break;
             curr = next;
         }
 

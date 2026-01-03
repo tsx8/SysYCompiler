@@ -1,22 +1,46 @@
 package top.tsxb.compiler.backend.opti;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.ListIterator;
+import java.util.Map;
+import java.util.Set;
+
 import top.tsxb.compiler.ir.base.Use;
 import top.tsxb.compiler.ir.base.Value;
-import top.tsxb.compiler.ir.inst.*;
-import top.tsxb.compiler.ir.structure.*;
-import top.tsxb.compiler.ir.type.PtrType;
-import top.tsxb.compiler.ir.type.ArrType;
-import top.tsxb.compiler.ir.type.IrType;
-import top.tsxb.compiler.ir.type.IntType;
 import top.tsxb.compiler.ir.constant.ConstInt;
-
-import java.util.*;
+import top.tsxb.compiler.ir.inst.AllocaInst;
+import top.tsxb.compiler.ir.inst.CallInst;
+import top.tsxb.compiler.ir.inst.GetElementPtrInst;
+import top.tsxb.compiler.ir.inst.Instruction;
+import top.tsxb.compiler.ir.inst.LoadInst;
+import top.tsxb.compiler.ir.inst.ReturnInst;
+import top.tsxb.compiler.ir.inst.StoreInst;
+import top.tsxb.compiler.ir.structure.BasicBlock;
+import top.tsxb.compiler.ir.structure.Function;
+import top.tsxb.compiler.ir.structure.GlobalVariable;
+import top.tsxb.compiler.ir.type.ArrType;
+import top.tsxb.compiler.ir.type.IntType;
+import top.tsxb.compiler.ir.type.IrType;
+import top.tsxb.compiler.ir.type.PtrType;
 
 public class GlobalLocalizationPass implements Pass {
 
-    private Map<GlobalVariable, Function> uniqueUserCache;
     private final Set<String> localizedInFunc = new LinkedHashSet<>();
+    private Map<GlobalVariable, Function> uniqueUserCache;
     private SideEffectAnalysis sea;
+
+    private static GlobalVariable getGlobalVariable(Value v) {
+        if (v instanceof GlobalVariable gv)
+            return gv;
+        if (v instanceof GetElementPtrInst gep) {
+            return getGlobalVariable(gep.getOperand(0));
+        }
+        return null;
+    }
 
     @Override
     public boolean run(top.tsxb.compiler.ir.structure.Module module) {
@@ -26,7 +50,8 @@ public class GlobalLocalizationPass implements Pass {
         sea.analyze(module);
         boolean changed = false;
         for (Function func : module.getFunctionList()) {
-            if (func.isDeclaration()) continue;
+            if (func.isDeclaration())
+                continue;
             changed |= runOnFunction(func);
         }
         return changed;
@@ -39,7 +64,8 @@ public class GlobalLocalizationPass implements Pass {
             boolean multiFunc = false;
             for (Use use : gv.getUseList()) {
                 if (use.user() instanceof Instruction inst) {
-                    if (inst.getParent() == null) continue;
+                    if (inst.getParent() == null)
+                        continue;
                     Function func = inst.getParent().getParent();
                     if (uniqueFunc == null) {
                         uniqueFunc = func;
@@ -60,13 +86,15 @@ public class GlobalLocalizationPass implements Pass {
 
     private boolean runOnFunction(Function func) {
         Set<GlobalVariable> worthIt = findWorthItGlobals(func);
-        if (worthIt.isEmpty()) return false;
+        if (worthIt.isEmpty())
+            return false;
 
         boolean changed = false;
         for (GlobalVariable gv : worthIt) {
             String key = func.getName() + ":" + gv.getName();
-            if (localizedInFunc.contains(key)) continue;
-            
+            if (localizedInFunc.contains(key))
+                continue;
+
             if (localizeGlobalInFunction(gv, func)) {
                 localizedInFunc.add(key);
                 changed = true;
@@ -78,10 +106,10 @@ public class GlobalLocalizationPass implements Pass {
     private Set<GlobalVariable> findWorthItGlobals(Function func) {
         Set<GlobalVariable> globalsInFunc = new LinkedHashSet<>();
         Set<GlobalVariable> globalsInLoops = new LinkedHashSet<>();
-        
+
         List<Loop> loops = findLoops(func);
         boolean isRecursive = isRecursive(func);
-        
+
         for (BasicBlock bb : func.getBasicBlocks()) {
             boolean inLoop = false;
             for (Loop loop : loops) {
@@ -90,7 +118,7 @@ public class GlobalLocalizationPass implements Pass {
                     break;
                 }
             }
-            
+
             for (Instruction inst : bb.getInstructions()) {
                 for (int i = 0; i < inst.getNumOperands(); i++) {
                     Value op = inst.getOperand(i);
@@ -103,7 +131,7 @@ public class GlobalLocalizationPass implements Pass {
                 }
             }
         }
-        
+
         Set<GlobalVariable> result = new LinkedHashSet<>();
         for (GlobalVariable gv : globalsInFunc) {
             if (isOnlyUsedIn(gv, func)) {
@@ -141,11 +169,12 @@ public class GlobalLocalizationPass implements Pass {
     }
 
     private boolean localizeGlobalInFunction(GlobalVariable gv, Function func) {
-        if (((PtrType) gv.getType()).getPointeeType() instanceof ArrType) {
+        if (((PtrType)gv.getType()).getPointeeType() instanceof ArrType) {
             return localizeArrayInFunction(gv, func);
         }
         String key = gv.getName() + "@" + func.getName();
-        if (localizedInFunc.contains(key)) return false;
+        if (localizedInFunc.contains(key))
+            return false;
         if (isScalarLocalized(gv, func)) {
             localizedInFunc.add(key);
             return false;
@@ -154,12 +183,12 @@ public class GlobalLocalizationPass implements Pass {
         isOnlyUsedIn(gv, func);
 
         BasicBlock entry = func.getBasicBlocks().get(0);
-        AllocaInst alloca = new AllocaInst(((PtrType) gv.getType()).getPointeeType(), gv.getName() + ".local", null);
+        AllocaInst alloca = new AllocaInst(((PtrType)gv.getType()).getPointeeType(), gv.getName() + ".local", null);
         entry.addFirst(alloca);
-        
+
         LoadInst entryLoad = new LoadInst(gv, null);
         StoreInst entryStore = new StoreInst(entryLoad, alloca, null);
-        
+
         int idx = entry.getInstructions().indexOf(alloca);
         entry.getInstructions().add(idx + 1, entryLoad);
         entryLoad.setParent(entry);
@@ -168,17 +197,18 @@ public class GlobalLocalizationPass implements Pass {
 
         Set<Instruction> protectedInsts = new LinkedHashSet<>();
         protectedInsts.add(entryLoad);
-        
+
         for (BasicBlock bb : func.getBasicBlocks()) {
             ListIterator<Instruction> it = bb.getInstructions().listIterator();
             while (it.hasNext()) {
                 Instruction inst = it.next();
-                if (protectedInsts.contains(inst)) continue;
-                
+                if (protectedInsts.contains(inst))
+                    continue;
+
                 if (inst instanceof CallInst call) {
                     boolean storeNeeded = needsStore(gv, call) && modified;
                     boolean reloadNeeded = needsReload(gv, call);
-                    
+
                     if (storeNeeded) {
                         it.previous();
                         LoadInst sLoad = new LoadInst(alloca, null);
@@ -190,7 +220,7 @@ public class GlobalLocalizationPass implements Pass {
                         protectedInsts.add(sStore);
                         it.next();
                     }
-                    
+
                     if (reloadNeeded) {
                         LoadInst rLoad = new LoadInst(gv, null);
                         rLoad.setParent(bb);
@@ -200,20 +230,22 @@ public class GlobalLocalizationPass implements Pass {
                         it.add(rStore);
                         protectedInsts.add(rLoad);
                     }
-                    if (storeNeeded || reloadNeeded) continue;
+                    if (storeNeeded || reloadNeeded)
+                        continue;
                 }
-                
+
                 for (int j = 0; j < inst.getNumOperands(); j++) {
                     if (inst.getOperand(j) == gv) {
                         inst.setOperand(j, alloca);
                     }
                 }
             }
-            
+
             if (modified) {
                 Instruction last = bb.getInstructions().get(bb.getInstructions().size() - 1);
                 if (last instanceof ReturnInst) {
-                    ListIterator<Instruction> retIt = bb.getInstructions().listIterator(bb.getInstructions().size() - 1);
+                    ListIterator<Instruction> retIt =
+                        bb.getInstructions().listIterator(bb.getInstructions().size() - 1);
                     LoadInst retLoad = new LoadInst(alloca, null);
                     retLoad.setParent(bb);
                     retIt.add(retLoad);
@@ -224,7 +256,7 @@ public class GlobalLocalizationPass implements Pass {
                 }
             }
         }
-        
+
         localizedInFunc.add(key);
         return true;
     }
@@ -271,7 +303,8 @@ public class GlobalLocalizationPass implements Pass {
 
     private boolean localizeArrayInFunction(GlobalVariable gv, Function func) {
         String key = gv.getName() + "@" + func.getName();
-        if (localizedInFunc.contains(key)) return false;
+        if (localizedInFunc.contains(key))
+            return false;
         if (isBaseHoisted(gv, func)) {
             localizedInFunc.add(key);
             return false;
@@ -291,7 +324,8 @@ public class GlobalLocalizationPass implements Pass {
                 }
             }
         }
-        if (geps.isEmpty() && otherUses.isEmpty()) return false;
+        if (geps.isEmpty() && otherUses.isEmpty())
+            return false;
 
         boolean allConstant = otherUses.isEmpty();
         Set<List<Value>> uniqueConstantIndices = new LinkedHashSet<>();
@@ -315,7 +349,7 @@ public class GlobalLocalizationPass implements Pass {
             }
         }
 
-        double constantRatio = geps.isEmpty() ? 0 : (double) constantCount / geps.size();
+        double constantRatio = geps.isEmpty() ? 0 : (double)constantCount / geps.size();
         boolean result;
         if (allConstant && constantRatio >= 0.5) {
             result = localizeArrayElements(gv, func, uniqueConstantIndices);
@@ -336,9 +370,10 @@ public class GlobalLocalizationPass implements Pass {
         Set<Instruction> protectedInsts = new LinkedHashSet<>();
 
         for (List<Value> indices : constantIndices) {
-            if (isArrayLocalized(gv, func, indices)) continue;
+            if (isArrayLocalized(gv, func, indices))
+                continue;
             GetElementPtrInst tempGep = new GetElementPtrInst(gv, indices, null);
-            IrType elementType = ((PtrType) tempGep.getType()).getPointeeType();
+            IrType elementType = ((PtrType)tempGep.getType()).getPointeeType();
             String name = gv.getName() + "." + indicesToString(indices);
             AllocaInst alloca = new AllocaInst(elementType, name, null);
             entry.addFirst(alloca);
@@ -357,13 +392,15 @@ public class GlobalLocalizationPass implements Pass {
             protectedInsts.add(load);
             protectedInsts.add(store);
         }
-        if (indexToAlloca.isEmpty()) return false;
+        if (indexToAlloca.isEmpty())
+            return false;
 
         for (BasicBlock bb : func.getBasicBlocks()) {
             ListIterator<Instruction> it = bb.getInstructions().listIterator();
             while (it.hasNext()) {
                 Instruction inst = it.next();
-                if (protectedInsts.contains(inst)) continue;
+                if (protectedInsts.contains(inst))
+                    continue;
                 if (inst instanceof GetElementPtrInst gep && gep.getOperand(0) == gv) {
                     List<Value> indices = new ArrayList<>();
                     for (int i = 1; i < gep.getNumOperands(); i++) {
@@ -380,7 +417,7 @@ public class GlobalLocalizationPass implements Pass {
                 if (inst instanceof CallInst call) {
                     boolean storeNeeded = needsStore(gv, call) && modified;
                     boolean reloadNeeded = needsReload(gv, call);
-                    
+
                     if (storeNeeded || reloadNeeded) {
                         for (Map.Entry<List<Value>, AllocaInst> entry_ : indexToAlloca.entrySet()) {
                             List<Value> indices = entry_.getKey();
@@ -421,7 +458,8 @@ public class GlobalLocalizationPass implements Pass {
             if (modified) {
                 Instruction last = bb.getInstructions().get(bb.getInstructions().size() - 1);
                 if (last instanceof ReturnInst) {
-                    ListIterator<Instruction> retIt = bb.getInstructions().listIterator(bb.getInstructions().size() - 1);
+                    ListIterator<Instruction> retIt =
+                        bb.getInstructions().listIterator(bb.getInstructions().size() - 1);
                     for (Map.Entry<List<Value>, AllocaInst> entry_ : indexToAlloca.entrySet()) {
                         List<Value> indices = entry_.getKey();
                         AllocaInst alloca = entry_.getValue();
@@ -444,12 +482,14 @@ public class GlobalLocalizationPass implements Pass {
     }
 
     private boolean hoistArrayBase(GlobalVariable gv, Function func, List<GetElementPtrInst> geps) {
-        if (isBaseHoisted(gv, func)) return false;
+        if (isBaseHoisted(gv, func))
+            return false;
         BasicBlock entry = func.getBasicBlocks().get(0);
         List<Value> baseIndices = List.of(new ConstInt(IntType.I32, 0), new ConstInt(IntType.I32, 0));
         GetElementPtrInst baseGep = new GetElementPtrInst(gv, baseIndices, null);
         int insertIdx = 0;
-        while (insertIdx < entry.getInstructions().size() && entry.getInstructions().get(insertIdx) instanceof AllocaInst) {
+        while (insertIdx < entry.getInstructions().size()
+            && entry.getInstructions().get(insertIdx) instanceof AllocaInst) {
             insertIdx++;
         }
         entry.getInstructions().add(insertIdx, baseGep);
@@ -457,7 +497,8 @@ public class GlobalLocalizationPass implements Pass {
 
         boolean changed = false;
         for (GetElementPtrInst gep : geps) {
-            if (gep.getParent() == null || gep == baseGep) continue;
+            if (gep.getParent() == null || gep == baseGep)
+                continue;
             List<Value> newIndices = new ArrayList<>();
             for (int i = 2; i < gep.getNumOperands(); i++) {
                 newIndices.add(gep.getOperand(i));
@@ -488,7 +529,8 @@ public class GlobalLocalizationPass implements Pass {
         Value callee = call.getOperand(0);
         if (callee instanceof Function f) {
             for (int i = 1; i < call.getNumOperands(); i++) {
-                if (getGlobalVariable(call.getOperand(i)) == gv) return true;
+                if (getGlobalVariable(call.getOperand(i)) == gv)
+                    return true;
             }
             if (f.isDeclaration()) {
                 return f.getName().equals("putarray");
@@ -502,7 +544,8 @@ public class GlobalLocalizationPass implements Pass {
         Value callee = call.getOperand(0);
         if (callee instanceof Function f) {
             for (int i = 1; i < call.getNumOperands(); i++) {
-                if (getGlobalVariable(call.getOperand(i)) == gv) return true;
+                if (getGlobalVariable(call.getOperand(i)) == gv)
+                    return true;
             }
             if (f.isDeclaration()) {
                 return f.getName().equals("getarray");
@@ -512,12 +555,44 @@ public class GlobalLocalizationPass implements Pass {
         return true;
     }
 
-    private static GlobalVariable getGlobalVariable(Value v) {
-        if (v instanceof GlobalVariable gv) return gv;
-        if (v instanceof GetElementPtrInst gep) {
-            return getGlobalVariable(gep.getOperand(0));
+    private boolean isModifiedIn(GlobalVariable gv, Function func) {
+        for (BasicBlock bb : func.getBasicBlocks()) {
+            for (Instruction inst : bb.getInstructions()) {
+                if (inst instanceof StoreInst store) {
+                    Value ptr = store.getOperand(1);
+                    if (isDerivedFrom(ptr, gv))
+                        return true;
+                }
+            }
         }
-        return null;
+        return false;
+    }
+
+    private boolean isDerivedFrom(Value ptr, GlobalVariable gv) {
+        if (ptr == gv)
+            return true;
+        if (ptr instanceof GetElementPtrInst gep) {
+            return isDerivedFrom(gep.getOperand(0), gv);
+        }
+        return false;
+    }
+
+    private List<Loop> findLoops(Function function) {
+        List<Loop> loops = new ArrayList<>();
+        DominatorAnalysis.Cfg cfg = DominatorAnalysis.computeCfg(function);
+        DominatorAnalysis.DominatorInfo domInfo = DominatorAnalysis.computeDominators(function);
+
+        for (BasicBlock n : function.getBasicBlocks()) {
+            if (!domInfo.dominators().containsKey(n))
+                continue;
+            for (BasicBlock d : cfg.successors().getOrDefault(n, List.of())) {
+                if (domInfo.dominators().get(n).contains(d)) {
+                    Set<BasicBlock> loopBlocks = DominatorAnalysis.findLoopBlocks(n, d, cfg.predecessors());
+                    loops.add(new Loop(d, loopBlocks));
+                }
+            }
+        }
+        return loops;
     }
 
     private static class SideEffectAnalysis {
@@ -531,16 +606,19 @@ public class GlobalLocalizationPass implements Pass {
                 refSet.put(func, new LinkedHashSet<>());
                 callGraph.put(func, new LinkedHashSet<>());
 
-                if (func.isDeclaration()) continue;
+                if (func.isDeclaration())
+                    continue;
 
                 for (BasicBlock bb : func.getBasicBlocks()) {
                     for (Instruction inst : bb.getInstructions()) {
                         if (inst instanceof LoadInst load) {
                             GlobalVariable gv = getGlobalVariable(load.getOperand(0));
-                            if (gv != null) refSet.get(func).add(gv);
+                            if (gv != null)
+                                refSet.get(func).add(gv);
                         } else if (inst instanceof StoreInst store) {
                             GlobalVariable gv = getGlobalVariable(store.getOperand(1));
-                            if (gv != null) modSet.get(func).add(gv);
+                            if (gv != null)
+                                modSet.get(func).add(gv);
                         } else if (inst instanceof CallInst call) {
                             Value callee = call.getOperand(0);
                             if (callee instanceof Function f) {
@@ -566,8 +644,10 @@ public class GlobalLocalizationPass implements Pass {
                     Set<GlobalVariable> funcMod = modSet.get(func);
                     Set<GlobalVariable> funcRef = refSet.get(func);
                     for (Function callee : callGraph.get(func)) {
-                        if (funcMod.addAll(modSet.get(callee))) changed = true;
-                        if (funcRef.addAll(refSet.get(callee))) changed = true;
+                        if (funcMod.addAll(modSet.get(callee)))
+                            changed = true;
+                        if (funcRef.addAll(refSet.get(callee)))
+                            changed = true;
                     }
                 }
             }
@@ -582,42 +662,6 @@ public class GlobalLocalizationPass implements Pass {
         }
     }
 
-    private boolean isModifiedIn(GlobalVariable gv, Function func) {
-        for (BasicBlock bb : func.getBasicBlocks()) {
-            for (Instruction inst : bb.getInstructions()) {
-                if (inst instanceof StoreInst store) {
-                    Value ptr = store.getOperand(1);
-                    if (isDerivedFrom(ptr, gv)) return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    private boolean isDerivedFrom(Value ptr, GlobalVariable gv) {
-        if (ptr == gv) return true;
-        if (ptr instanceof GetElementPtrInst gep) {
-            return isDerivedFrom(gep.getOperand(0), gv);
-        }
-        return false;
-    }
-
-    private record Loop(BasicBlock header, Set<BasicBlock> blocks) {}
-
-    private List<Loop> findLoops(Function function) {
-        List<Loop> loops = new ArrayList<>();
-        DominatorAnalysis.Cfg cfg = DominatorAnalysis.computeCfg(function);
-        DominatorAnalysis.DominatorInfo domInfo = DominatorAnalysis.computeDominators(function);
-
-        for (BasicBlock n : function.getBasicBlocks()) {
-            if (!domInfo.dominators().containsKey(n)) continue;
-            for (BasicBlock d : cfg.successors().getOrDefault(n, List.of())) {
-                if (domInfo.dominators().get(n).contains(d)) {
-                    Set<BasicBlock> loopBlocks = DominatorAnalysis.findLoopBlocks(n, d, cfg.predecessors());
-                    loops.add(new Loop(d, loopBlocks));
-                }
-            }
-        }
-        return loops;
+    private record Loop(BasicBlock header, Set<BasicBlock> blocks) {
     }
 }

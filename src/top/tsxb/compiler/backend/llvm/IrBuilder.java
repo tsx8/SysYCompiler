@@ -116,12 +116,14 @@ public class IrBuilder implements AstVisitor<Value> {
                     for (int i = 0; i < count; i++) {
                         Value val = context.ensureI32(values.get(i).accept(this));
                         Value index = new ConstInt(IntType.I32, i);
-                        Value ptr = new GetElementPtrInst(alloca, List.of(new ConstInt(IntType.I32, 0), index), context.currentBlock);
+                        Value ptr = new GetElementPtrInst(alloca, List.of(new ConstInt(IntType.I32, 0), index),
+                            context.currentBlock);
                         new StoreInst(val, ptr, context.currentBlock);
                     }
                     for (int i = count; i < at.getNumElements(); i++) {
                         Value index = new ConstInt(IntType.I32, i);
-                        Value ptr = new GetElementPtrInst(alloca, List.of(new ConstInt(IntType.I32, 0), index), context.currentBlock);
+                        Value ptr = new GetElementPtrInst(alloca, List.of(new ConstInt(IntType.I32, 0), index),
+                            context.currentBlock);
                         new StoreInst(new ConstInt(IntType.I32, 0), ptr, context.currentBlock);
                     }
                 }
@@ -241,7 +243,8 @@ public class IrBuilder implements AstVisitor<Value> {
             return new ConstInt(IntType.I32, 0);
         }
         if (ptr.getType() instanceof PtrType pt && pt.getPointeeType() instanceof ArrType) {
-            return new GetElementPtrInst(ptr, List.of(new ConstInt(IntType.I32, 0), new ConstInt(IntType.I32, 0)), context.currentBlock);
+            return new GetElementPtrInst(ptr, List.of(new ConstInt(IntType.I32, 0), new ConstInt(IntType.I32, 0)),
+                context.currentBlock);
         } else {
             return new LoadInst(ptr, context.currentBlock);
         }
@@ -383,8 +386,8 @@ public class IrBuilder implements AstVisitor<Value> {
             }
             if (!literalContent.isEmpty()) {
                 var strLiteral = module.createString(literalContent);
-                var strPtr =
-                    new GetElementPtrInst(strLiteral, List.of(new ConstInt(IntType.I32, 0), new ConstInt(IntType.I32, 0)), context.currentBlock);
+                var strPtr = new GetElementPtrInst(strLiteral,
+                    List.of(new ConstInt(IntType.I32, 0), new ConstInt(IntType.I32, 0)), context.currentBlock);
                 var putstr = context.lookupBuiltin("putstr");
                 putstr.ifPresent(p -> new CallInst(p, List.of(strPtr), context.currentBlock));
             }
@@ -402,7 +405,8 @@ public class IrBuilder implements AstVisitor<Value> {
         Value operand = node.operand.accept(this);
         return switch (node.op) {
             case PLUS -> operand;
-            case MINU -> new BinaryInst(OpCode.SUB, new ConstInt(IntType.I32, 0), context.ensureI32(operand), context.currentBlock);
+            case MINU -> new BinaryInst(OpCode.SUB, new ConstInt(IntType.I32, 0), context.ensureI32(operand),
+                context.currentBlock);
             case NOT -> {
                 var zero = (operand.getType() instanceof IntType it && it.getBitWidth() == 1)
                     ? new ConstInt(IntType.I1, 0) : new ConstInt(IntType.I32, 0);
@@ -463,7 +467,8 @@ public class IrBuilder implements AstVisitor<Value> {
                     var ptr = new LoadInst(current, context.currentBlock);
                     current = new GetElementPtrInst(ptr, List.of(index), context.currentBlock);
                 } else {
-                    current = new GetElementPtrInst(current, List.of(new ConstInt(IntType.I32, 0), index), context.currentBlock);
+                    current = new GetElementPtrInst(current, List.of(new ConstInt(IntType.I32, 0), index),
+                        context.currentBlock);
                 }
             }
             return current;

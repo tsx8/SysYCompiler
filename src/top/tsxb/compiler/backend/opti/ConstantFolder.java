@@ -15,11 +15,13 @@ public class ConstantFolder {
             case SUB -> res = l - r;
             case MUL -> res = l * r;
             case SDIV -> {
-                if (r == 0) return null;
+                if (r == 0)
+                    return null;
                 res = l / r;
             }
             case SREM -> {
-                if (r == 0) return null;
+                if (r == 0)
+                    return null;
                 res = l % r;
             }
             default -> {

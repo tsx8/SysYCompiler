@@ -1,7 +1,7 @@
 package top.tsxb.compiler.ir.inst;
 
-import top.tsxb.compiler.ir.structure.BasicBlock;
 import top.tsxb.compiler.ir.base.Value;
+import top.tsxb.compiler.ir.structure.BasicBlock;
 
 public class BinaryInst extends Instruction {
     public BinaryInst(OpCode op, Value left, Value right, BasicBlock parent) {

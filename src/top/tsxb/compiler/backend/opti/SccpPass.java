@@ -1,62 +1,45 @@
 package top.tsxb.compiler.backend.opti;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Queue;
+import java.util.Set;
+
+import top.tsxb.compiler.backend.opti.SccpHelper.LatticeStatus;
+import top.tsxb.compiler.backend.opti.SccpHelper.LatticeValue;
 import top.tsxb.compiler.ir.base.Value;
 import top.tsxb.compiler.ir.constant.ConstInt;
-import top.tsxb.compiler.ir.inst.*;
+import top.tsxb.compiler.ir.inst.BinaryInst;
+import top.tsxb.compiler.ir.inst.BrInst;
+import top.tsxb.compiler.ir.inst.IcmpInst;
+import top.tsxb.compiler.ir.inst.Instruction;
+import top.tsxb.compiler.ir.inst.LoadInst;
+import top.tsxb.compiler.ir.inst.OpCode;
+import top.tsxb.compiler.ir.inst.PhiInst;
+import top.tsxb.compiler.ir.inst.ZextInst;
 import top.tsxb.compiler.ir.structure.Argument;
 import top.tsxb.compiler.ir.structure.BasicBlock;
 import top.tsxb.compiler.ir.structure.Function;
 import top.tsxb.compiler.ir.structure.GlobalVariable;
 import top.tsxb.compiler.ir.type.IntType;
 
-import java.util.*;
-
 public class SccpPass implements Pass {
-    private enum LatticeStatus {
-        TOP, CONSTANT, BOTTOM
-    }
-
-    private record LatticeValue(LatticeStatus status, Integer value) {
-
-        static LatticeValue top() {return new LatticeValue(LatticeStatus.TOP, null);}
-
-        static LatticeValue bottom() {return new LatticeValue(LatticeStatus.BOTTOM, null);}
-
-        static LatticeValue constant(int val) {
-            return new LatticeValue(LatticeStatus.CONSTANT, val);
-        }
-
-            @Override
-            public boolean equals(Object o) {
-                if (this == o) {return true;}
-                if (o == null || getClass() != o.getClass()) {return false;}
-                LatticeValue that = (LatticeValue) o;
-                return status == that.status && Objects.equals(value, that.value);
-            }
-
-        @Override
-            public String toString() {
-                return switch (status) {
-                    case TOP -> "TOP";
-                    case BOTTOM -> "BOTTOM";
-                    case CONSTANT -> "CONST(" + value + ")";
-                };
-            }
-        }
-
     private final Map<Value, LatticeValue> latticeValues = new LinkedHashMap<>();
     private final Set<BasicBlock> reachableBlocks = new LinkedHashSet<>();
     private final Queue<BasicBlock> cfgWorklist = new LinkedList<>();
     private final Queue<Instruction> ssaWorklist = new LinkedList<>();
     private final Set<Edge> executableEdges = new LinkedHashSet<>();
 
-    private record Edge(BasicBlock from, BasicBlock to) {}
-
     @Override
     public boolean run(top.tsxb.compiler.ir.structure.Module module) {
         boolean changed = false;
         for (Function function : module.getFunctionList()) {
-            if (function.isDeclaration()) continue;
+            if (function.isDeclaration())
+                continue;
             changed |= runOnFunction(function);
         }
         return changed;
@@ -73,16 +56,17 @@ public class SccpPass implements Pass {
         for (Argument arg : function.getArguments()) {
             latticeValues.put(arg, LatticeValue.bottom());
         }
-        
+
         // Entry block is reachable
         if (!function.getBasicBlocks().isEmpty()) {
             cfgWorklist.add(function.getBasicBlocks().get(0));
         }
-        
+
         while (!cfgWorklist.isEmpty() || !ssaWorklist.isEmpty()) {
             if (!cfgWorklist.isEmpty()) {
                 BasicBlock bb = cfgWorklist.poll();
-                if (reachableBlocks.contains(bb)) continue;
+                if (reachableBlocks.contains(bb))
+                    continue;
                 reachableBlocks.add(bb);
                 for (Instruction inst : bb.getInstructions()) {
                     visitInstruction(inst);
@@ -144,65 +128,15 @@ public class SccpPass implements Pass {
     }
 
     private void visitBinary(BinaryInst binary) {
-        LatticeValue v1 = getLatticeValue(binary.getOperand(0));
-        LatticeValue v2 = getLatticeValue(binary.getOperand(1));
-
-        if (v1.status == LatticeStatus.CONSTANT && v2.status == LatticeStatus.CONSTANT) {
-            ConstInt res = ConstantFolder.foldBinary(binary.getOpCode(), 
-                new ConstInt(IntType.I32, v1.value), 
-                new ConstInt(IntType.I32, v2.value));
-            if (res != null) {
-                setLatticeValue(binary, LatticeValue.constant(res.getValue()));
-                return;
-            }
-        }
-        
-        // Special cases for MUL by 0
-        if (binary.getOpCode() == OpCode.MUL) {
-            if ((v1.status == LatticeStatus.CONSTANT && v1.value == 0) ||
-                (v2.status == LatticeStatus.CONSTANT && v2.value == 0)) {
-                setLatticeValue(binary, LatticeValue.constant(0));
-                return;
-            }
-        }
-
-        if (v1.status == LatticeStatus.BOTTOM || v2.status == LatticeStatus.BOTTOM) {
-            setLatticeValue(binary, LatticeValue.bottom());
-        } else {
-            setLatticeValue(binary, LatticeValue.top());
-        }
+        SccpHelper.visitBinary(binary, this::getLatticeValue, lv -> setLatticeValue(binary, lv));
     }
 
     private void visitIcmp(IcmpInst icmp) {
-        LatticeValue v1 = getLatticeValue(icmp.getOperand(0));
-        LatticeValue v2 = getLatticeValue(icmp.getOperand(1));
-
-        if (v1.status == LatticeStatus.CONSTANT && v2.status == LatticeStatus.CONSTANT) {
-            ConstInt res = ConstantFolder.foldIcmp(icmp.getPredicate(),
-                new ConstInt(IntType.I32, v1.value),
-                new ConstInt(IntType.I32, v2.value));
-            if (res != null) {
-                setLatticeValue(icmp, LatticeValue.constant(res.getValue()));
-                return;
-            }
-        }
-
-        if (v1.status == LatticeStatus.BOTTOM || v2.status == LatticeStatus.BOTTOM) {
-            setLatticeValue(icmp, LatticeValue.bottom());
-        } else {
-            setLatticeValue(icmp, LatticeValue.top());
-        }
+        SccpHelper.visitIcmp(icmp, this::getLatticeValue, lv -> setLatticeValue(icmp, lv));
     }
 
     private void visitZext(ZextInst zext) {
-        LatticeValue v = getLatticeValue(zext.getOperand(0));
-        if (v.status == LatticeStatus.BOTTOM) {
-            setLatticeValue(zext, LatticeValue.bottom());
-        } else if (v.status == LatticeStatus.CONSTANT) {
-            setLatticeValue(zext, LatticeValue.constant(v.value));
-        } else {
-            setLatticeValue(zext, LatticeValue.top());
-        }
+        SccpHelper.visitZext(zext, this::getLatticeValue, lv -> setLatticeValue(zext, lv));
     }
 
     private void visitLoad(LoadInst load) {
@@ -221,7 +155,7 @@ public class SccpPass implements Pass {
         boolean hasExecutableEdge = false;
         for (Map.Entry<BasicBlock, Value> entry : phi.getIncoming().entrySet()) {
             if (executableEdges.contains(new Edge(entry.getKey(), phi.getParent()))) {
-                res = meet(res, getLatticeValue(entry.getValue()));
+                res = res.meet(getLatticeValue(entry.getValue()));
                 hasExecutableEdge = true;
             }
         }
@@ -232,29 +166,21 @@ public class SccpPass implements Pass {
         }
     }
 
-    private LatticeValue meet(LatticeValue v1, LatticeValue v2) {
-        if (v1.status == LatticeStatus.BOTTOM || v2.status == LatticeStatus.BOTTOM) return LatticeValue.bottom();
-        if (v1.status == LatticeStatus.TOP) return v2;
-        if (v2.status == LatticeStatus.TOP) return v1;
-        if (v1.value.equals(v2.value)) return v1;
-        return LatticeValue.bottom();
-    }
-
     private void visitBr(BrInst br) {
         if (br.getNumOperands() == 1) {
-            BasicBlock dest = (BasicBlock) br.getOperand(0);
+            BasicBlock dest = (BasicBlock)br.getOperand(0);
             addEdge(br.getParent(), dest);
         } else {
             LatticeValue cond = getLatticeValue(br.getOperand(0));
-            if (cond.status == LatticeStatus.CONSTANT) {
-                if (cond.value != 0) {
-                    addEdge(br.getParent(), (BasicBlock) br.getOperand(1));
+            if (cond.status() == LatticeStatus.CONSTANT) {
+                if (cond.value() != 0) {
+                    addEdge(br.getParent(), (BasicBlock)br.getOperand(1));
                 } else {
-                    addEdge(br.getParent(), (BasicBlock) br.getOperand(2));
+                    addEdge(br.getParent(), (BasicBlock)br.getOperand(2));
                 }
-            } else if (cond.status == LatticeStatus.BOTTOM) {
-                addEdge(br.getParent(), (BasicBlock) br.getOperand(1));
-                addEdge(br.getParent(), (BasicBlock) br.getOperand(2));
+            } else if (cond.status() == LatticeStatus.BOTTOM) {
+                addEdge(br.getParent(), (BasicBlock)br.getOperand(1));
+                addEdge(br.getParent(), (BasicBlock)br.getOperand(2));
             }
         }
     }
@@ -278,14 +204,14 @@ public class SccpPass implements Pass {
 
     private boolean rewriteFunction(Function function) {
         boolean changed = false;
-        
+
         // 1. Replace constant instructions with ConstInt
         for (BasicBlock bb : function.getBasicBlocks()) {
             List<Instruction> insts = new ArrayList<>(bb.getInstructions());
             for (Instruction inst : insts) {
                 LatticeValue lv = getLatticeValue(inst);
-                if (lv.status == LatticeStatus.CONSTANT) {
-                    inst.replaceAllUsesWith(new ConstInt((IntType) inst.getType(), lv.value));
+                if (lv.status() == LatticeStatus.CONSTANT) {
+                    inst.replaceAllUsesWith(new ConstInt((IntType)inst.getType(), lv.value()));
                     inst.dropAllReferences();
                     bb.getInstructions().remove(inst);
                     changed = true;
@@ -295,13 +221,14 @@ public class SccpPass implements Pass {
 
         // 2. Simplify branches
         for (BasicBlock bb : function.getBasicBlocks()) {
-            if (bb.getInstructions().isEmpty()) continue;
+            if (bb.getInstructions().isEmpty())
+                continue;
             Instruction last = bb.getInstructions().get(bb.getInstructions().size() - 1);
             if (last instanceof BrInst br && br.getNumOperands() == 3) {
                 LatticeValue cond = getLatticeValue(br.getOperand(0));
-                if (cond.status == LatticeStatus.CONSTANT) {
-                    BasicBlock dest = (BasicBlock) (cond.value != 0 ? br.getOperand(1) : br.getOperand(2));
-                    
+                if (cond.status() == LatticeStatus.CONSTANT) {
+                    BasicBlock dest = (BasicBlock)(cond.value() != 0 ? br.getOperand(1) : br.getOperand(2));
+
                     // Replace with unconditional branch
                     br.dropAllReferences();
                     bb.getInstructions().remove(br);
@@ -322,7 +249,7 @@ public class SccpPass implements Pass {
                 changed = true;
             }
         }
-        
+
         // 4. Clean up PHIs in reachable blocks
         for (BasicBlock bb : function.getBasicBlocks()) {
             List<Instruction> insts = new ArrayList<>(bb.getInstructions());
@@ -371,10 +298,13 @@ public class SccpPass implements Pass {
                         // Strength reduction: mul x, -1 -> sub 0, x; sdiv x, -1 -> sub 0, x
                         Value x = null;
                         if (binary.getOpCode() == OpCode.MUL) {
-                            if (isConstant(binary.getOperand(0), -1)) x = binary.getOperand(1);
-                            else if (isConstant(binary.getOperand(1), -1)) x = binary.getOperand(0);
+                            if (isConstant(binary.getOperand(0), -1))
+                                x = binary.getOperand(1);
+                            else if (isConstant(binary.getOperand(1), -1))
+                                x = binary.getOperand(0);
                         } else if (binary.getOpCode() == OpCode.SDIV) {
-                            if (isConstant(binary.getOperand(1), -1)) x = binary.getOperand(0);
+                            if (isConstant(binary.getOperand(1), -1))
+                                x = binary.getOperand(0);
                         }
 
                         if (x != null) {
@@ -402,33 +332,51 @@ public class SccpPass implements Pass {
         Value right = binary.getOperand(1);
 
         if (op == OpCode.ADD) {
-            if (isConstant(left, 0)) return right;
-            if (isConstant(right, 0)) return left;
+            if (isConstant(left, 0))
+                return right;
+            if (isConstant(right, 0))
+                return left;
         } else if (op == OpCode.SUB) {
-            if (isConstant(right, 0)) return left;
-            if (left == right) return new ConstInt(IntType.I32, 0);
+            if (isConstant(right, 0))
+                return left;
+            if (left == right)
+                return new ConstInt(IntType.I32, 0);
             // 0 - (0 - x) -> x
-            if (isConstant(left, 0) && right instanceof BinaryInst rBin && rBin.getOpCode() == OpCode.SUB && isConstant(rBin.getOperand(0), 0)) {
+            if (isConstant(left, 0) && right instanceof BinaryInst rBin && rBin.getOpCode() == OpCode.SUB
+                && isConstant(rBin.getOperand(0), 0)) {
                 return rBin.getOperand(1);
             }
         } else if (op == OpCode.MUL) {
-            if (isConstant(left, 1)) return right;
-            if (isConstant(right, 1)) return left;
-            if (isConstant(left, 0)) return left;
-            if (isConstant(right, 0)) return right;
+            if (isConstant(left, 1))
+                return right;
+            if (isConstant(right, 1))
+                return left;
+            if (isConstant(left, 0))
+                return left;
+            if (isConstant(right, 0))
+                return right;
         } else if (op == OpCode.SDIV) {
-            if (isConstant(right, 1)) return left;
-            if (isConstant(left, 0)) return left;
-            if (left == right) return new ConstInt(IntType.I32, 1);
+            if (isConstant(right, 1))
+                return left;
+            if (isConstant(left, 0))
+                return left;
+            if (left == right)
+                return new ConstInt(IntType.I32, 1);
         } else if (op == OpCode.SREM) {
-            if (isConstant(right, 1)) return new ConstInt(IntType.I32, 0);
-            if (isConstant(left, 0)) return left;
-            if (left == right) return new ConstInt(IntType.I32, 0);
+            if (isConstant(right, 1))
+                return new ConstInt(IntType.I32, 0);
+            if (isConstant(left, 0))
+                return left;
+            if (left == right)
+                return new ConstInt(IntType.I32, 0);
         }
         return null;
     }
 
     private boolean isConstant(Value v, int val) {
         return v instanceof ConstInt c && c.getValue() == val;
+    }
+
+    private record Edge(BasicBlock from, BasicBlock to) {
     }
 }

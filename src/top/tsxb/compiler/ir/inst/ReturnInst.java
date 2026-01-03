@@ -1,8 +1,8 @@
 package top.tsxb.compiler.ir.inst;
 
-import top.tsxb.compiler.ir.type.NoneType;
-import top.tsxb.compiler.ir.structure.BasicBlock;
 import top.tsxb.compiler.ir.base.Value;
+import top.tsxb.compiler.ir.structure.BasicBlock;
+import top.tsxb.compiler.ir.type.NoneType;
 
 public class ReturnInst extends Instruction {
     public ReturnInst(Value retVal, BasicBlock parent) {

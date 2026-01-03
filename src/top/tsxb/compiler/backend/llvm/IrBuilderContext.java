@@ -6,18 +6,18 @@ import java.util.Optional;
 import java.util.Stack;
 
 import top.tsxb.compiler.frontend.semantic.sym.Symbol;
-import top.tsxb.compiler.ir.structure.Module;
+import top.tsxb.compiler.ir.base.Value;
+import top.tsxb.compiler.ir.constant.ConstInt;
 import top.tsxb.compiler.ir.inst.BrInst;
 import top.tsxb.compiler.ir.inst.IcmpInst;
 import top.tsxb.compiler.ir.inst.Instruction;
 import top.tsxb.compiler.ir.inst.OpCode;
 import top.tsxb.compiler.ir.inst.ZextInst;
-import top.tsxb.compiler.ir.type.IntType;
 import top.tsxb.compiler.ir.structure.BasicBlock;
-import top.tsxb.compiler.ir.constant.ConstInt;
 import top.tsxb.compiler.ir.structure.Function;
 import top.tsxb.compiler.ir.structure.GlobalValue;
-import top.tsxb.compiler.ir.base.Value;
+import top.tsxb.compiler.ir.structure.Module;
+import top.tsxb.compiler.ir.type.IntType;
 
 public class IrBuilderContext {
     private final Module module;
@@ -39,7 +39,8 @@ public class IrBuilderContext {
     }
 
     public Value ensureI32(Value val) {
-        if (val == null) return new ConstInt(IntType.I32, 0);
+        if (val == null)
+            return new ConstInt(IntType.I32, 0);
         if (val.getType() instanceof IntType it && it.getBitWidth() == 1) {
             return new ZextInst(val, IntType.I32, currentBlock);
         }

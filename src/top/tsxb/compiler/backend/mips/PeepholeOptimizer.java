@@ -6,56 +6,6 @@ import java.util.List;
 public class PeepholeOptimizer {
     private final List<Inst> insts = new ArrayList<>();
 
-    static class Inst {
-        String original;
-        String label;
-        String opcode;
-        String[] args;
-        String indent;
-
-        Inst(String line) {
-            this.original = line;
-            int i = 0;
-            while (i < line.length() && Character.isWhitespace(line.charAt(i))) i++;
-            indent = line.substring(0, i);
-
-            String clean = line.trim();
-            int commentIdx = clean.indexOf('#');
-            if (commentIdx >= 0) clean = clean.substring(0, commentIdx).trim();
-
-            if (clean.isEmpty()) return;
-
-            if (clean.contains(".asciiz") || clean.contains(".ascii")) {
-                return;
-            }
-
-            if (clean.endsWith(":")) {
-                label = clean.substring(0, clean.length() - 1);
-                return;
-            }
-
-            int spaceIdx = clean.indexOf(' ');
-            if (spaceIdx == -1) {
-                opcode = clean;
-                args = new String[0];
-            } else {
-                opcode = clean.substring(0, spaceIdx);
-                String argsStr = clean.substring(spaceIdx + 1);
-                args = argsStr.split("\\s*,\\s*");
-            }
-        }
-
-        boolean isLabel() { return label != null; }
-        boolean isEmpty() { return label == null && opcode == null; }
-
-        @Override
-        public String toString() {
-            if (label != null) return label + ":";
-            if (opcode == null) return original;
-            return indent + opcode + " " + String.join(", ", args);
-        }
-    }
-
     public PeepholeOptimizer(String mipsCode) {
         for (String line : mipsCode.split("\n")) {
             insts.add(new Inst(line));
@@ -104,7 +54,8 @@ public class PeepholeOptimizer {
         for (int i = 0; i < insts.size() - 1; i++) {
             Inst i1 = insts.get(i);
             Inst i2 = insts.get(i + 1);
-            if (i1.isEmpty() || i2.isEmpty()) continue;
+            if (i1.isEmpty() || i2.isEmpty())
+                continue;
 
             if ("li".equals(i1.opcode) && "move".equals(i2.opcode)) {
                 String tReg = i1.args[0];
@@ -115,7 +66,7 @@ public class PeepholeOptimizer {
                 if (src.equals(tReg) && isTempReg(tReg)) {
                     if (isSafeToRemove(tReg, i + 2)) {
                         i2.opcode = "li";
-                        i2.args = new String[]{dst, imm};
+                        i2.args = new String[] {dst, imm};
                         insts.remove(i);
                         i--;
                         changed = true;
@@ -131,7 +82,8 @@ public class PeepholeOptimizer {
         for (int i = 0; i < insts.size() - 1; i++) {
             Inst i1 = insts.get(i);
             Inst i2 = insts.get(i + 1);
-            if (i1.isEmpty() || i2.isEmpty()) continue;
+            if (i1.isEmpty() || i2.isEmpty())
+                continue;
 
             if ("move".equals(i1.opcode) && "move".equals(i2.opcode)) {
                 String tReg = i1.args[0];
@@ -141,7 +93,7 @@ public class PeepholeOptimizer {
 
                 if (src2.equals(tReg) && isTempReg(tReg)) {
                     if (isSafeToRemove(tReg, i + 2)) {
-                        i2.args = new String[]{dst2, src1};
+                        i2.args = new String[] {dst2, src1};
                         insts.remove(i);
                         i--;
                         changed = true;
@@ -157,7 +109,8 @@ public class PeepholeOptimizer {
         for (int i = 0; i < insts.size() - 1; i++) {
             Inst i1 = insts.get(i);
             Inst i2 = insts.get(i + 1);
-            if (i1.isEmpty() || i2.isEmpty()) continue;
+            if (i1.isEmpty() || i2.isEmpty())
+                continue;
 
             if ("move".equals(i1.opcode) && "sw".equals(i2.opcode)) {
                 String tReg = i1.args[0];
@@ -167,7 +120,7 @@ public class PeepholeOptimizer {
 
                 if (src2.equals(tReg) && isTempReg(tReg)) {
                     if (isSafeToRemove(tReg, i + 2)) {
-                        i2.args = new String[]{src1, addr};
+                        i2.args = new String[] {src1, addr};
                         insts.remove(i);
                         i--;
                         changed = true;
@@ -183,7 +136,8 @@ public class PeepholeOptimizer {
         for (int i = 0; i < insts.size() - 1; i++) {
             Inst i1 = insts.get(i);
             Inst i2 = insts.get(i + 1);
-            if (i1.isEmpty() || i2.isEmpty()) continue;
+            if (i1.isEmpty() || i2.isEmpty())
+                continue;
 
             if ("move".equals(i1.opcode) && ("beq".equals(i2.opcode) || "bne".equals(i2.opcode))) {
                 String tReg = i1.args[0];
@@ -194,14 +148,14 @@ public class PeepholeOptimizer {
 
                 if (op1.equals(tReg) && isTempReg(tReg)) {
                     if (isSafeToRemove(tReg, i + 2)) {
-                        i2.args = new String[]{src, op2, label};
+                        i2.args = new String[] {src, op2, label};
                         insts.remove(i);
                         i--;
                         changed = true;
                     }
                 } else if (op2.equals(tReg) && isTempReg(tReg)) {
                     if (isSafeToRemove(tReg, i + 2)) {
-                        i2.args = new String[]{op1, src, label};
+                        i2.args = new String[] {op1, src, label};
                         insts.remove(i);
                         i--;
                         changed = true;
@@ -217,7 +171,8 @@ public class PeepholeOptimizer {
         for (int i = 0; i < insts.size() - 1; i++) {
             Inst i1 = insts.get(i);
             Inst i2 = insts.get(i + 1);
-            if (i1.isEmpty() || i2.isEmpty()) continue;
+            if (i1.isEmpty() || i2.isEmpty())
+                continue;
 
             if ("move".equals(i1.opcode) && ("lw".equals(i2.opcode) || "sw".equals(i2.opcode))) {
                 String tReg = i1.args[0];
@@ -233,7 +188,7 @@ public class PeepholeOptimizer {
 
                     if (baseReg.equals(tReg) && isTempReg(tReg)) {
                         if (isSafeToRemove(tReg, i + 2)) {
-                            i2.args = new String[]{memSrcDest, offset + "(" + baseSrc + ")"};
+                            i2.args = new String[] {memSrcDest, offset + "(" + baseSrc + ")"};
                             insts.remove(i);
                             i--;
                             changed = true;
@@ -250,7 +205,8 @@ public class PeepholeOptimizer {
         for (int i = 0; i < insts.size() - 1; i++) {
             Inst i1 = insts.get(i);
             Inst i2 = insts.get(i + 1);
-            if (i1.isEmpty() || i2.isEmpty()) continue;
+            if (i1.isEmpty() || i2.isEmpty())
+                continue;
 
             if ("j".equals(i1.opcode) && i2.isLabel()) {
                 if (i1.args[0].equals(i2.label)) {
@@ -269,7 +225,8 @@ public class PeepholeOptimizer {
             Inst i1 = insts.get(i);
             Inst i2 = insts.get(i + 1);
             Inst i3 = insts.get(i + 2);
-            if (i1.isEmpty() || i2.isEmpty() || i3.isEmpty()) continue;
+            if (i1.isEmpty() || i2.isEmpty() || i3.isEmpty())
+                continue;
 
             if (("beq".equals(i1.opcode) || "bne".equals(i1.opcode)) && "j".equals(i2.opcode) && i3.isLabel()) {
                 String target1 = i1.args[2];
@@ -292,7 +249,8 @@ public class PeepholeOptimizer {
         for (int i = 0; i < insts.size() - 1; i++) {
             Inst i1 = insts.get(i);
             Inst i2 = insts.get(i + 1);
-            if (i1.isEmpty() || i2.isEmpty()) continue;
+            if (i1.isEmpty() || i2.isEmpty())
+                continue;
 
             if ("sw".equals(i1.opcode) && "lw".equals(i2.opcode)) {
                 String srcReg = i1.args[0];
@@ -305,7 +263,7 @@ public class PeepholeOptimizer {
                         insts.remove(i + 1);
                     } else {
                         i2.opcode = "move";
-                        i2.args = new String[]{dstReg, srcReg};
+                        i2.args = new String[] {dstReg, srcReg};
                     }
                     changed = true;
                 }
@@ -317,9 +275,12 @@ public class PeepholeOptimizer {
     private boolean isSafeToRemove(String reg, int nextIndex) {
         for (int i = nextIndex; i < insts.size() && i < nextIndex + 20; i++) {
             Inst inst = insts.get(i);
-            if (inst.isEmpty()) continue;
-            if (inst.isLabel()) return false;
-            if (inst.opcode.startsWith("j") || inst.opcode.startsWith("b")) return false;
+            if (inst.isEmpty())
+                continue;
+            if (inst.isLabel())
+                return false;
+            if (inst.opcode.startsWith("j") || inst.opcode.startsWith("b"))
+                return false;
 
             boolean usesReg = false;
             for (String arg : inst.args) {
@@ -334,7 +295,8 @@ public class PeepholeOptimizer {
                     // If it's the destination, it's safe ONLY if it's not also a source operand
                     if (inst.args[0].equals(reg)) {
                         for (int j = 1; j < inst.args.length; j++) {
-                            if (inst.args[j].contains(reg)) return false;
+                            if (inst.args[j].contains(reg))
+                                return false;
                         }
                         return true;
                     }
@@ -351,28 +313,82 @@ public class PeepholeOptimizer {
     }
 
     private boolean isDestOpcode(String op) {
-        return op.equals("add") || op.equals("addu") || op.equals("addiu") ||
-               op.equals("sub") || op.equals("subu") ||
-               op.equals("mul") ||
-               op.equals("sll") || op.equals("srl") || op.equals("sra") ||
-               op.equals("slt") || op.equals("slti") || op.equals("sltiu") || op.equals("sltu") ||
-               op.equals("and") || op.equals("or") || op.equals("xor") || op.equals("nor") ||
-               op.equals("andi") || op.equals("ori") || op.equals("xori") ||
-               op.equals("li") || op.equals("la") ||
-               op.equals("lw") || op.equals("lb") || op.equals("lh") ||
-               op.equals("move") || op.equals("mfhi") || op.equals("mflo");
+        return op.equals("add") || op.equals("addu") || op.equals("addiu") || op.equals("sub") || op.equals("subu")
+            || op.equals("mul") || op.equals("sll") || op.equals("srl") || op.equals("sra") || op.equals("slt")
+            || op.equals("slti") || op.equals("sltiu") || op.equals("sltu") || op.equals("and") || op.equals("or")
+            || op.equals("xor") || op.equals("nor") || op.equals("andi") || op.equals("ori") || op.equals("xori")
+            || op.equals("li") || op.equals("la") || op.equals("lw") || op.equals("lb") || op.equals("lh")
+            || op.equals("move") || op.equals("mfhi") || op.equals("mflo");
     }
 
     private boolean isSourceOpcode(String op) {
-        return op.equals("sw") || op.equals("sb") || op.equals("sh") ||
-               op.equals("beq") || op.equals("bne") || op.equals("bgt") || op.equals("bge") ||
-               op.equals("blt") || op.equals("ble") || op.equals("bgtz") || op.equals("blez") ||
-               op.equals("jr") || op.equals("jalr") ||
-               op.equals("mult") || op.equals("multu") ||
-               op.equals("div") || op.equals("divu");
+        return op.equals("sw") || op.equals("sb") || op.equals("sh") || op.equals("beq") || op.equals("bne")
+            || op.equals("bgt") || op.equals("bge") || op.equals("blt") || op.equals("ble") || op.equals("bgtz")
+            || op.equals("blez") || op.equals("jr") || op.equals("jalr") || op.equals("mult") || op.equals("multu")
+            || op.equals("div") || op.equals("divu");
     }
 
     private boolean isTempReg(String reg) {
         return reg.matches("\\$t[0-9]");
+    }
+
+    static class Inst {
+        final String original;
+        final String indent;
+        String label;
+        String opcode;
+        String[] args;
+
+        Inst(String line) {
+            this.original = line;
+            int i = 0;
+            while (i < line.length() && Character.isWhitespace(line.charAt(i)))
+                i++;
+            indent = line.substring(0, i);
+
+            String clean = line.trim();
+            int commentIdx = clean.indexOf('#');
+            if (commentIdx >= 0)
+                clean = clean.substring(0, commentIdx).trim();
+
+            if (clean.isEmpty())
+                return;
+
+            if (clean.contains(".asciiz") || clean.contains(".ascii")) {
+                return;
+            }
+
+            if (clean.endsWith(":")) {
+                label = clean.substring(0, clean.length() - 1);
+                return;
+            }
+
+            int spaceIdx = clean.indexOf(' ');
+            if (spaceIdx == -1) {
+                opcode = clean;
+                args = new String[0];
+            } else {
+                opcode = clean.substring(0, spaceIdx);
+                String argsStr = clean.substring(spaceIdx + 1);
+                args = argsStr.split("\\s*,\\s*");
+            }
+        }
+
+        boolean isLabel() {
+            return label != null;
+        }
+
+        boolean isEmpty() {
+            return label == null && opcode == null;
+        }
+
+        @Override
+        public String toString() {
+            if (label != null)
+                return label + ":";
+            if (opcode == null)
+                return original;
+            return indent + opcode + " " + String.join(", ", args);
+        }
     }
 }
