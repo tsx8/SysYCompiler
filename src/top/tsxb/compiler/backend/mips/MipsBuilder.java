@@ -25,6 +25,10 @@ public class MipsBuilder {
     private int brCounter = 0;
     private boolean isLeaf = false;
     private int spShift = 0;
+    private Set<BasicBlock> frameRegion = new LinkedHashSet<>();
+    private Map<BasicBlock, List<BasicBlock>> predecessorsMap = new LinkedHashMap<>();
+    private Function currentFunction;
+    private BasicBlock currentBlock;
 
     public MipsBuilder(Module module) {
         this.module = module;
@@ -309,6 +313,7 @@ public class MipsBuilder {
     }
 
     private void genFunction(Function func) {
+        currentFunction = func;
         currentSb.append(getLabel(func)).append(":\n");
         spShift = 0;
 
@@ -327,21 +332,7 @@ public class MipsBuilder {
         this.usedCalleeSaved = allocator.getUsedCalleeSaved();
 
         calculateStackFrame(func);
-
-        currentSb.append("    # Prologue\n");
-        if (currentStackSize > 0) {
-            addI("$sp", "$sp", -currentStackSize);
-        }
-        if (!isLeaf) {
-            storeStack("$ra", currentStackSize - 4);
-        }
-
-        // Save callee-saved registers
-        int regOffset = currentStackSize - (isLeaf ? 4 : 8);
-        for (MipsRegister reg : usedCalleeSaved) {
-            storeStack(reg.getName(), regOffset);
-            regOffset -= 4;
-        }
+        computePredecessors(func);
 
         // Load global addresses into assigned registers
         for (Map.Entry<Value, MipsRegister> entry : regMapping.entrySet()) {
@@ -352,28 +343,14 @@ public class MipsBuilder {
             }
         }
 
+        // Move arguments 0-3 to caller-saved registers
         List<Argument> args = func.getArguments();
-        for (int i = 0; i < args.size(); i++) {
+        for (int i = 0; i < Math.min(args.size(), 4); i++) {
             Argument arg = args.get(i);
             MipsRegister reg = regMapping.get(arg);
-            if (reg != null) {
-                if (i < 4) {
-                    if (!reg.getName().equals("$a" + i)) {
-                        currentSb.append("    move ").append(reg.getName()).append(", $a").append(i).append("\n");
-                    }
-                } else {
-                    loadStack(reg.getName(), currentStackSize + (i - 4) * 4);
-                }
-            } else {
-                // Spilled or not used
-                Integer offset = stackOffsets.get(arg);
-                if (offset != null) {
-                    if (i < 4) {
-                        storeStack("$a" + i, offset);
-                    } else {
-                        loadStack("$t0", currentStackSize + (i - 4) * 4);
-                        storeStack("$t0", offset);
-                    }
+            if (reg != null && reg.isCallerSaved()) {
+                if (!reg.getName().equals("$a" + i)) {
+                    currentSb.append("    move ").append(reg.getName()).append(", $a").append(i).append("\n");
                 }
             }
         }
@@ -381,7 +358,27 @@ public class MipsBuilder {
         List<BasicBlock> blocks = reorderBlocks(func, loopAnalysis);
         for (int i = 0; i < blocks.size(); i++) {
             BasicBlock bb = blocks.get(i);
+            currentBlock = bb;
             BasicBlock nextBb = (i + 1 < blocks.size()) ? blocks.get(i + 1) : null;
+
+            if (frameRegion.contains(bb)) {
+                boolean hasEntryFromOutside = false;
+                if (bb == func.getBasicBlocks().get(0)) {
+                    hasEntryFromOutside = true;
+                } else {
+                    for (BasicBlock pred : predecessorsMap.get(bb)) {
+                        if (!frameRegion.contains(pred)) {
+                            hasEntryFromOutside = true;
+                            break;
+                        }
+                    }
+                }
+                if (hasEntryFromOutside) {
+                    currentSb.append(getLabel(bb)).append("_prologue:\n");
+                    emitPrologue(func);
+                }
+            }
+
             currentSb.append(getLabel(bb)).append(":\n");
             globalAddrCache.clear();
             regToGlobal.clear();
@@ -399,18 +396,155 @@ public class MipsBuilder {
         currentSb.append("\n");
     }
 
-    private void calculateStackFrame(Function func) {
-        stackOffsets.clear();
-        isLeaf = true;
+    private List<BasicBlock> getSuccessors(BasicBlock bb) {
+        List<BasicBlock> succs = new ArrayList<>();
+        if (bb.getInstructions().isEmpty()) return succs;
+        Instruction last = bb.getInstructions().get(bb.getInstructions().size() - 1);
+        if (last instanceof BrInst br) {
+            if (br.getNumOperands() == 1) {
+                succs.add((BasicBlock) br.getOperand(0));
+            } else {
+                succs.add((BasicBlock) br.getOperand(1));
+                succs.add((BasicBlock) br.getOperand(2));
+            }
+        }
+        return succs;
+    }
+
+    private void computePredecessors(Function func) {
+        predecessorsMap.clear();
         for (BasicBlock bb : func.getBasicBlocks()) {
-            for (Instruction inst : bb.getInstructions()) {
-                if (inst instanceof CallInst) {
-                    isLeaf = false;
+            predecessorsMap.put(bb, new ArrayList<>());
+        }
+        for (BasicBlock bb : func.getBasicBlocks()) {
+            for (BasicBlock succ : getSuccessors(bb)) {
+                predecessorsMap.get(succ).add(bb);
+            }
+        }
+    }
+
+    private boolean blockNeedsFrame(Function func, BasicBlock bb) {
+        for (Instruction inst : bb.getInstructions()) {
+            if (inst instanceof CallInst) return true;
+            if (inst instanceof AllocaInst) return true;
+            if (stackOffsets.containsKey(inst)) return true;
+            for (int i = 0; i < inst.getNumOperands(); i++) {
+                Value op = inst.getOperand(i);
+                if (stackOffsets.containsKey(op)) return true;
+                if (op instanceof Argument arg) {
+                    int argIndex = func.getArguments().indexOf(arg);
+                    if (argIndex >= 4) return true;
+                }
+            }
+            MipsRegister reg = regMapping.get(inst);
+            if (reg != null && reg.isCalleeSaved() && usedCalleeSaved.contains(reg)) return true;
+        }
+        for (BasicBlock succ : getSuccessors(bb)) {
+            for (Instruction inst : succ.getInstructions()) {
+                if (inst instanceof PhiInst phi) {
+                    Value incoming = phi.getIncomingValue(bb);
+                    if (incoming != null) {
+                        MipsRegister phiReg = regMapping.get(phi);
+                        if (phiReg != null && phiReg.isCalleeSaved() && usedCalleeSaved.contains(phiReg)) return true;
+                        if (!regMapping.containsKey(phi) && stackOffsets.containsKey(phi)) return true;
+                        if (incoming instanceof Argument arg) {
+                            int argIndex = func.getArguments().indexOf(arg);
+                            if (argIndex >= 4) return true;
+                        }
+                    }
+                } else {
                     break;
                 }
             }
-            if (!isLeaf) break;
         }
+        return false;
+    }
+
+    private void calculateFrameRegion(Function func) {
+        frameRegion.clear();
+        Set<BasicBlock> initial = new LinkedHashSet<>();
+        for (BasicBlock bb : func.getBasicBlocks()) {
+            if (blockNeedsFrame(func, bb)) {
+                initial.add(bb);
+            }
+        }
+        frameRegion.addAll(initial);
+        Queue<BasicBlock> queue = new LinkedList<>(initial);
+        while (!queue.isEmpty()) {
+            BasicBlock curr = queue.poll();
+            for (BasicBlock succ : getSuccessors(curr)) {
+                if (frameRegion.add(succ)) {
+                    queue.add(succ);
+                }
+            }
+        }
+    }
+
+    private void updateIsLeaf() {
+        isLeaf = true;
+        for (BasicBlock bb : frameRegion) {
+            for (Instruction inst : bb.getInstructions()) {
+                if (inst instanceof CallInst) {
+                    isLeaf = false;
+                    return;
+                }
+            }
+        }
+    }
+
+    private String getJumpTarget(BasicBlock current, BasicBlock target) {
+        if (frameRegion.contains(target) && !frameRegion.contains(current)) {
+            return getLabel(target) + "_prologue";
+        }
+        return getLabel(target);
+    }
+
+    private void emitPrologue(Function func) {
+        currentSb.append("    # Prologue\n");
+        if (currentStackSize > 0) {
+            addI("$sp", "$sp", -currentStackSize);
+        }
+        if (!isLeaf) {
+            storeStack("$ra", currentStackSize - 4);
+        }
+
+        // Save callee-saved registers
+        int regOffset = currentStackSize - (isLeaf ? 4 : 8);
+        for (MipsRegister reg : usedCalleeSaved) {
+            storeStack(reg.getName(), regOffset);
+            regOffset -= 4;
+        }
+
+        // Load/Store remaining arguments
+        List<Argument> args = func.getArguments();
+        for (int i = 0; i < args.size(); i++) {
+            Argument arg = args.get(i);
+            MipsRegister reg = regMapping.get(arg);
+            if (i < 4) {
+                if (reg == null) { // Spilled
+                    Integer offset = stackOffsets.get(arg);
+                    if (offset != null) {
+                        storeStack("$a" + i, offset);
+                    }
+                } else if (reg.isCalleeSaved()) { // Callee-saved
+                    currentSb.append("    move ").append(reg.getName()).append(", $a").append(i).append("\n");
+                }
+            } else {
+                if (reg != null) {
+                    loadStack(reg.getName(), currentStackSize + (i - 4) * 4);
+                } else {
+                    Integer offset = stackOffsets.get(arg);
+                    if (offset != null) {
+                        loadStack("$t0", currentStackSize + (i - 4) * 4);
+                        storeStack("$t0", offset);
+                    }
+                }
+            }
+        }
+    }
+
+    private void calculateStackFrame(Function func) {
+        stackOffsets.clear();
 
         int offset = 0;
         // Space for arguments that are spilled
@@ -435,6 +569,9 @@ public class MipsBuilder {
                 }
             }
         }
+
+        calculateFrameRegion(func);
+        updateIsLeaf();
 
         int localsSize = offset;
         int calleeSavedSize = usedCalleeSaved.size() * 4;
@@ -503,6 +640,20 @@ public class MipsBuilder {
         } else if (val instanceof AllocaInst alloca) {
             int dataOffset = getAllocaDataOffset(alloca);
             addI(reg, "$sp", dataOffset + spShift);
+        } else if (val instanceof Argument arg && !frameRegion.contains(currentBlock)) {
+            int argIndex = currentFunction.getArguments().indexOf(arg);
+            if (argIndex < 4) {
+                if (!reg.equals("$a" + argIndex)) {
+                    invalidateCache(reg);
+                    currentSb.append("    move ").append(reg).append(", $a").append(argIndex).append("\n");
+                }
+                return;
+            }
+            Integer offset = stackOffsets.get(val);
+            if (offset == null) {
+                throw new RuntimeException("Value not found in stack or register: " + val);
+            }
+            loadStack(reg, offset + spShift);
         } else if (regMapping.containsKey(val)) {
             MipsRegister srcReg = regMapping.get(val);
             if (!srcReg.getName().equals(reg)) {
@@ -538,6 +689,17 @@ public class MipsBuilder {
         } else if (val instanceof AllocaInst alloca) {
             int dataOffset = getAllocaDataOffset(alloca);
             addI(tempReg, "$sp", dataOffset + spShift);
+            return tempReg;
+        } else if (val instanceof Argument arg && !frameRegion.contains(currentBlock)) {
+            int argIndex = currentFunction.getArguments().indexOf(arg);
+            if (argIndex < 4) {
+                return "$a" + argIndex;
+            }
+            Integer offset = stackOffsets.get(val);
+            if (offset == null) {
+                throw new RuntimeException("Value not found in stack or register: " + val);
+            }
+            loadStack(tempReg, offset + spShift);
             return tempReg;
         } else if (regMapping.containsKey(val)) {
             return regMapping.get(val).getName();
@@ -999,7 +1161,7 @@ public class MipsBuilder {
     }
 
     private void emitConditionalBranch(IcmpInst icmp, String r0, String r1, boolean jumpIfTrue, BasicBlock target, boolean hasPhis, BasicBlock current) {
-        String label = getLabel(target);
+        String label = getJumpTarget(current, target);
         String branchLabel = label;
         if (hasPhis) {
             branchLabel = "br_bridge_" + (brCounter++);
@@ -1028,7 +1190,9 @@ public class MipsBuilder {
             BasicBlock target = (BasicBlock) inst.getOperand(0);
             fillPhis(inst.getParent(), target);
             if (target != nextBb) {
-                currentSb.append("    j ").append(getLabel(target)).append("\n");
+                currentSb.append("    j ").append(getJumpTarget(inst.getParent(), target)).append("\n");
+            } else if (frameRegion.contains(target) && !frameRegion.contains(inst.getParent())) {
+                currentSb.append("    j ").append(getJumpTarget(inst.getParent(), target)).append("\n");
             }
         } else {
             Value cond = inst.getOperand(0);
@@ -1050,25 +1214,30 @@ public class MipsBuilder {
                 r0 = getValueReg(cond, "$t0");
             }
 
-            String labelTrue = getLabel(targetTrue);
-            getLabel(targetFalse);
-
             boolean phisTrue = hasPhis(inst.getParent(), targetTrue);
             boolean phisFalse = hasPhis(inst.getParent(), targetFalse);
 
             if (targetFalse == nextBb) {
                 // Fall through to False
                 emitConditionalBranch(icmp, r0, r1, true, targetTrue, phisTrue, inst.getParent());
-                fillPhis(inst.getParent(), targetFalse);
+                if (frameRegion.contains(targetFalse) && !frameRegion.contains(inst.getParent())) {
+                    currentSb.append("    j ").append(getJumpTarget(inst.getParent(), targetFalse)).append("\n");
+                } else {
+                    fillPhis(inst.getParent(), targetFalse);
+                }
             } else if (targetTrue == nextBb) {
                 // Fall through to True
                 emitConditionalBranch(icmp, r0, r1, false, targetFalse, phisFalse, inst.getParent());
-                fillPhis(inst.getParent(), targetTrue);
+                if (frameRegion.contains(targetTrue) && !frameRegion.contains(inst.getParent())) {
+                    currentSb.append("    j ").append(getJumpTarget(inst.getParent(), targetTrue)).append("\n");
+                } else {
+                    fillPhis(inst.getParent(), targetTrue);
+                }
             } else {
                 // Neither is next
                 emitConditionalBranch(icmp, r0, r1, false, targetFalse, phisFalse, inst.getParent());
                 fillPhis(inst.getParent(), targetTrue);
-                currentSb.append("    j ").append(labelTrue).append("\n");
+                currentSb.append("    j ").append(getJumpTarget(inst.getParent(), targetTrue)).append("\n");
             }
         }
     }
@@ -1169,7 +1338,7 @@ public class MipsBuilder {
             loadValue(inst.getOperand(0), "$v0");
         }
 
-        if (currentStackSize > 0) {
+        if (frameRegion.contains(inst.getParent()) && currentStackSize > 0) {
             // Restore callee-saved registers
             int regOffset = currentStackSize - (isLeaf ? 4 : 8);
             for (MipsRegister reg : usedCalleeSaved) {
