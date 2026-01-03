@@ -52,11 +52,11 @@ public class SccpPass implements Pass {
         }
     }
 
-    private final Map<Value, LatticeValue> latticeValues = new HashMap<>();
-    private final Set<BasicBlock> reachableBlocks = new HashSet<>();
+    private final Map<Value, LatticeValue> latticeValues = new LinkedHashMap<>();
+    private final Set<BasicBlock> reachableBlocks = new LinkedHashSet<>();
     private final Queue<BasicBlock> cfgWorklist = new LinkedList<>();
     private final Queue<Instruction> ssaWorklist = new LinkedList<>();
-    private final Set<Edge> executableEdges = new HashSet<>();
+    private final Set<Edge> executableEdges = new LinkedHashSet<>();
 
     private record Edge(BasicBlock from, BasicBlock to) {}
 

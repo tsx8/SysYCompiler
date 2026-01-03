@@ -8,7 +8,7 @@ import java.util.*;
 
 public class GvnPass implements Pass {
     private final Map<Value, Value> replacementMap = new IdentityHashMap<>();
-    private final Set<Function> pureFunctions = new HashSet<>();
+    private final Set<Function> pureFunctions = new LinkedHashSet<>();
 
     @Override
     public boolean run(top.tsxb.compiler.ir.structure.Module module) {
@@ -32,7 +32,7 @@ public class GvnPass implements Pass {
     private boolean runOnFunction(Function function) {
         if (function.getBasicBlocks().isEmpty()) return false;
         DominatorAnalysis.DominatorInfo domInfo = DominatorAnalysis.computeDominators(function);
-        return runOnDomTree(function.getBasicBlocks().get(0), new HashMap<>(), new HashMap<>(), domInfo);
+        return runOnDomTree(function.getBasicBlocks().get(0), new LinkedHashMap<>(), new LinkedHashMap<>(), domInfo);
     }
 
     private boolean runOnDomTree(BasicBlock bb, Map<GvnKey, Instruction> valueTable, Map<Value, Value> memoryTable, DominatorAnalysis.DominatorInfo domInfo) {
@@ -143,8 +143,8 @@ public class GvnPass implements Pass {
 
     private void analyzePureFunctions(top.tsxb.compiler.ir.structure.Module module) {
         pureFunctions.clear();
-        Set<Function> nonPure = new HashSet<>();
-        Map<Function, Set<Function>> callGraph = new HashMap<>();
+        Set<Function> nonPure = new LinkedHashSet<>();
+        Map<Function, Set<Function>> callGraph = new LinkedHashMap<>();
 
         for (Function func : module.getFunctionList()) {
             if (func.isDeclaration()) {
@@ -153,7 +153,7 @@ public class GvnPass implements Pass {
             }
 
             boolean sideEffect = false;
-            Set<Function> callees = new HashSet<>();
+            Set<Function> callees = new LinkedHashSet<>();
             for (BasicBlock bb : func.getBasicBlocks()) {
                 for (Instruction inst : bb.getInstructions()) {
                     if (inst.getOpCode() == OpCode.STORE) {

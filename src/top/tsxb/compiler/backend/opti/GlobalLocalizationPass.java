@@ -104,7 +104,7 @@ public class GlobalLocalizationPass implements Pass {
             }
         }
         
-        Set<GlobalVariable> result = new HashSet<>();
+        Set<GlobalVariable> result = new LinkedHashSet<>();
         for (GlobalVariable gv : globalsInFunc) {
             if (isOnlyUsedIn(gv, func)) {
                 // If it's recursive and modified, localization might be bad due to syncs
@@ -166,7 +166,7 @@ public class GlobalLocalizationPass implements Pass {
         entry.getInstructions().add(idx + 2, entryStore);
         entryStore.setParent(entry);
 
-        Set<Instruction> protectedInsts = new HashSet<>();
+        Set<Instruction> protectedInsts = new LinkedHashSet<>();
         protectedInsts.add(entryLoad);
         
         for (BasicBlock bb : func.getBasicBlocks()) {
@@ -294,7 +294,7 @@ public class GlobalLocalizationPass implements Pass {
         if (geps.isEmpty() && otherUses.isEmpty()) return false;
 
         boolean allConstant = otherUses.isEmpty();
-        Set<List<Value>> uniqueConstantIndices = new HashSet<>();
+        Set<List<Value>> uniqueConstantIndices = new LinkedHashSet<>();
         int constantCount = 0;
         for (GetElementPtrInst gep : geps) {
             boolean thisGepConstant = true;
@@ -329,11 +329,11 @@ public class GlobalLocalizationPass implements Pass {
     }
 
     private boolean localizeArrayElements(GlobalVariable gv, Function func, Set<List<Value>> constantIndices) {
-        Map<List<Value>, AllocaInst> indexToAlloca = new HashMap<>();
+        Map<List<Value>, AllocaInst> indexToAlloca = new LinkedHashMap<>();
         BasicBlock entry = func.getBasicBlocks().get(0);
         boolean modified = isModifiedIn(gv, func);
         boolean isPrivate = isOnlyUsedIn(gv, func);
-        Set<Instruction> protectedInsts = new HashSet<>();
+        Set<Instruction> protectedInsts = new LinkedHashSet<>();
 
         for (List<Value> indices : constantIndices) {
             if (isArrayLocalized(gv, func, indices)) continue;
@@ -522,15 +522,15 @@ public class GlobalLocalizationPass implements Pass {
     }
 
     private static class SideEffectAnalysis {
-        private final Map<Function, Set<GlobalVariable>> modSet = new HashMap<>();
-        private final Map<Function, Set<GlobalVariable>> refSet = new HashMap<>();
-        private final Map<Function, Set<Function>> callGraph = new HashMap<>();
+        private final Map<Function, Set<GlobalVariable>> modSet = new LinkedHashMap<>();
+        private final Map<Function, Set<GlobalVariable>> refSet = new LinkedHashMap<>();
+        private final Map<Function, Set<Function>> callGraph = new LinkedHashMap<>();
 
         public void analyze(top.tsxb.compiler.ir.structure.Module module) {
             for (Function func : module.getFunctionList()) {
-                modSet.put(func, new HashSet<>());
-                refSet.put(func, new HashSet<>());
-                callGraph.put(func, new HashSet<>());
+                modSet.put(func, new LinkedHashSet<>());
+                refSet.put(func, new LinkedHashSet<>());
+                callGraph.put(func, new LinkedHashSet<>());
 
                 if (func.isDeclaration()) continue;
 

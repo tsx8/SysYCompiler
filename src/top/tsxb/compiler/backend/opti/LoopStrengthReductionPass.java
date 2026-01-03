@@ -338,7 +338,7 @@ public class LoopStrengthReductionPass implements Pass {
     }
 
     private Map<PhiInst, Value> findInductionVariables(Loop loop) {
-        Map<PhiInst, Value> ivs = new HashMap<>();
+        Map<PhiInst, Value> ivs = new LinkedHashMap<>();
         for (Instruction inst : loop.header().getInstructions()) {
             if (inst instanceof PhiInst phi) {
                 Value latchVal = phi.getIncomingValue(loop.latch());

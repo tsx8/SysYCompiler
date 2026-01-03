@@ -228,7 +228,7 @@ public class LoopUnrollingPass implements Pass {
             return;
         }
 
-        Map<PhiInst, Value> currentPhiValues = new HashMap<>();
+        Map<PhiInst, Value> currentPhiValues = new LinkedHashMap<>();
         for (Instruction inst : loop.header().getInstructions()) {
             if (inst instanceof PhiInst phi) {
                 currentPhiValues.put(phi, phi.getIncomingValue(preHeader));
@@ -244,8 +244,8 @@ public class LoopUnrollingPass implements Pass {
         List<Map<Value, Value>> allValueMappings = new ArrayList<>();
 
         for (int i = 0; i < tripCount; i++) {
-            Map<Value, Value> iterationMapping = new HashMap<>();
-            Map<BasicBlock, BasicBlock> blockMapping = new HashMap<>();
+            Map<Value, Value> iterationMapping = new LinkedHashMap<>();
+            Map<BasicBlock, BasicBlock> blockMapping = new LinkedHashMap<>();
 
             for (Map.Entry<PhiInst, Value> entry : currentPhiValues.entrySet()) {
                 if (entry.getKey() == iv) {
