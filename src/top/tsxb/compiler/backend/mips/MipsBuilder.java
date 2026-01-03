@@ -25,8 +25,8 @@ public class MipsBuilder {
     private int brCounter = 0;
     private boolean isLeaf = false;
     private int spShift = 0;
-    private Set<BasicBlock> frameRegion = new LinkedHashSet<>();
-    private Map<BasicBlock, List<BasicBlock>> predecessorsMap = new LinkedHashMap<>();
+    private final Set<BasicBlock> frameRegion = new LinkedHashSet<>();
+    private final Map<BasicBlock, List<BasicBlock>> predecessorsMap = new LinkedHashMap<>();
     private Function currentFunction;
     private BasicBlock currentBlock;
 
