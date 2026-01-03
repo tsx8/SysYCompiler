@@ -9,6 +9,7 @@ import java.util.*;
 public class LoopAnalysis {
     private final Function function;
     private final Map<BasicBlock, Integer> loopDepth = new LinkedHashMap<>();
+    private final Set<BasicBlock> loopHeaders = new HashSet<>();
 
     public LoopAnalysis(Function function) {
         this.function = function;
@@ -29,6 +30,7 @@ public class LoopAnalysis {
             for (BasicBlock d : successors) {
                 if (domInfo.dominators().get(n).contains(d)) {
                     // Found a back-edge n -> d, d is the loop header
+                    loopHeaders.add(d);
                     Set<BasicBlock> loopNodes = DominatorAnalysis.findLoopBlocks(n, d, cfg.predecessors());
                     for (BasicBlock node : loopNodes) {
                         loopDepth.put(node, loopDepth.get(node) + 1);
@@ -40,5 +42,9 @@ public class LoopAnalysis {
 
     public int getLoopDepth(BasicBlock bb) {
         return loopDepth.getOrDefault(bb, 0);
+    }
+
+    public boolean isLoopHeader(BasicBlock bb) {
+        return loopHeaders.contains(bb);
     }
 }

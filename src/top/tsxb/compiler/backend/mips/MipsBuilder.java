@@ -209,70 +209,101 @@ public class MipsBuilder {
         return counts;
     }
 
-    private List<BasicBlock> reorderBlocks(Function func) {
+    private List<BasicBlock> reorderBlocks(Function func, LoopAnalysis loopAnalysis) {
         List<BasicBlock> original = func.getBasicBlocks();
         if (original.isEmpty()) return original;
 
-        Map<BasicBlock, Integer> predCounts = getPredecessorCounts(func);
+        Map<BasicBlock, Integer> initialPredCounts = getPredecessorCounts(func);
+        Map<BasicBlock, Integer> inDegree = new HashMap<>(initialPredCounts);
         List<BasicBlock> reordered = new ArrayList<>();
-        Set<BasicBlock> visited = new LinkedHashSet<>();
+        Set<BasicBlock> visited = new HashSet<>();
 
         BasicBlock current = original.get(0);
-        reordered.add(current);
-        visited.add(current);
 
         while (reordered.size() < original.size()) {
-            if (current.getInstructions().isEmpty()) {
-                current = null;
-            } else {
+            if (!visited.contains(current)) {
+                reordered.add(current);
+                visited.add(current);
+
+                // Update in-degree of successors
+                if (!current.getInstructions().isEmpty()) {
+                    Instruction lastInst = current.getInstructions().get(current.getInstructions().size() - 1);
+                    if (lastInst instanceof BrInst br) {
+                        if (br.getNumOperands() == 1) {
+                            BasicBlock target = (BasicBlock) br.getOperand(0);
+                            inDegree.put(target, inDegree.get(target) - 1);
+                        } else {
+                            BasicBlock targetTrue = (BasicBlock) br.getOperand(1);
+                            BasicBlock targetFalse = (BasicBlock) br.getOperand(2);
+                            inDegree.put(targetTrue, inDegree.get(targetTrue) - 1);
+                            inDegree.put(targetFalse, inDegree.get(targetFalse) - 1);
+                        }
+                    }
+                }
+            }
+
+            BasicBlock next = null;
+            if (!current.getInstructions().isEmpty()) {
                 Instruction lastInst = current.getInstructions().get(current.getInstructions().size() - 1);
-                BasicBlock next = null;
                 if (lastInst instanceof BrInst br) {
                     if (br.getNumOperands() == 1) {
                         BasicBlock target = (BasicBlock) br.getOperand(0);
                         if (!visited.contains(target)) {
-                            next = target;
+                            if (inDegree.get(target) == 0 || loopAnalysis.isLoopHeader(target)) {
+                                next = target;
+                            }
                         }
                     } else {
                         BasicBlock targetTrue = (BasicBlock) br.getOperand(1);
                         BasicBlock targetFalse = (BasicBlock) br.getOperand(2);
-                        
-                        boolean visitedTrue = visited.contains(targetTrue);
-                        boolean visitedFalse = visited.contains(targetFalse);
 
-                        if (!visitedTrue && !visitedFalse) {
-                            // Heuristic: prefer the one that is NOT a merge block
-                            if (predCounts.getOrDefault(targetFalse, 0) == 1 && predCounts.getOrDefault(targetTrue, 0) > 1) {
+                        boolean canTrue = !visited.contains(targetTrue) && (inDegree.get(targetTrue) == 0 || loopAnalysis.isLoopHeader(targetTrue));
+                        boolean canFalse = !visited.contains(targetFalse) && (inDegree.get(targetFalse) == 0 || loopAnalysis.isLoopHeader(targetFalse));
+
+                        if (canTrue && canFalse) {
+                            int depthTrue = loopAnalysis.getLoopDepth(targetTrue);
+                            int depthFalse = loopAnalysis.getLoopDepth(targetFalse);
+                            if (depthTrue > depthFalse) {
+                                next = targetTrue;
+                            } else if (depthFalse > depthTrue) {
                                 next = targetFalse;
                             } else {
-                                next = targetTrue;
+                                // Tie-break: prefer non-merge block
+                                if (initialPredCounts.getOrDefault(targetFalse, 0) == 1 && initialPredCounts.getOrDefault(targetTrue, 0) > 1) {
+                                    next = targetFalse;
+                                } else {
+                                    next = targetTrue;
+                                }
                             }
-                        } else if (!visitedTrue) {
+                        } else if (canTrue) {
                             next = targetTrue;
-                        } else if (!visitedFalse) {
+                        } else if (canFalse) {
                             next = targetFalse;
                         }
                     }
                 }
-                current = next;
             }
 
-            if (current == null) {
-                // Find first unvisited block
+            if (next == null) {
+                // Find next unvisited block
                 for (BasicBlock bb : original) {
-                    if (!visited.contains(bb)) {
-                        current = bb;
+                    if (!visited.contains(bb) && (inDegree.get(bb) == 0 || loopAnalysis.isLoopHeader(bb))) {
+                        next = bb;
                         break;
+                    }
+                }
+                if (next == null) {
+                    for (BasicBlock bb : original) {
+                        if (!visited.contains(bb)) {
+                            next = bb;
+                            break;
+                        }
                     }
                 }
             }
 
-            if (current != null && !visited.contains(current)) {
-                reordered.add(current);
-                visited.add(current);
-            } else if (current == null) {
-                break;
-            }
+            if (next == null) break;
+            current = next;
         }
         return reordered;
     }
@@ -345,7 +376,7 @@ public class MipsBuilder {
             }
         }
 
-        List<BasicBlock> blocks = reorderBlocks(func);
+        List<BasicBlock> blocks = reorderBlocks(func, loopAnalysis);
         for (int i = 0; i < blocks.size(); i++) {
             BasicBlock bb = blocks.get(i);
             BasicBlock nextBb = (i + 1 < blocks.size()) ? blocks.get(i + 1) : null;
