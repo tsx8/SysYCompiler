@@ -15,6 +15,8 @@ public class PeepholeOptimizer {
     private static final Pattern BEQ_PATTERN = Pattern.compile("^\\s*beq\\s+(\\$[a-z0-9]+),\\s+(\\$[a-z0-9]+),\\s+([a-zA-Z0-9_]+)\\s*$");
     private static final Pattern BNE_PATTERN = Pattern.compile("^\\s*bne\\s+(\\$[a-z0-9]+),\\s+(\\$[a-z0-9]+),\\s+([a-zA-Z0-9_]+)\\s*$");
     private static final Pattern LW_PATTERN = Pattern.compile("^\\s*lw\\s+(\\$[a-z0-9]+),\\s+(-?\\d+\\(\\$[a-z0-9]+\\))\\s*$");
+    private static final Pattern J_PATTERN = Pattern.compile("^\\s*j\\s+([a-zA-Z0-9_]+)\\s*$");
+    private static final Pattern LABEL_PATTERN = Pattern.compile("^\\s*([a-zA-Z0-9_]+):\\s*$");
 
     public PeepholeOptimizer(String mipsCode) {
         this.lines = new ArrayList<>(Arrays.asList(mipsCode.split("\n")));
@@ -30,6 +32,9 @@ public class PeepholeOptimizer {
             changed |= optimizeMoveSw();
             changed |= optimizeMoveBranch();
             changed |= optimizeMoveMemAddr();
+            changed |= removeRedundantJumps();
+            changed |= optimizeBranchInversion();
+            changed |= optimizeLoadStoreForwarding();
             pass++;
         }
         return String.join("\n", lines) + "\n";
@@ -368,5 +373,113 @@ public class PeepholeOptimizer {
             i++;
         }
         return line.substring(0, i);
+    }
+
+    /**
+     * Remove 'j Label' followed by 'Label:'
+     */
+    private boolean removeRedundantJumps() {
+        boolean changed = false;
+        for (int i = 0; i < lines.size() - 1; i++) {
+            String line1 = lines.get(i);
+            String line2 = lines.get(i + 1);
+
+            Matcher m1 = J_PATTERN.matcher(line1);
+            Matcher m2 = LABEL_PATTERN.matcher(line2);
+
+            if (m1.matches() && m2.matches()) {
+                String target = m1.group(1);
+                String label = m2.group(1);
+                if (target.equals(label)) {
+                    lines.remove(i);
+                    i--;
+                    changed = true;
+                }
+            }
+        }
+        return changed;
+    }
+
+    /**
+     * Optimize:
+     * bne $t0, $zero, L1
+     * j L2
+     * L1:
+     * ->
+     * beq $t0, $zero, L2
+     * L1:
+     */
+    private boolean optimizeBranchInversion() {
+        boolean changed = false;
+        for (int i = 0; i < lines.size() - 2; i++) {
+            String line1 = lines.get(i);
+            String line2 = lines.get(i + 1);
+            String line3 = lines.get(i + 2);
+
+            Matcher mBeq = BEQ_PATTERN.matcher(line1);
+            Matcher mBne = BNE_PATTERN.matcher(line1);
+            Matcher mJ = J_PATTERN.matcher(line2);
+            Matcher mLabel = LABEL_PATTERN.matcher(line3);
+
+            if ((mBeq.matches() || mBne.matches()) && mJ.matches() && mLabel.matches()) {
+                boolean isBeq = mBeq.matches();
+                Matcher mB = isBeq ? mBeq : mBne;
+
+                String reg1 = mB.group(1);
+                String reg2 = mB.group(2);
+                String target1 = mB.group(3);
+                String target2 = mJ.group(1);
+                String label = mLabel.group(1);
+
+                if (target1.equals(label)) {
+                    String indent = getIndent(line1);
+                    String newOp = isBeq ? "bne" : "beq";
+                    String newInst = indent + newOp + " " + reg1 + ", " + reg2 + ", " + target2;
+                    lines.set(i, newInst);
+                    lines.remove(i + 1);
+                    changed = true;
+                }
+            }
+        }
+        return changed;
+    }
+
+    /**
+     * Optimize:
+     * sw $t0, 0($sp)
+     * lw $t0, 0($sp) -> remove lw
+     * OR
+     * sw $t0, 0($sp)
+     * lw $t1, 0($sp) -> move $t1, $t0
+     */
+    private boolean optimizeLoadStoreForwarding() {
+        boolean changed = false;
+        for (int i = 0; i < lines.size() - 1; i++) {
+            String line1 = lines.get(i);
+            String line2 = lines.get(i + 1);
+
+            Matcher mSw = SW_PATTERN.matcher(line1);
+            Matcher mLw = LW_PATTERN.matcher(line2);
+
+            if (mSw.matches() && mLw.matches()) {
+                String srcReg = mSw.group(1);
+                String addr1 = mSw.group(2);
+                String dstReg = mLw.group(1);
+                String addr2 = mLw.group(2);
+
+                if (addr1.equals(addr2)) {
+                    if (srcReg.equals(dstReg)) {
+                        lines.remove(i + 1);
+                        changed = true;
+                    } else {
+                        String indent = getIndent(line2);
+                        String newInst = indent + "move " + dstReg + ", " + srcReg;
+                        lines.set(i + 1, newInst);
+                        changed = true;
+                    }
+                }
+            }
+        }
+        return changed;
     }
 }
