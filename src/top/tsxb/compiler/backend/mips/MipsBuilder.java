@@ -779,7 +779,46 @@ public class MipsBuilder {
         return terms;
     }
 
+    private boolean isFusableIcmp(IcmpInst inst) {
+        List<Use> uses = inst.getUseList();
+        if (uses.size() != 1) {
+            return false;
+        }
+        User user = uses.get(0).user();
+        if (!(user instanceof BrInst br)) {
+            return false;
+        }
+        return br.getParent() == inst.getParent() && br.getOperand(0) == inst;
+    }
+
+    private String getBranchInst(String predicate, boolean jumpIfTrue) {
+        if (jumpIfTrue) {
+            return switch (predicate) {
+                case "eq" -> "beq";
+                case "ne" -> "bne";
+                case "sgt" -> "bgt";
+                case "sge" -> "bge";
+                case "slt" -> "blt";
+                case "sle" -> "ble";
+                default -> throw new RuntimeException("Unknown predicate: " + predicate);
+            };
+        } else {
+            return switch (predicate) {
+                case "eq" -> "bne";
+                case "ne" -> "beq";
+                case "sgt" -> "ble";
+                case "sge" -> "blt";
+                case "slt" -> "bge";
+                case "sle" -> "bgt";
+                default -> throw new RuntimeException("Unknown predicate: " + predicate);
+            };
+        }
+    }
+
     private void genIcmp(IcmpInst inst) {
+        if (isFusableIcmp(inst)) {
+            return;
+        }
         loadValue(inst.getOperand(0), "$t0");
         loadValue(inst.getOperand(1), "$t1");
         String cond = inst.getPredicate().toString();
@@ -845,7 +884,18 @@ public class MipsBuilder {
             BasicBlock targetTrue = (BasicBlock) inst.getOperand(1);
             BasicBlock targetFalse = (BasicBlock) inst.getOperand(2);
 
-            loadValue(cond, "$t0");
+            IcmpInst icmp = null;
+            if (cond instanceof IcmpInst && isFusableIcmp((IcmpInst) cond)) {
+                icmp = (IcmpInst) cond;
+            }
+
+            if (icmp != null) {
+                loadValue(icmp.getOperand(0), "$t0");
+                loadValue(icmp.getOperand(1), "$t1");
+            } else {
+                loadValue(cond, "$t0");
+            }
+
             String labelTrue = getLabel(targetTrue);
             String labelFalse = getLabel(targetFalse);
 
@@ -855,10 +905,20 @@ public class MipsBuilder {
             if (targetFalse == nextBb) {
                 // Fall through to False
                 if (!phisTrue) {
-                    currentSb.append("    bne $t0, $zero, ").append(labelTrue).append("\n");
+                    if (icmp != null) {
+                        String bInst = getBranchInst(icmp.getPredicate().toString(), true);
+                        currentSb.append("    ").append(bInst).append(" $t0, $t1, ").append(labelTrue).append("\n");
+                    } else {
+                        currentSb.append("    bne $t0, $zero, ").append(labelTrue).append("\n");
+                    }
                 } else {
                     String bridgeLabel = "br_bridge_" + (brCounter++);
-                    currentSb.append("    bne $t0, $zero, ").append(bridgeLabel).append("\n");
+                    if (icmp != null) {
+                        String bInst = getBranchInst(icmp.getPredicate().toString(), true);
+                        currentSb.append("    ").append(bInst).append(" $t0, $t1, ").append(bridgeLabel).append("\n");
+                    } else {
+                        currentSb.append("    bne $t0, $zero, ").append(bridgeLabel).append("\n");
+                    }
 
                     StringBuilder oldSb = currentSb;
                     currentSb = pendingBridges;
@@ -871,10 +931,20 @@ public class MipsBuilder {
             } else if (targetTrue == nextBb) {
                 // Fall through to True
                 if (!phisFalse) {
-                    currentSb.append("    beq $t0, $zero, ").append(labelFalse).append("\n");
+                    if (icmp != null) {
+                        String bInst = getBranchInst(icmp.getPredicate().toString(), false);
+                        currentSb.append("    ").append(bInst).append(" $t0, $t1, ").append(labelFalse).append("\n");
+                    } else {
+                        currentSb.append("    beq $t0, $zero, ").append(labelFalse).append("\n");
+                    }
                 } else {
                     String bridgeLabel = "br_bridge_" + (brCounter++);
-                    currentSb.append("    beq $t0, $zero, ").append(bridgeLabel).append("\n");
+                    if (icmp != null) {
+                        String bInst = getBranchInst(icmp.getPredicate().toString(), false);
+                        currentSb.append("    ").append(bInst).append(" $t0, $t1, ").append(bridgeLabel).append("\n");
+                    } else {
+                        currentSb.append("    beq $t0, $zero, ").append(bridgeLabel).append("\n");
+                    }
 
                     StringBuilder oldSb = currentSb;
                     currentSb = pendingBridges;
@@ -887,10 +957,20 @@ public class MipsBuilder {
             } else {
                 // Neither is next
                 if (!phisFalse) {
-                    currentSb.append("    beq $t0, $zero, ").append(labelFalse).append("\n");
+                    if (icmp != null) {
+                        String bInst = getBranchInst(icmp.getPredicate().toString(), false);
+                        currentSb.append("    ").append(bInst).append(" $t0, $t1, ").append(labelFalse).append("\n");
+                    } else {
+                        currentSb.append("    beq $t0, $zero, ").append(labelFalse).append("\n");
+                    }
                 } else {
                     String bridgeLabel = "br_bridge_" + (brCounter++);
-                    currentSb.append("    beq $t0, $zero, ").append(bridgeLabel).append("\n");
+                    if (icmp != null) {
+                        String bInst = getBranchInst(icmp.getPredicate().toString(), false);
+                        currentSb.append("    ").append(bInst).append(" $t0, $t1, ").append(bridgeLabel).append("\n");
+                    } else {
+                        currentSb.append("    beq $t0, $zero, ").append(bridgeLabel).append("\n");
+                    }
 
                     StringBuilder oldSb = currentSb;
                     currentSb = pendingBridges;
