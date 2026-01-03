@@ -28,7 +28,7 @@ public class PeepholeOptimizer {
         while (changed && pass < 10) {
             changed = removeSelfMoves();
             changed |= optimizeLiMove();
-            changed |= optimizeMoveMove();
+            changed |= optimizeMoveMove(); // have problems here
             changed |= optimizeMoveSw();
             changed |= optimizeMoveBranch();
             changed |= optimizeMoveMemAddr();
@@ -71,14 +71,19 @@ public class PeepholeOptimizer {
          
             if (line.contains(reg)) {
                 
-                String[] parts = line.split("[\\s,]+");
+                String[] parts = line.split("[\\s,()]+");
                 if (parts.length > 1) {
                     String opcode = parts[0];
                     String op1 = parts[1];
                     
                    
                     if (isDestOpcode(opcode)) {
+                        // If it's the destination, it's safe ONLY if it's not also a source operand
+                        // e.g., add $t0, $t0, $t1 -> $t0 is both dest and source
                         if (op1.equals(reg)) {
+                            for (int j = 2; j < parts.length; j++) {
+                                if (parts[j].equals(reg)) return false;
+                            }
                             return true;
                         }
                         return false;
@@ -97,7 +102,7 @@ public class PeepholeOptimizer {
     private boolean isDestOpcode(String op) {
         return op.equals("add") || op.equals("addu") || op.equals("addiu") ||
                op.equals("sub") || op.equals("subu") ||
-               op.equals("mul") || op.equals("div") || // div $d, $s, $t (pseudo) or div $s, $t (native) - wait, native div writes LO/HI
+               op.equals("mul") ||
                op.equals("sll") || op.equals("srl") || op.equals("sra") ||
                op.equals("slt") || op.equals("slti") || op.equals("sltiu") || op.equals("sltu") ||
                op.equals("and") || op.equals("or") || op.equals("xor") || op.equals("nor") ||

@@ -12,7 +12,7 @@ public class MipsGenStage implements CompilerStage<top.tsxb.compiler.ir.structur
         // Apply peephole optimization
         PeepholeOptimizer optimizer = new PeepholeOptimizer(mipsCode);
         mipsCode = optimizer.optimize();
-        
+
         return new StageResult<>(mipsCode, mipsCode);
     }
 }

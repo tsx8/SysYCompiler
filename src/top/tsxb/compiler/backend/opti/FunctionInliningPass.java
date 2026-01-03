@@ -80,12 +80,12 @@ public class FunctionInliningPass implements Pass {
     }
 
     private Set<Function> findRecursiveFunctions(Module module) {
-        Set<Function> recursiveFunctions = new HashSet<>();
-        Map<Function, Set<Function>> callGraph = new HashMap<>();
+        Set<Function> recursiveFunctions = new LinkedHashSet<>();
+        Map<Function, Set<Function>> callGraph = new LinkedHashMap<>();
 
         for (Function f : module.getFunctionList()) {
             if (f.isDeclaration()) continue;
-            Set<Function> callees = new HashSet<>();
+            Set<Function> callees = new LinkedHashSet<>();
             for (BasicBlock bb : f.getBasicBlocks()) {
                 for (Instruction inst : bb.getInstructions()) {
                     if (inst instanceof CallInst call) {
@@ -97,7 +97,7 @@ public class FunctionInliningPass implements Pass {
         }
 
         for (Function f : callGraph.keySet()) {
-            if (hasPath(f, f, callGraph, new HashSet<>())) {
+            if (hasPath(f, f, callGraph, new LinkedHashSet<>())) {
                 recursiveFunctions.add(f);
             }
         }
@@ -128,7 +128,7 @@ public class FunctionInliningPass implements Pass {
             afterBlock.addInstruction(inst);
         }
 
-        Map<Value, Value> valueMap = new HashMap<>();
+        Map<Value, Value> valueMap = new LinkedHashMap<>();
         for (int i = 0; i < callee.getArguments().size(); i++) {
             valueMap.put(callee.getArguments().get(i), call.getOperand(i + 1));
         }

@@ -112,7 +112,8 @@ public class LivenessAnalysis {
 
     private boolean isAllocatable(Value val) {
         if (val == null) return false;
-        if (val instanceof GlobalVariable) return true;
+        if (val instanceof GlobalVariable) return false;
+        if (val instanceof top.tsxb.compiler.ir.inst.AllocaInst) return false;
         if (val instanceof Constant || val instanceof BasicBlock) return false;
         return !(val instanceof Instruction inst) || !(inst.getType() instanceof NoneType);
     }

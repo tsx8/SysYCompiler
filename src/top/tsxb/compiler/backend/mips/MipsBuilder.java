@@ -214,9 +214,9 @@ public class MipsBuilder {
         if (original.isEmpty()) return original;
 
         Map<BasicBlock, Integer> initialPredCounts = getPredecessorCounts(func);
-        Map<BasicBlock, Integer> inDegree = new HashMap<>(initialPredCounts);
+        Map<BasicBlock, Integer> inDegree = new LinkedHashMap<>(initialPredCounts);
         List<BasicBlock> reordered = new ArrayList<>();
-        Set<BasicBlock> visited = new HashSet<>();
+        Set<BasicBlock> visited = new LinkedHashSet<>();
 
         BasicBlock current = original.get(0);
 
@@ -516,6 +516,46 @@ public class MipsBuilder {
         }
     }
 
+    private String getValueReg(Value val, String tempReg) {
+        if (val instanceof ConstInt ci) {
+            if (ci.getValue() == 0) return "$zero";
+            invalidateCache(tempReg);
+            currentSb.append("    li ").append(tempReg).append(", ").append(ci.getValue()).append("\n");
+            return tempReg;
+        } else if (val instanceof GlobalValue gv) {
+            if (regMapping.containsKey(gv)) {
+                return regMapping.get(gv).getName();
+            }
+            if (globalAddrCache.containsKey(gv)) {
+                return globalAddrCache.get(gv);
+            }
+            invalidateCache(tempReg);
+            currentSb.append("    la ").append(tempReg).append(", ").append(getLabel(gv)).append("\n");
+            updateCache(gv, tempReg);
+            return tempReg;
+        } else if (val instanceof AllocaInst alloca) {
+            int dataOffset = getAllocaDataOffset(alloca);
+            addI(tempReg, "$sp", dataOffset + spShift);
+            return tempReg;
+        } else if (regMapping.containsKey(val)) {
+            return regMapping.get(val).getName();
+        } else {
+            Integer offset = stackOffsets.get(val);
+            if (offset == null) {
+                throw new RuntimeException("Value not found in stack or register: " + val);
+            }
+            loadStack(tempReg, offset + spShift);
+            return tempReg;
+        }
+    }
+
+    private String getDestReg(Instruction inst, String tempReg) {
+        if (regMapping.containsKey(inst)) {
+            return regMapping.get(inst).getName();
+        }
+        return tempReg;
+    }
+
     private void storeValue(Value inst, String reg) {
         if (regMapping.containsKey(inst)) {
             MipsRegister destReg = regMapping.get(inst);
@@ -566,27 +606,45 @@ public class MipsBuilder {
         }
 
         if (inst.getOpCode() == OpCode.ADD && op2 instanceof ConstInt ci && Math.abs(ci.getValue()) < 32768) {
-            loadValue(op1, "$t0");
-            addI("$t2", "$t0", ci.getValue()); // Use helper that handles neg/pos
+            String r1 = getValueReg(op1, "$t0");
+            String rd = getDestReg(inst, "$t2");
+            invalidateCache(rd);
+            addI(rd, r1, ci.getValue());
+            if (!regMapping.containsKey(inst)) {
+                storeStack(rd, stackOffsets.get(inst) + spShift);
+            }
         } else if (inst.getOpCode() == OpCode.ADD && op1 instanceof ConstInt ci && Math.abs(ci.getValue()) < 32768) {
-            loadValue(op2, "$t0");
-            addI("$t2", "$t0", ci.getValue());
+            String r2 = getValueReg(op2, "$t0");
+            String rd = getDestReg(inst, "$t2");
+            invalidateCache(rd);
+            addI(rd, r2, ci.getValue());
+            if (!regMapping.containsKey(inst)) {
+                storeStack(rd, stackOffsets.get(inst) + spShift);
+            }
         } else if (inst.getOpCode() == OpCode.SUB && op2 instanceof ConstInt ci && Math.abs(ci.getValue()) < 32768) {
-            loadValue(op1, "$t0");
-            addI("$t2", "$t0", -ci.getValue());
+            String r1 = getValueReg(op1, "$t0");
+            String rd = getDestReg(inst, "$t2");
+            invalidateCache(rd);
+            addI(rd, r1, -ci.getValue());
+            if (!regMapping.containsKey(inst)) {
+                storeStack(rd, stackOffsets.get(inst) + spShift);
+            }
         } else {
-            loadValue(op1, "$t0");
-            loadValue(op2, "$t1");
-            invalidateCache("$t2");
+            String r1 = getValueReg(op1, "$t0");
+            String r2 = getValueReg(op2, "$t1");
+            String rd = getDestReg(inst, "$t2");
+            invalidateCache(rd);
             switch (inst.getOpCode()) {
-                case ADD -> currentSb.append("    addu $t2, $t0, $t1\n");
-                case SUB -> currentSb.append("    subu $t2, $t0, $t1\n");
-                case MUL -> currentSb.append("    mul $t2, $t0, $t1\n");
-                case SDIV -> currentSb.append("    div $t0, $t1\n    mflo $t2\n");
-                case SREM -> currentSb.append("    div $t0, $t1\n    mfhi $t2\n");
+                case ADD -> currentSb.append("    addu ").append(rd).append(", ").append(r1).append(", ").append(r2).append("\n");
+                case SUB -> currentSb.append("    subu ").append(rd).append(", ").append(r1).append(", ").append(r2).append("\n");
+                case MUL -> currentSb.append("    mul ").append(rd).append(", ").append(r1).append(", ").append(r2).append("\n");
+                case SDIV -> currentSb.append("    div ").append(r1).append(", ").append(r2).append("\n    mflo ").append(rd).append("\n");
+                case SREM -> currentSb.append("    div ").append(r1).append(", ").append(r2).append("\n    mfhi ").append(rd).append("\n");
+            }
+            if (!regMapping.containsKey(inst)) {
+                storeStack(rd, stackOffsets.get(inst) + spShift);
             }
         }
-        storeValue(inst, "$t2");
     }
 
     private boolean isPowerOfTwo(int n) {
@@ -847,28 +905,95 @@ public class MipsBuilder {
         return offset;
     }
 
+    private boolean allIndicesConstant(GetElementPtrInst gep) {
+        for (int i = 1; i < gep.getNumOperands(); i++) {
+            if (!(gep.getOperand(i) instanceof ConstInt)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private int calculateTotalOffset(GetElementPtrInst gep) {
+        IrType currentType = ((PtrType) gep.getOperand(0).getType()).getPointeeType();
+        int totalOffset = 0;
+        
+        for (int i = 1; i < gep.getNumOperands(); i++) {
+            Value index = gep.getOperand(i);
+            int elementSize;
+            if (i == 1) {
+                elementSize = getSize(currentType);
+            } else {
+                if (currentType instanceof ArrType at) {
+                    currentType = at.getElementType();
+                    elementSize = getSize(currentType);
+                } else {
+                    elementSize = 4;
+                }
+            }
+            
+            if (index instanceof ConstInt ci) {
+                totalOffset += ci.getValue() * elementSize;
+            }
+        }
+        return totalOffset;
+    }
+
+    private boolean canFuseGep(GetElementPtrInst gep) {
+        if (regMapping.containsKey(gep.getOperand(0))) {
+            return false;
+        }
+        return allIndicesConstant(gep);
+    }
+
     private void genLoad(LoadInst inst) {
         Value addr = inst.getOperand(0);
+        String destReg = getDestReg(inst, "$t1");
+        invalidateCache(destReg);
+
         if (addr instanceof AllocaInst alloca) {
             int dataOffset = getAllocaDataOffset(alloca);
-            loadStack("$t1", dataOffset + spShift);
+            loadStack(destReg, dataOffset + spShift);
+        } else if (addr instanceof GetElementPtrInst gep && canFuseGep(gep)) {
+            int offset = calculateTotalOffset(gep);
+            if (offset >= -32768 && offset <= 32767) {
+                String baseReg = getValueReg(gep.getOperand(0), "$t0");
+                currentSb.append("    lw ").append(destReg).append(", ").append(offset).append("(").append(baseReg).append(")\n");
+            } else {
+                String addrReg = getValueReg(addr, "$t0");
+                currentSb.append("    lw ").append(destReg).append(", 0(").append(addrReg).append(")\n");
+            }
         } else {
-            loadValue(addr, "$t0");
-            invalidateCache("$t1");
-            currentSb.append("    lw $t1, 0($t0)\n");
+            String addrReg = getValueReg(addr, "$t0");
+            currentSb.append("    lw ").append(destReg).append(", 0(").append(addrReg).append(")\n");
         }
-        storeValue(inst, "$t1");
+        
+        if (!regMapping.containsKey(inst)) {
+            storeStack(destReg, stackOffsets.get(inst) + spShift);
+        }
     }
 
     private void genStore(StoreInst inst) {
-        loadValue(inst.getOperand(0), "$t0"); // Get value
+        Value val = inst.getOperand(0);
         Value addr = inst.getOperand(1);
+        
+        String valReg = getValueReg(val, "$t0");
+        
         if (addr instanceof AllocaInst alloca) {
             int dataOffset = getAllocaDataOffset(alloca);
-            storeStack("$t0", dataOffset + spShift);
+            storeStack(valReg, dataOffset + spShift);
+        } else if (addr instanceof GetElementPtrInst gep && canFuseGep(gep)) {
+            int offset = calculateTotalOffset(gep);
+            if (offset >= -32768 && offset <= 32767) {
+                String baseReg = getValueReg(gep.getOperand(0), "$t1");
+                currentSb.append("    sw ").append(valReg).append(", ").append(offset).append("(").append(baseReg).append(")\n");
+            } else {
+                String addrReg = getValueReg(addr, "$t1");
+                currentSb.append("    sw ").append(valReg).append(", 0(").append(addrReg).append(")\n");
+            }
         } else {
-            loadValue(addr, "$t1");
-            currentSb.append("    sw $t0, 0($t1)\n");
+            String addrReg = getValueReg(addr, "$t1");
+            currentSb.append("    sw ").append(valReg).append(", 0(").append(addrReg).append(")\n");
         }
     }
 
@@ -1118,6 +1243,9 @@ public class MipsBuilder {
         // Save to stack (below current sp)
         if (!toSave.isEmpty()) {
             int shift = toSave.size() * 4;
+            if (shift % 8 != 0) {
+                shift += 4;
+            }
             addI("$sp", "$sp", -shift);
             spShift += shift;
             for (int i = 0; i < toSave.size(); i++) {
@@ -1154,6 +1282,9 @@ public class MipsBuilder {
         // Restore caller-saved registers
         if (!toSave.isEmpty()) {
             int shift = toSave.size() * 4;
+            if (shift % 8 != 0) {
+                shift += 4;
+            }
             for (int i = 0; i < toSave.size(); i++) {
                 loadStack(toSave.get(i).getName(), i * 4);
             }

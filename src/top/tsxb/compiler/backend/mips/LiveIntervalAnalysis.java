@@ -93,6 +93,7 @@ public class LiveIntervalAnalysis {
         }
 
         // Initialize intervals for global variables used in this function
+        /*
         for (BasicBlock bb : function.getBasicBlocks()) {
             for (Instruction inst : bb.getInstructions()) {
                 for (int i = 0; i < inst.getNumOperands(); i++) {
@@ -107,6 +108,7 @@ public class LiveIntervalAnalysis {
                 }
             }
         }
+        */
 
         // Process blocks in reverse order
         List<BasicBlock> blocks = new ArrayList<>(function.getBasicBlocks());
@@ -158,7 +160,8 @@ public class LiveIntervalAnalysis {
 
     private boolean isAllocatable(Value val) {
         if (val == null) return false;
-        if (val instanceof GlobalVariable) return true;
+        if (val instanceof GlobalVariable) return false;
+        if (val instanceof top.tsxb.compiler.ir.inst.AllocaInst) return false;
         if (val instanceof Constant || val instanceof BasicBlock) return false;
         return !(val instanceof Instruction inst) || !(inst.getType() instanceof NoneType);
     }
