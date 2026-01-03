@@ -16,41 +16,33 @@ public class SccpPass implements Pass {
         TOP, CONSTANT, BOTTOM
     }
 
-    private static class LatticeValue {
-        LatticeStatus status;
-        Integer value;
+    private record LatticeValue(LatticeStatus status, Integer value) {
 
-        LatticeValue(LatticeStatus status, Integer value) {
-            this.status = status;
-            this.value = value;
+        static LatticeValue top() {return new LatticeValue(LatticeStatus.TOP, null);}
+
+        static LatticeValue bottom() {return new LatticeValue(LatticeStatus.BOTTOM, null);}
+
+        static LatticeValue constant(int val) {
+            return new LatticeValue(LatticeStatus.CONSTANT, val);
         }
 
-        static LatticeValue top() { return new LatticeValue(LatticeStatus.TOP, null); }
-        static LatticeValue bottom() { return new LatticeValue(LatticeStatus.BOTTOM, null); }
-        static LatticeValue constant(int val) { return new LatticeValue(LatticeStatus.CONSTANT, val); }
+            @Override
+            public boolean equals(Object o) {
+                if (this == o) {return true;}
+                if (o == null || getClass() != o.getClass()) {return false;}
+                LatticeValue that = (LatticeValue) o;
+                return status == that.status && Objects.equals(value, that.value);
+            }
 
         @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            LatticeValue that = (LatticeValue) o;
-            return status == that.status && Objects.equals(value, that.value);
+            public String toString() {
+                return switch (status) {
+                    case TOP -> "TOP";
+                    case BOTTOM -> "BOTTOM";
+                    case CONSTANT -> "CONST(" + value + ")";
+                };
+            }
         }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(status, value);
-        }
-
-        @Override
-        public String toString() {
-            return switch (status) {
-                case TOP -> "TOP";
-                case BOTTOM -> "BOTTOM";
-                case CONSTANT -> "CONST(" + value + ")";
-            };
-        }
-    }
 
     private final Map<Value, LatticeValue> latticeValues = new LinkedHashMap<>();
     private final Set<BasicBlock> reachableBlocks = new LinkedHashSet<>();

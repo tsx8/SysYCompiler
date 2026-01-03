@@ -92,24 +92,6 @@ public class LiveIntervalAnalysis {
             intervals.put(arg, interval);
         }
 
-        // Initialize intervals for global variables used in this function
-        /*
-        for (BasicBlock bb : function.getBasicBlocks()) {
-            for (Instruction inst : bb.getInstructions()) {
-                for (int i = 0; i < inst.getNumOperands(); i++) {
-                    Value op = inst.getOperand(i);
-                    if (op instanceof GlobalVariable gv) {
-                        LiveInterval interval = getOrCreateInterval(gv);
-                        if (interval.getStart() == Integer.MAX_VALUE) {
-                            interval.setStart(firstInstId);
-                            interval.setEnd(firstInstId);
-                        }
-                    }
-                }
-            }
-        }
-        */
-
         // Process blocks in reverse order
         List<BasicBlock> blocks = new ArrayList<>(function.getBasicBlocks());
         Collections.reverse(blocks);

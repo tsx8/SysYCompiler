@@ -997,6 +997,31 @@ public class MipsBuilder {
         }
     }
 
+    private void emitConditionalBranch(IcmpInst icmp, boolean jumpIfTrue, BasicBlock target, boolean hasPhis, BasicBlock current) {
+        String label = getLabel(target);
+        String branchLabel = label;
+        if (hasPhis) {
+            branchLabel = "br_bridge_" + (brCounter++);
+        }
+
+        if (icmp != null) {
+            String bInst = getBranchInst(icmp.getPredicate().toString(), jumpIfTrue);
+            currentSb.append("    ").append(bInst).append(" $t0, $t1, ").append(branchLabel).append("\n");
+        } else {
+            String bInst = jumpIfTrue ? "bne" : "beq";
+            currentSb.append("    ").append(bInst).append(" $t0, $zero, ").append(branchLabel).append("\n");
+        }
+
+        if (hasPhis) {
+            StringBuilder oldSb = currentSb;
+            currentSb = pendingBridges;
+            currentSb.append(branchLabel).append(":\n");
+            fillPhis(current, target);
+            currentSb.append("    j ").append(label).append("\n");
+            currentSb = oldSb;
+        }
+    }
+
     private void genBr(BrInst inst, BasicBlock nextBb) {
         if (inst.getNumOperands() == 1) {
             BasicBlock target = (BasicBlock) inst.getOperand(0);
@@ -1022,89 +1047,22 @@ public class MipsBuilder {
             }
 
             String labelTrue = getLabel(targetTrue);
-            String labelFalse = getLabel(targetFalse);
+            getLabel(targetFalse);
 
             boolean phisTrue = hasPhis(inst.getParent(), targetTrue);
             boolean phisFalse = hasPhis(inst.getParent(), targetFalse);
 
             if (targetFalse == nextBb) {
                 // Fall through to False
-                if (!phisTrue) {
-                    if (icmp != null) {
-                        String bInst = getBranchInst(icmp.getPredicate().toString(), true);
-                        currentSb.append("    ").append(bInst).append(" $t0, $t1, ").append(labelTrue).append("\n");
-                    } else {
-                        currentSb.append("    bne $t0, $zero, ").append(labelTrue).append("\n");
-                    }
-                } else {
-                    String bridgeLabel = "br_bridge_" + (brCounter++);
-                    if (icmp != null) {
-                        String bInst = getBranchInst(icmp.getPredicate().toString(), true);
-                        currentSb.append("    ").append(bInst).append(" $t0, $t1, ").append(bridgeLabel).append("\n");
-                    } else {
-                        currentSb.append("    bne $t0, $zero, ").append(bridgeLabel).append("\n");
-                    }
-
-                    StringBuilder oldSb = currentSb;
-                    currentSb = pendingBridges;
-                    currentSb.append(bridgeLabel).append(":\n");
-                    fillPhis(inst.getParent(), targetTrue);
-                    currentSb.append("    j ").append(labelTrue).append("\n");
-                    currentSb = oldSb;
-                }
+                emitConditionalBranch(icmp, true, targetTrue, phisTrue, inst.getParent());
                 fillPhis(inst.getParent(), targetFalse);
             } else if (targetTrue == nextBb) {
                 // Fall through to True
-                if (!phisFalse) {
-                    if (icmp != null) {
-                        String bInst = getBranchInst(icmp.getPredicate().toString(), false);
-                        currentSb.append("    ").append(bInst).append(" $t0, $t1, ").append(labelFalse).append("\n");
-                    } else {
-                        currentSb.append("    beq $t0, $zero, ").append(labelFalse).append("\n");
-                    }
-                } else {
-                    String bridgeLabel = "br_bridge_" + (brCounter++);
-                    if (icmp != null) {
-                        String bInst = getBranchInst(icmp.getPredicate().toString(), false);
-                        currentSb.append("    ").append(bInst).append(" $t0, $t1, ").append(bridgeLabel).append("\n");
-                    } else {
-                        currentSb.append("    beq $t0, $zero, ").append(bridgeLabel).append("\n");
-                    }
-
-                    StringBuilder oldSb = currentSb;
-                    currentSb = pendingBridges;
-                    currentSb.append(bridgeLabel).append(":\n");
-                    fillPhis(inst.getParent(), targetFalse);
-                    currentSb.append("    j ").append(labelFalse).append("\n");
-                    currentSb = oldSb;
-                }
+                emitConditionalBranch(icmp, false, targetFalse, phisFalse, inst.getParent());
                 fillPhis(inst.getParent(), targetTrue);
             } else {
                 // Neither is next
-                if (!phisFalse) {
-                    if (icmp != null) {
-                        String bInst = getBranchInst(icmp.getPredicate().toString(), false);
-                        currentSb.append("    ").append(bInst).append(" $t0, $t1, ").append(labelFalse).append("\n");
-                    } else {
-                        currentSb.append("    beq $t0, $zero, ").append(labelFalse).append("\n");
-                    }
-                } else {
-                    String bridgeLabel = "br_bridge_" + (brCounter++);
-                    if (icmp != null) {
-                        String bInst = getBranchInst(icmp.getPredicate().toString(), false);
-                        currentSb.append("    ").append(bInst).append(" $t0, $t1, ").append(bridgeLabel).append("\n");
-                    } else {
-                        currentSb.append("    beq $t0, $zero, ").append(bridgeLabel).append("\n");
-                    }
-
-                    StringBuilder oldSb = currentSb;
-                    currentSb = pendingBridges;
-                    currentSb.append(bridgeLabel).append(":\n");
-                    fillPhis(inst.getParent(), targetFalse);
-                    currentSb.append("    j ").append(labelFalse).append("\n");
-                    currentSb = oldSb;
-                }
-
+                emitConditionalBranch(icmp, false, targetFalse, phisFalse, inst.getParent());
                 fillPhis(inst.getParent(), targetTrue);
                 currentSb.append("    j ").append(labelTrue).append("\n");
             }

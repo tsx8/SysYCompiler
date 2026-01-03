@@ -4,30 +4,22 @@ import top.tsxb.compiler.ir.base.Value;
 import java.util.*;
 
 public class GraphColoringRegAlloc {
-    private static class Move {
-        LiveInterval u, v;
-        boolean isPhi;
-
-        Move(LiveInterval u, LiveInterval v, boolean isPhi) {
-            this.u = u;
-            this.v = v;
-            this.isPhi = isPhi;
-        }
+    private record Move(LiveInterval u, LiveInterval v, boolean isPhi) {
 
         @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            Move move = (Move) o;
-            return (Objects.equals(u, move.u) && Objects.equals(v, move.v)) ||
-                   (Objects.equals(u, move.v) && Objects.equals(v, move.u));
-        }
+            public boolean equals(Object o) {
+                if (this == o) {return true;}
+                if (o == null || getClass() != o.getClass()) {return false;}
+                Move move = (Move) o;
+                return (Objects.equals(u, move.u) && Objects.equals(v, move.v)) ||
+                       (Objects.equals(u, move.v) && Objects.equals(v, move.u));
+            }
 
-        @Override
-        public int hashCode() {
-            return u.hashCode() ^ v.hashCode();
+            @Override
+            public int hashCode() {
+                return u.hashCode() ^ v.hashCode();
+            }
         }
-    }
 
     private final List<LiveInterval> intervals;
     private final int K;

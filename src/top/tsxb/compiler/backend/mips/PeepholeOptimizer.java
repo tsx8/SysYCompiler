@@ -475,13 +475,12 @@ public class PeepholeOptimizer {
                 if (addr1.equals(addr2)) {
                     if (srcReg.equals(dstReg)) {
                         lines.remove(i + 1);
-                        changed = true;
                     } else {
                         String indent = getIndent(line2);
                         String newInst = indent + "move " + dstReg + ", " + srcReg;
                         lines.set(i + 1, newInst);
-                        changed = true;
                     }
+                    changed = true;
                 }
             }
         }

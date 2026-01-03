@@ -151,7 +151,7 @@ public class GlobalLocalizationPass implements Pass {
             return false;
         }
         boolean modified = isModifiedIn(gv, func);
-        boolean isPrivate = isOnlyUsedIn(gv, func);
+        isOnlyUsedIn(gv, func);
 
         BasicBlock entry = func.getBasicBlocks().get(0);
         AllocaInst alloca = new AllocaInst(((PtrType) gv.getType()).getPointeeType(), gv.getName() + ".local", null);
@@ -332,7 +332,7 @@ public class GlobalLocalizationPass implements Pass {
         Map<List<Value>, AllocaInst> indexToAlloca = new LinkedHashMap<>();
         BasicBlock entry = func.getBasicBlocks().get(0);
         boolean modified = isModifiedIn(gv, func);
-        boolean isPrivate = isOnlyUsedIn(gv, func);
+        isOnlyUsedIn(gv, func);
         Set<Instruction> protectedInsts = new LinkedHashSet<>();
 
         for (List<Value> indices : constantIndices) {
@@ -414,7 +414,6 @@ public class GlobalLocalizationPass implements Pass {
                                 protectedInsts.add(rLoad);
                             }
                         }
-                        continue;
                     }
                 }
             }
