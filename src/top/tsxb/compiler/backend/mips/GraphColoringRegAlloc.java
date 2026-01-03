@@ -29,15 +29,20 @@ public class GraphColoringRegAlloc {
     private final Map<LiveInterval, LiveInterval> alias = new LinkedHashMap<>();
     private final Map<Value, MipsRegister> regMapping = new LinkedHashMap<>();
     private final Set<MipsRegister> usedCalleeSaved = new LinkedHashSet<>();
-    public GraphColoringRegAlloc(List<LiveInterval> intervals) {
+
+    public GraphColoringRegAlloc(List<LiveInterval> intervals, Set<MipsRegister> excludedRegs) {
         this.intervals = new ArrayList<>(intervals);
         this.allocatableRegs = new ArrayList<>();
 
         for (MipsRegister reg : MipsRegister.getAllocatable()) {
+            if (excludedRegs.contains(reg))
+                continue;
             if (reg.isCallerSaved())
                 allocatableRegs.add(reg);
         }
         for (MipsRegister reg : MipsRegister.getAllocatable()) {
+            if (excludedRegs.contains(reg))
+                continue;
             if (reg.isCalleeSaved())
                 allocatableRegs.add(reg);
         }

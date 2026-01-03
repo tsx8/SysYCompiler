@@ -309,26 +309,41 @@ public class MipsBuilder {
         liveness.analyze();
         LoopAnalysis loopAnalysis = new LoopAnalysis(func);
         loopAnalysis.analyze();
+
+        // Global Address Hoisting
+        List<GlobalVariable> globals = analyzeGlobalUsage(func, loopAnalysis);
+        Set<MipsRegister> excludedRegs = new HashSet<>();
+        Map<GlobalVariable, MipsRegister> globalRegs = new HashMap<>();
+
+        // Use S0-S7 for globals, limit to 3 globals
+        MipsRegister[] sRegs = {MipsRegister.S0, MipsRegister.S1, MipsRegister.S2, MipsRegister.S3, MipsRegister.S4,
+            MipsRegister.S5, MipsRegister.S6, MipsRegister.S7};
+        int allocated = 0;
+        for (GlobalVariable gv : globals) {
+            if (allocated >= 3)
+                break;
+            MipsRegister reg = sRegs[allocated++];
+            excludedRegs.add(reg);
+            globalRegs.put(gv, reg);
+        }
+
         LiveIntervalAnalysis intervalAnalysis = new LiveIntervalAnalysis(func, liveness, loopAnalysis);
         intervalAnalysis.analyze();
         this.intervals = intervalAnalysis.getIntervalMap();
         this.instToId = intervalAnalysis.getInstToId();
-        GraphColoringRegAlloc allocator = new GraphColoringRegAlloc(intervalAnalysis.getIntervals());
+        GraphColoringRegAlloc allocator = new GraphColoringRegAlloc(intervalAnalysis.getIntervals(), excludedRegs);
         allocator.allocate();
         this.regMapping = allocator.getRegMapping();
         this.usedCalleeSaved = allocator.getUsedCalleeSaved();
 
+        // Add global mappings
+        for (Map.Entry<GlobalVariable, MipsRegister> entry : globalRegs.entrySet()) {
+            this.regMapping.put(entry.getKey(), entry.getValue());
+            this.usedCalleeSaved.add(entry.getValue());
+        }
+
         calculateStackFrame(func);
         computePredecessors(func);
-
-        // Load global addresses into assigned registers
-        for (Map.Entry<Value, MipsRegister> entry : regMapping.entrySet()) {
-            if (entry.getKey() instanceof GlobalVariable gv) {
-                String regName = entry.getValue().getName();
-                invalidateCache(regName);
-                currentSb.append("    la ").append(regName).append(", ").append(getLabel(gv)).append("\n");
-            }
-        }
 
         // Move arguments 0-3 to caller-saved registers
         List<Argument> args = func.getArguments();
@@ -363,6 +378,14 @@ public class MipsBuilder {
                 if (hasEntryFromOutside) {
                     currentSb.append(getLabel(bb)).append("_prologue:\n");
                     emitPrologue(func);
+                    // Load global addresses into assigned registers
+                    for (Map.Entry<Value, MipsRegister> entry : regMapping.entrySet()) {
+                        if (entry.getKey() instanceof GlobalVariable gv) {
+                            String regName = entry.getValue().getName();
+                            invalidateCache(regName);
+                            currentSb.append("    la ").append(regName).append(", ").append(getLabel(gv)).append("\n");
+                        }
+                    }
                 }
             }
 
@@ -428,6 +451,11 @@ public class MipsBuilder {
                     if (argIndex >= 4)
                         return true;
                 }
+                if (op instanceof GlobalVariable && regMapping.containsKey(op)) {
+                    MipsRegister reg = regMapping.get(op);
+                    if (reg.isCalleeSaved() && usedCalleeSaved.contains(reg))
+                        return true;
+                }
             }
             MipsRegister reg = regMapping.get(inst);
             if (reg != null && reg.isCalleeSaved() && usedCalleeSaved.contains(reg))
@@ -446,6 +474,11 @@ public class MipsBuilder {
                         if (incoming instanceof Argument arg) {
                             int argIndex = func.getArguments().indexOf(arg);
                             if (argIndex >= 4)
+                                return true;
+                        }
+                        if (incoming instanceof GlobalVariable && regMapping.containsKey(incoming)) {
+                            MipsRegister reg = regMapping.get(incoming);
+                            if (reg.isCalleeSaved() && usedCalleeSaved.contains(reg))
                                 return true;
                         }
                     }
@@ -1541,5 +1574,27 @@ public class MipsBuilder {
     }
 
     private record MulTerm(int shift, boolean positive) {
+    }
+
+    private List<GlobalVariable> analyzeGlobalUsage(Function func, LoopAnalysis loopAnalysis) {
+        Map<GlobalVariable, Double> scores = new HashMap<>();
+        for (BasicBlock bb : func.getBasicBlocks()) {
+            int depth = loopAnalysis.getLoopDepth(bb);
+            double weight = Math.pow(10, depth);
+            for (Instruction inst : bb.getInstructions()) {
+                for (int i = 0; i < inst.getNumOperands(); i++) {
+                    Value op = inst.getOperand(i);
+                    if (op instanceof GlobalVariable gv) {
+                        scores.put(gv, scores.getOrDefault(gv, 0.0) + weight);
+                    }
+                }
+            }
+        }
+        // Filter out globals with low usage score
+        scores.entrySet().removeIf(entry -> entry.getValue() < 15.0);
+
+        List<GlobalVariable> sorted = new ArrayList<>(scores.keySet());
+        sorted.sort((a, b) -> Double.compare(scores.get(b), scores.get(a)));
+        return sorted;
     }
 }
