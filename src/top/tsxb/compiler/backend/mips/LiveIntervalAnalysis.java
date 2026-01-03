@@ -101,9 +101,12 @@ public class LiveIntervalAnalysis {
             int bEnd = blockEnd.get(bb);
             double weight = Math.pow(10, loopAnalysis.getLoopDepth(bb));
 
-            // Live out values are live until the end of the block
             for (Value v : liveness.getLiveOut(bb)) {
-                getOrCreateInterval(v).addRange(bStart, bEnd);
+                getOrCreateInterval(v).addRange(bEnd, bEnd);
+            }
+
+            for (Value v : liveness.getLiveIn(bb)) {
+                getOrCreateInterval(v).addRange(bStart, bStart);
             }
 
             // Process instructions in reverse

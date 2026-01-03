@@ -18,7 +18,6 @@ public class LivenessAnalysis {
     private final Map<BasicBlock, Set<Value>> liveOut = new LinkedHashMap<>();
     private final Map<BasicBlock, Set<Value>> def = new LinkedHashMap<>();
     private final Map<BasicBlock, Set<Value>> use = new LinkedHashMap<>();
-    // Phi uses: for each block, what values are used by Phi nodes in successor blocks
     private final Map<BasicBlock, Set<Value>> phiUse = new LinkedHashMap<>();
     private final Map<BasicBlock, List<BasicBlock>> successors = new LinkedHashMap<>();
     private final Map<BasicBlock, List<BasicBlock>> predecessors = new LinkedHashMap<>();
@@ -155,5 +154,9 @@ public class LivenessAnalysis {
 
     public Set<Value> getLiveOut(BasicBlock bb) {
         return liveOut.get(bb);
+    }
+
+    public Set<Value> getLiveIn(BasicBlock bb) {
+        return liveIn.get(bb);
     }
 }
