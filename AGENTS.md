@@ -42,6 +42,7 @@ The project uses raw `javac` for compilation. Always run specific test first to 
 - **Naming**: Use `PascalCase` for classes and `camelCase` for methods and variables.
 - **Patterns**: Strictly follow the **Visitor Pattern** for CST (`CstVisitor`) and AST (`AstVisitor`) traversals.
 - **Error Handling**: Use `ErrorReporter` for diagnostics instead of throwing exceptions for user-level errors.
+- **Determinism**: Ensure all optimization passes are deterministic. Avoid using `HashSet` or `HashMap` when iterating over IR elements (e.g., instructions, blocks, functions); use `LinkedHashSet` or `LinkedHashMap` instead to maintain consistent iteration order and avoid performance fluctuations.
 
 ## Testing Guidelines
 
