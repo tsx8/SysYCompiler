@@ -12,19 +12,24 @@ public class PassManager {
 
     public static PassManager createDefault() {
         PassManager manager = new PassManager();
+
         manager.register(new FunctionInliningPass());
         manager.register(new GlobalLocalizationPass());
         manager.register(new Mem2RegPass());
-        manager.register(new SccpPass());
+        manager.register(new DeadCodeEliminationPass());
+        manager.register(new SimplifyCfgPass());
         manager.register(new IpsccpPass());
-        manager.register(new GvnPass());
+        manager.register(new SccpPass());
+        manager.register(new LoopUnrollingPass());
         manager.register(new SimplifyCfgPass());
         manager.register(new TailRecursionEliminationPass());
-        manager.register(new LoopUnrollingPass());
-        manager.register(new LoopStrengthReductionPass());
+        manager.register(new GvnPass());
         manager.register(new LicmPass());
+        manager.register(new LoopStrengthReductionPass());
         manager.register(new GcmPass());
         manager.register(new DeadCodeEliminationPass());
+        manager.register(new SimplifyCfgPass());
+
         return manager;
     }
 
@@ -35,7 +40,7 @@ public class PassManager {
 
     public void runAll(Module module, ErrorReporter errorReporter) {
         int iterations = 0;
-        int MAX_ITERATIONS = 15;
+        int MAX_ITERATIONS = 512;
         boolean changed = true;
         while (changed && iterations < MAX_ITERATIONS) {
             changed = false;

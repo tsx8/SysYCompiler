@@ -320,7 +320,7 @@ public class MipsBuilder {
             MipsRegister.S5, MipsRegister.S6, MipsRegister.S7};
         int allocated = 0;
         for (GlobalVariable gv : globals) {
-            if (allocated >= 3)
+            if (allocated >= 8)
                 break;
             MipsRegister reg = sRegs[allocated++];
             excludedRegs.add(reg);
@@ -1591,7 +1591,7 @@ public class MipsBuilder {
             }
         }
         // Filter out globals with low usage score
-        scores.entrySet().removeIf(entry -> entry.getValue() < 15.0);
+        scores.entrySet().removeIf(entry -> entry.getValue() < 5.0);
 
         List<GlobalVariable> sorted = new ArrayList<>(scores.keySet());
         sorted.sort((a, b) -> Double.compare(scores.get(b), scores.get(a)));

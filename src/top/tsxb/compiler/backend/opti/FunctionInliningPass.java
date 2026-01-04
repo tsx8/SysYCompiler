@@ -17,8 +17,8 @@ import top.tsxb.compiler.ir.type.FuncType;
 import top.tsxb.compiler.ir.type.NoneType;
 
 public class FunctionInliningPass implements Pass {
-    private static final int MAX_INLINE_SIZE = 40;
-    private static final int MAX_RECURSIVE_INLINE_SIZE = 50;
+    private static final int MAX_INLINE_SIZE = 30;
+    private static final int MAX_RECURSIVE_INLINE_SIZE = 1024;
 
     @Override
     public boolean run(Module module) {
@@ -147,18 +147,19 @@ public class FunctionInliningPass implements Pass {
             valueMap.put(callee.getArguments().get(i), call.getOperand(i + 1));
         }
 
-        List<BasicBlock> clonedBlocks = new ArrayList<>();
         for (BasicBlock calleeBB : callee.getBasicBlocks()) {
             BasicBlock clonedBB = new BasicBlock(calleeBB.getName() + ".inline", caller);
             valueMap.put(calleeBB, clonedBB);
-            clonedBlocks.add(clonedBB);
         }
 
         List<ReturnInst> returnInsts = new ArrayList<>();
         BasicBlock callerEntry = caller.getBasicBlocks().get(0);
-        for (int i = 0; i < callee.getBasicBlocks().size(); i++) {
-            BasicBlock calleeBB = callee.getBasicBlocks().get(i);
-            BasicBlock clonedBB = clonedBlocks.get(i);
+
+        DominatorAnalysis.Cfg cfg = DominatorAnalysis.computeCfg(callee);
+        List<BasicBlock> rpo = DominatorAnalysis.getReversePostOrder(callee.getBasicBlocks().get(0), cfg.successors());
+
+        for (BasicBlock calleeBB : rpo) {
+            BasicBlock clonedBB = (BasicBlock)valueMap.get(calleeBB);
             for (Instruction inst : calleeBB.getInstructions()) {
                 if (inst instanceof AllocaInst alloca) {
                     AllocaInst clonedAlloca = new AllocaInst(alloca.getAllocatedType(), alloca.getName(), null);
@@ -175,9 +176,8 @@ public class FunctionInliningPass implements Pass {
             }
         }
 
-        for (int i = 0; i < callee.getBasicBlocks().size(); i++) {
-            BasicBlock calleeBB = callee.getBasicBlocks().get(i);
-            BasicBlock clonedBB = clonedBlocks.get(i);
+        for (BasicBlock calleeBB : rpo) {
+            BasicBlock clonedBB = (BasicBlock)valueMap.get(calleeBB);
             for (int j = 0, clonedIdx = 0; j < calleeBB.getInstructions().size(); j++) {
                 Instruction inst = calleeBB.getInstructions().get(j);
                 if (inst instanceof AllocaInst)
@@ -187,13 +187,13 @@ public class FunctionInliningPass implements Pass {
                     PhiInst clonedPhi = (PhiInst)clonedInst;
                     for (Map.Entry<BasicBlock, Value> entry : phi.getIncoming().entrySet()) {
                         clonedPhi.setIncoming((BasicBlock)valueMap.get(entry.getKey()),
-                            map(entry.getValue(), valueMap));
+                                              map(entry.getValue(), valueMap));
                     }
                 }
             }
         }
 
-        new BrInst(clonedBlocks.get(0), bb);
+        new BrInst((BasicBlock)valueMap.get(callee.getBasicBlocks().get(0)), bb);
 
         // Update Phis in original successors of bb to refer to afterBlock
         for (BasicBlock successor : getSuccessors(afterBlock)) {

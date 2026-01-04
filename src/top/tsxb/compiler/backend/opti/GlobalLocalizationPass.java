@@ -242,6 +242,8 @@ public class GlobalLocalizationPass implements Pass {
             }
 
             if (modified) {
+                if (bb.getInstructions().isEmpty())
+                    continue;
                 Instruction last = bb.getInstructions().get(bb.getInstructions().size() - 1);
                 if (last instanceof ReturnInst) {
                     ListIterator<Instruction> retIt =
@@ -351,7 +353,7 @@ public class GlobalLocalizationPass implements Pass {
 
         double constantRatio = geps.isEmpty() ? 0 : (double)constantCount / geps.size();
         boolean result;
-        if (allConstant && constantRatio >= 0.5) {
+        if (allConstant && constantRatio >= 0.01) {
             result = localizeArrayElements(gv, func, uniqueConstantIndices);
         } else {
             result = hoistArrayBase(gv, func, geps);
@@ -456,6 +458,8 @@ public class GlobalLocalizationPass implements Pass {
             }
 
             if (modified) {
+                if (bb.getInstructions().isEmpty())
+                    continue;
                 Instruction last = bb.getInstructions().get(bb.getInstructions().size() - 1);
                 if (last instanceof ReturnInst) {
                     ListIterator<Instruction> retIt =

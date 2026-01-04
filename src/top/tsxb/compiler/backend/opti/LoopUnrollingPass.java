@@ -17,8 +17,8 @@ import top.tsxb.compiler.ir.structure.Module;
 import top.tsxb.compiler.ir.type.IntType;
 
 public class LoopUnrollingPass implements Pass {
-    private static final int MAX_TRIP_COUNT = 32;
-    private static final int MAX_TOTAL_INSTS = 128;
+    private static final int MAX_TRIP_COUNT = 128;
+    private static final int MAX_TOTAL_INSTS = 1024;
 
     @Override
     public boolean run(Module module) {
@@ -34,7 +34,6 @@ public class LoopUnrollingPass implements Pass {
     private boolean runOnFunction(Function function) {
         boolean changed = false;
         List<Loop> loops = findLoops(function);
-        // Sort loops by size (inner loops first)
         loops.sort(Comparator.comparingInt(l -> l.blocks().size()));
 
         for (Loop loop : loops) {
@@ -349,13 +348,43 @@ public class LoopUnrollingPass implements Pass {
             }
         }
 
+        BasicBlock epilogue = new BasicBlock(loop.header().getName() + ".epilogue", function);
+        Map<Value, Value> epilogueMapping = new LinkedHashMap<>();
+
+        for (Instruction inst : loop.header().getInstructions()) {
+            if (inst instanceof PhiInst phi) {
+                epilogueMapping.put(phi, currentPhiValues.get(phi));
+            }
+        }
+
+        for (Instruction inst : loop.header().getInstructions()) {
+            if (inst instanceof PhiInst) continue;
+            if (inst instanceof BrInst) continue;
+
+            Instruction newInst = copyInstruction(inst, epilogue);
+            if (newInst != null) {
+                for (int j = 0; j < newInst.getNumOperands(); j++) {
+                    Value op = newInst.getOperand(j);
+                    if (epilogueMapping.containsKey(op)) {
+                        newInst.setOperand(j, epilogueMapping.get(op));
+                    }
+                }
+                epilogueMapping.put(inst, newInst);
+            }
+        }
+
+        new BrInst(loop.exit(), epilogue);
+
+        BasicBlock lastLatch = allBlockMappings.get(tripCount - 1).get(loop.latch());
+        Instruction lastLatchInst = lastLatch.getInstructions().get(lastLatch.getInstructions().size() - 1);
+        lastLatchInst.setOperand(0, epilogue);
+
         for (Instruction inst : loop.exit().getInstructions()) {
             if (inst instanceof PhiInst phi) {
                 Value val = phi.getIncomingValue(loop.header());
                 if (val != null) {
-                    Value lastVal = allValueMappings.get(tripCount - 1).getOrDefault(val, val);
                     phi.removeIncoming(loop.header());
-                    phi.setIncoming(allBlockMappings.get(tripCount - 1).get(loop.latch()), lastVal);
+                    phi.setIncoming(epilogue, val);
                 }
             }
         }
@@ -363,8 +392,8 @@ public class LoopUnrollingPass implements Pass {
         for (BasicBlock bb : loop.blocks()) {
             for (Instruction inst : new ArrayList<>(bb.getInstructions())) {
                 Value replacement;
-                if (inst instanceof PhiInst phi && bb == loop.header()) {
-                    replacement = currentPhiValues.get(phi);
+                if (bb == loop.header()) {
+                    replacement = epilogueMapping.get(inst);
                 } else {
                     replacement = allValueMappings.get(tripCount - 1).get(inst);
                 }

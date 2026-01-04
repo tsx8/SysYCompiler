@@ -161,7 +161,12 @@ public class LiveIntervalAnalysis {
     }
 
     public List<LiveInterval> getIntervals() {
-        List<LiveInterval> result = new ArrayList<>(intervals.values());
+        List<LiveInterval> result = new ArrayList<>();
+        for (LiveInterval interval : intervals.values()) {
+            if (interval.getStart() < interval.getEnd()) {
+                result.add(interval);
+            }
+        }
         Collections.sort(result);
         return result;
     }
