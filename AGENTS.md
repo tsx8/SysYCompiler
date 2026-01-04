@@ -4,7 +4,7 @@ This document provides essential information for contributors to the SysYCompile
 
 ## Project Structure & Module Organization
 
-The compiler is organized into a multi-stage pipeline:
+The compiler follows a multi-stage pipeline structure:
 
 - [src/top/tsxb/compiler/](src/top/tsxb/compiler/):
     - `frontend/`: Lexer, Parser (CST), and Semantic Analysis (AST/Symbol Table).
@@ -15,10 +15,14 @@ The compiler is organized into a multi-stage pipeline:
 - [test/](test/): Custom testing framework source code.
 - [testcases/](testcases/): Test cases organized by stage (e.g., `lexer/`, `llvm/`, `mips/`).
 - [assets/](assets/): Grammar definitions (`SysY.g4`), runtime library (`libsysy/`), MIPS simulator (`mars.jar`), and homework specifications.
+- [docs/](docs/): Project documentation written in Typst (modified from `typst-ori` template).
+    - `optimize.typ`: Optimization documentation.
+    - `report.typ`: Design documentation.
+    - `summary.typ`: Summary and reflections.
 
 ## Build, Test, and Development Commands
 
-The project uses raw `javac` for compilation.
+The project uses raw `javac` for compilation. Run these commands in PowerShell:
 
 - **Compile Source**:
   ```powershell
@@ -44,7 +48,7 @@ The project uses raw `javac` for compilation.
 - **Naming**: `PascalCase` for classes, `camelCase` for methods and variables.
 - **Patterns**: Strictly follow the **Visitor Pattern** for CST (`CstVisitor`) and AST (`AstVisitor`) traversals.
 - **Error Handling**: Use `ErrorReporter` for diagnostics; avoid throwing exceptions for user-level errors.
-- **Determinism**: Use `LinkedHashSet` or `LinkedHashMap` when iterating over IR elements (instructions, blocks, functions) to ensure consistent optimization results and avoid performance fluctuations.
+- **Determinism**: Use `LinkedHashSet` or `LinkedHashMap` when iterating over IR elements to ensure consistent optimization results.
 
 ## Testing Guidelines
 
@@ -53,17 +57,20 @@ The project uses raw `javac` for compilation.
 - **Execution**: Always run specific tests first to verify local changes before running the full suite.
 - **Caveat**: Avoid parallel testing when using `mars.jar` due to known timeout issues.
 
+## Documentation Guidelines
+
+The project documentation is located in the `docs/` directory and is written in Typst.
+
+- **Validation**: When modifying documentation, ensure to compile the source file to check for errors or important warnings:
+  ```powershell
+  typst compile docs/<filename>.typ
+  ```
+
 ## Commit & Pull Request Guidelines
 
-- **Commit Messages**: Use English and follow the `type: description` convention:
-    - `feat`: New features.
-    - `fix`: Bug fixes.
-    - `perf`: Optimization changes.
-    - `refactor`: Code restructuring.
-    - `docs`: Documentation updates.
-    - `tests`: Adding or updating tests.
+- **Commit Messages**: Follow the `type: description` convention (e.g., `feat`, `fix`, `perf`, `refactor`, `docs`, `tests`).
 - **Pull Requests**: Provide a concise summary of changes and link any related issues.
 
 ## Architecture Overview
 
-The compiler features a standard frontend-middle-backend split. The middle-end performs SSA-based optimizations (Mem2Reg, GVN, DCE, etc.) managed by `PassManager`. The backend targets MIPS with graph-coloring register allocation and peephole optimizations.
+The compiler features a standard frontend-middle-backend split. The middle-end performs SSA-based optimizations (Mem2Reg, GVN, DCE) managed by `PassManager`. The backend targets MIPS with graph-coloring register allocation and peephole optimizations.
