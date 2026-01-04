@@ -30,7 +30,6 @@ public class MipsBuilder {
     private final Map<Value, Integer> stackOffsets = new LinkedHashMap<>();
     private final Map<GlobalValue, String> globalAddrCache = new LinkedHashMap<>();
     private final Map<String, GlobalValue> regToGlobal = new LinkedHashMap<>();
-    private final Set<BasicBlock> frameRegion = new LinkedHashSet<>();
     private final Map<BasicBlock, List<BasicBlock>> predecessorsMap = new LinkedHashMap<>();
     private StringBuilder currentSb = sb;
     private Map<Value, MipsRegister> regMapping = new LinkedHashMap<>();
@@ -42,7 +41,6 @@ public class MipsBuilder {
     private boolean isLeaf = false;
     private int spShift = 0;
     private Function currentFunction;
-    private BasicBlock currentBlock;
 
     public MipsBuilder(Module module) {
         this.module = module;
@@ -370,7 +368,6 @@ public class MipsBuilder {
         List<BasicBlock> blocks = reorderBlocks(func, loopAnalysis);
         for (int i = 0; i < blocks.size(); i++) {
             BasicBlock bb = blocks.get(i);
-            currentBlock = bb;
             BasicBlock nextBb = (i + 1 < blocks.size()) ? blocks.get(i + 1) : null;
 
             currentSb.append(getLabel(bb)).append(":\n");
@@ -416,62 +413,6 @@ public class MipsBuilder {
                 predecessorsMap.get(succ).add(bb);
             }
         }
-    }
-
-    private boolean blockNeedsFrame(Function func, BasicBlock bb) {
-        for (Instruction inst : bb.getInstructions()) {
-            if (inst instanceof CallInst)
-                return true;
-            if (inst instanceof AllocaInst)
-                return true;
-            if (stackOffsets.containsKey(inst))
-                return true;
-            for (int i = 0; i < inst.getNumOperands(); i++) {
-                Value op = inst.getOperand(i);
-                if (stackOffsets.containsKey(op))
-                    return true;
-                if (op instanceof Argument arg) {
-                    int argIndex = func.getArguments().indexOf(arg);
-                    if (argIndex >= 4)
-                        return true;
-                }
-                if (op instanceof GlobalVariable && regMapping.containsKey(op)) {
-                    MipsRegister reg = regMapping.get(op);
-                    if (reg.isCalleeSaved() && usedCalleeSaved.contains(reg))
-                        return true;
-                }
-            }
-            MipsRegister reg = regMapping.get(inst);
-            if (reg != null && reg.isCalleeSaved() && usedCalleeSaved.contains(reg))
-                return true;
-        }
-        for (BasicBlock succ : getSuccessors(bb)) {
-            for (Instruction inst : succ.getInstructions()) {
-                if (inst instanceof PhiInst phi) {
-                    Value incoming = phi.getIncomingValue(bb);
-                    if (incoming != null) {
-                        MipsRegister phiReg = regMapping.get(phi);
-                        if (phiReg != null && phiReg.isCalleeSaved() && usedCalleeSaved.contains(phiReg))
-                            return true;
-                        if (!regMapping.containsKey(phi) && stackOffsets.containsKey(phi))
-                            return true;
-                        if (incoming instanceof Argument arg) {
-                            int argIndex = func.getArguments().indexOf(arg);
-                            if (argIndex >= 4)
-                                return true;
-                        }
-                        if (incoming instanceof GlobalVariable && regMapping.containsKey(incoming)) {
-                            MipsRegister reg = regMapping.get(incoming);
-                            if (reg.isCalleeSaved() && usedCalleeSaved.contains(reg))
-                                return true;
-                        }
-                    }
-                } else {
-                    break;
-                }
-            }
-        }
-        return false;
     }
 
     private void updateIsLeaf() {
@@ -1176,8 +1117,6 @@ public class MipsBuilder {
             fillPhis(inst.getParent(), target);
             if (target != nextBb) {
                 currentSb.append("    j ").append(getJumpTarget(target)).append("\n");
-            } else if (frameRegion.contains(target) && !frameRegion.contains(inst.getParent())) {
-                currentSb.append("    j ").append(getJumpTarget(target)).append("\n");
             }
         } else {
             Value cond = inst.getOperand(0);
@@ -1205,19 +1144,11 @@ public class MipsBuilder {
             if (targetFalse == nextBb) {
                 // Fall through to False
                 emitConditionalBranch(icmp, r0, r1, true, targetTrue, phisTrue, inst.getParent());
-                if (frameRegion.contains(targetFalse) && !frameRegion.contains(inst.getParent())) {
-                    currentSb.append("    j ").append(getJumpTarget(targetFalse)).append("\n");
-                } else {
-                    fillPhis(inst.getParent(), targetFalse);
-                }
+                fillPhis(inst.getParent(), targetFalse);
             } else if (targetTrue == nextBb) {
                 // Fall through to True
                 emitConditionalBranch(icmp, r0, r1, false, targetFalse, phisFalse, inst.getParent());
-                if (frameRegion.contains(targetTrue) && !frameRegion.contains(inst.getParent())) {
-                    currentSb.append("    j ").append(getJumpTarget(targetTrue)).append("\n");
-                } else {
-                    fillPhis(inst.getParent(), targetTrue);
-                }
+                fillPhis(inst.getParent(), targetTrue);
             } else {
                 // Neither is next
                 emitConditionalBranch(icmp, r0, r1, false, targetFalse, phisFalse, inst.getParent());
@@ -1508,9 +1439,6 @@ public class MipsBuilder {
             storeStack(dst, stackOffsets.get(inst) + spShift);
     }
 
-    private record MulTerm(int shift, boolean positive) {
-    }
-
     private List<GlobalVariable> analyzeGlobalUsage(Function func, LoopAnalysis loopAnalysis) {
         Map<GlobalVariable, Double> scores = new HashMap<>();
         for (BasicBlock bb : func.getBasicBlocks()) {
@@ -1531,5 +1459,8 @@ public class MipsBuilder {
         List<GlobalVariable> sorted = new ArrayList<>(scores.keySet());
         sorted.sort((a, b) -> Double.compare(scores.get(b), scores.get(a)));
         return sorted;
+    }
+
+    private record MulTerm(int shift, boolean positive) {
     }
 }

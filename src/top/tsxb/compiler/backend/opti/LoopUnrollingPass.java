@@ -358,8 +358,10 @@ public class LoopUnrollingPass implements Pass {
         }
 
         for (Instruction inst : loop.header().getInstructions()) {
-            if (inst instanceof PhiInst) continue;
-            if (inst instanceof BrInst) continue;
+            if (inst instanceof PhiInst)
+                continue;
+            if (inst instanceof BrInst)
+                continue;
 
             Instruction newInst = copyInstruction(inst, epilogue);
             if (newInst != null) {

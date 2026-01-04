@@ -1,11 +1,7 @@
 package top.tsxb.compiler.ir.structure;
 
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 import top.tsxb.compiler.ir.base.Value;
@@ -16,8 +12,7 @@ import top.tsxb.compiler.ir.type.NoneType;
 public class Function extends GlobalValue {
     private final List<BasicBlock> basicBlocks = new LinkedList<>();
     private final List<Argument> arguments = new LinkedList<>();
-    private final Map<String, Integer> localNameMap = new HashMap<>();
-    private final Set<String> usedNames = new HashSet<>();
+    private final NameResolver nameResolver = new NameResolver();
 
     public Function(String name, FuncType type, Linkage linkage) {
         super(type, name, linkage);
@@ -46,26 +41,7 @@ public class Function extends GlobalValue {
         if (!needsName) {
             return;
         }
-        String nameHint = value.getName();
-        if (nameHint == null || nameHint.isEmpty()) {
-            nameHint = "anonymous";
-        }
-
-        String candidate = nameHint;
-        if (usedNames.contains(candidate)) {
-            int count = localNameMap.getOrDefault(nameHint, 1);
-            do {
-                candidate = nameHint + "." + count;
-                count++;
-            } while (usedNames.contains(candidate));
-            localNameMap.put(nameHint, count);
-        } else {
-            if (!localNameMap.containsKey(nameHint)) {
-                localNameMap.put(nameHint, 1);
-            }
-        }
-        value.setName(candidate);
-        usedNames.add(candidate);
+        nameResolver.resolveName(value);
     }
 
     public List<BasicBlock> getBasicBlocks() {

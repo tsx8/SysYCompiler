@@ -188,7 +188,7 @@ public class FunctionInliningPass implements Pass {
                     PhiInst clonedPhi = (PhiInst)clonedInst;
                     for (Map.Entry<BasicBlock, Value> entry : phi.getIncoming().entrySet()) {
                         clonedPhi.setIncoming((BasicBlock)valueMap.get(entry.getKey()),
-                                              map(entry.getValue(), valueMap));
+                            map(entry.getValue(), valueMap));
                     }
                 }
             }

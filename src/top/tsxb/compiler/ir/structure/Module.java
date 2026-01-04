@@ -2,10 +2,8 @@ package top.tsxb.compiler.ir.structure;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import top.tsxb.compiler.ir.base.Value;
 import top.tsxb.compiler.ir.constant.ConstString;
@@ -14,8 +12,7 @@ public class Module {
     private final List<GlobalVariable> globalList = new ArrayList<>();
     private final List<Function> functionList = new ArrayList<>();
     private final Map<String, GlobalValue> symbolMap = new HashMap<>();
-    private final Map<String, Integer> globalNameMap = new HashMap<>();
-    private final Set<String> usedGlobalNames = new HashSet<>();
+    private final NameResolver nameResolver = new NameResolver();
 
     public List<GlobalVariable> getGlobalList() {
         return globalList;
@@ -44,32 +41,13 @@ public class Module {
     public GlobalVariable createString(String literal) {
         ConstString constString = new ConstString(literal);
         GlobalVariable gv =
-        new GlobalVariable(".str", constString.getType(), true, constString, GlobalValue.Linkage.INTERNAL);
+            new GlobalVariable(".str", constString.getType(), true, constString, GlobalValue.Linkage.INTERNAL);
         addGlobalVariable(gv);
         return gv;
     }
 
     private void resolveGlobalName(Value value) {
-        String originalName = value.getName();
-        if (originalName == null || originalName.isEmpty()) {
-            originalName = "anonymous";
-        }
-
-        String candidate = originalName;
-        if (usedGlobalNames.contains(candidate)) {
-            int count = globalNameMap.getOrDefault(originalName, 1);
-            do {
-                candidate = originalName + "." + count;
-                count++;
-            } while (usedGlobalNames.contains(candidate));
-            globalNameMap.put(originalName, count);
-        } else {
-            if (!globalNameMap.containsKey(originalName)) {
-                globalNameMap.put(originalName, 1);
-            }
-        }
-        value.setName(candidate);
-        usedGlobalNames.add(candidate);
+        nameResolver.resolveName(value);
     }
 
     @Override

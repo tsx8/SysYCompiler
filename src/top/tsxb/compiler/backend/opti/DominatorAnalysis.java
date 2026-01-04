@@ -141,8 +141,7 @@ public class DominatorAnalysis {
         return new DominatorInfo(dominators, idom, domTree, frontier);
     }
 
-    public static List<BasicBlock> getReversePostOrder(BasicBlock entry,
-        Map<BasicBlock, List<BasicBlock>> successors) {
+    public static List<BasicBlock> getReversePostOrder(BasicBlock entry, Map<BasicBlock, List<BasicBlock>> successors) {
         List<BasicBlock> postOrder = new ArrayList<>();
         Set<BasicBlock> visited = new LinkedHashSet<>();
         dfsPostOrder(entry, successors, visited, postOrder);

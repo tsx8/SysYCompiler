@@ -212,26 +212,12 @@ public class GlobalLocalizationPass implements Pass {
 
                     if (storeNeeded) {
                         it.previous();
-                        LoadInst sLoad = new LoadInst(alloca, null);
-                        sLoad.setParent(bb);
-                        it.add(sLoad);
-                        func.resolveLocalName(sLoad);
-                        StoreInst sStore = new StoreInst(sLoad, gv, null);
-                        sStore.setParent(bb);
-                        it.add(sStore);
-                        protectedInsts.add(sStore);
+                        storeBackToScalar(gv, alloca, bb, it, func, protectedInsts);
                         it.next();
                     }
 
                     if (reloadNeeded) {
-                        LoadInst rLoad = new LoadInst(gv, null);
-                        rLoad.setParent(bb);
-                        it.add(rLoad);
-                        func.resolveLocalName(rLoad);
-                        StoreInst rStore = new StoreInst(rLoad, alloca, null);
-                        rStore.setParent(bb);
-                        it.add(rStore);
-                        protectedInsts.add(rLoad);
+                        reloadFromScalar(gv, alloca, bb, it, func, protectedInsts);
                     }
                     if (storeNeeded || reloadNeeded)
                         continue;
@@ -251,20 +237,37 @@ public class GlobalLocalizationPass implements Pass {
                 if (last instanceof ReturnInst) {
                     ListIterator<Instruction> retIt =
                         bb.getInstructions().listIterator(bb.getInstructions().size() - 1);
-                    LoadInst retLoad = new LoadInst(alloca, null);
-                    retLoad.setParent(bb);
-                    retIt.add(retLoad);
-                    func.resolveLocalName(retLoad);
-                    StoreInst retStore = new StoreInst(retLoad, gv, null);
-                    retStore.setParent(bb);
-                    retIt.add(retStore);
-                    protectedInsts.add(retStore);
+                    storeBackToScalar(gv, alloca, bb, retIt, func, protectedInsts);
                 }
             }
         }
 
         localizedInFunc.add(key);
         return true;
+    }
+
+    private void storeBackToScalar(GlobalVariable gv, AllocaInst alloca, BasicBlock bb, ListIterator<Instruction> it,
+        Function func, Set<Instruction> protectedInsts) {
+        LoadInst load = new LoadInst(alloca, null);
+        load.setParent(bb);
+        it.add(load);
+        func.resolveLocalName(load);
+        StoreInst store = new StoreInst(load, gv, null);
+        store.setParent(bb);
+        it.add(store);
+        protectedInsts.add(store);
+    }
+
+    private void reloadFromScalar(GlobalVariable gv, AllocaInst alloca, BasicBlock bb, ListIterator<Instruction> it,
+        Function func, Set<Instruction> protectedInsts) {
+        LoadInst load = new LoadInst(gv, null);
+        load.setParent(bb);
+        it.add(load);
+        func.resolveLocalName(load);
+        StoreInst store = new StoreInst(load, alloca, null);
+        store.setParent(bb);
+        it.add(store);
+        protectedInsts.add(load);
     }
 
     private boolean isScalarLocalized(GlobalVariable gv, Function func) {
@@ -432,35 +435,11 @@ public class GlobalLocalizationPass implements Pass {
                             AllocaInst alloca = entry_.getValue();
                             if (storeNeeded) {
                                 it.previous();
-                                LoadInst sLoad = new LoadInst(alloca, null);
-                                sLoad.setParent(bb);
-                                it.add(sLoad);
-                                func.resolveLocalName(sLoad);
-                                GetElementPtrInst sGep = new GetElementPtrInst(gv, indices, null);
-                                sGep.setParent(bb);
-                                it.add(sGep);
-                                func.resolveLocalName(sGep);
-                                StoreInst sStore = new StoreInst(sLoad, sGep, null);
-                                sStore.setParent(bb);
-                                it.add(sStore);
-                                protectedInsts.add(sGep);
-                                protectedInsts.add(sStore);
+                                storeBackToArray(gv, indices, alloca, bb, it, func, protectedInsts);
                                 it.next();
                             }
                             if (reloadNeeded) {
-                                GetElementPtrInst rGep = new GetElementPtrInst(gv, indices, null);
-                                rGep.setParent(bb);
-                                it.add(rGep);
-                                func.resolveLocalName(rGep);
-                                LoadInst rLoad = new LoadInst(rGep, null);
-                                rLoad.setParent(bb);
-                                it.add(rLoad);
-                                func.resolveLocalName(rLoad);
-                                StoreInst rStore = new StoreInst(rLoad, alloca, null);
-                                rStore.setParent(bb);
-                                it.add(rStore);
-                                protectedInsts.add(rGep);
-                                protectedInsts.add(rLoad);
+                                reloadFromArray(gv, indices, alloca, bb, it, func, protectedInsts);
                             }
                         }
                     }
@@ -477,24 +456,46 @@ public class GlobalLocalizationPass implements Pass {
                     for (Map.Entry<List<Value>, AllocaInst> entry_ : indexToAlloca.entrySet()) {
                         List<Value> indices = entry_.getKey();
                         AllocaInst alloca = entry_.getValue();
-                        LoadInst retLoad = new LoadInst(alloca, null);
-                        retLoad.setParent(bb);
-                        retIt.add(retLoad);
-                        func.resolveLocalName(retLoad);
-                        GetElementPtrInst retGep = new GetElementPtrInst(gv, indices, null);
-                        retGep.setParent(bb);
-                        retIt.add(retGep);
-                        func.resolveLocalName(retGep);
-                        StoreInst retStore = new StoreInst(retLoad, retGep, null);
-                        retStore.setParent(bb);
-                        retIt.add(retStore);
-                        protectedInsts.add(retGep);
-                        protectedInsts.add(retStore);
+                        storeBackToArray(gv, indices, alloca, bb, retIt, func, protectedInsts);
                     }
                 }
             }
         }
         return true;
+    }
+
+    private void storeBackToArray(GlobalVariable gv, List<Value> indices, AllocaInst alloca, BasicBlock bb,
+        ListIterator<Instruction> it, Function func, Set<Instruction> protectedInsts) {
+        LoadInst load = new LoadInst(alloca, null);
+        load.setParent(bb);
+        it.add(load);
+        func.resolveLocalName(load);
+        GetElementPtrInst gep = new GetElementPtrInst(gv, indices, null);
+        gep.setParent(bb);
+        it.add(gep);
+        func.resolveLocalName(gep);
+        StoreInst store = new StoreInst(load, gep, null);
+        store.setParent(bb);
+        it.add(store);
+        protectedInsts.add(gep);
+        protectedInsts.add(store);
+    }
+
+    private void reloadFromArray(GlobalVariable gv, List<Value> indices, AllocaInst alloca, BasicBlock bb,
+        ListIterator<Instruction> it, Function func, Set<Instruction> protectedInsts) {
+        GetElementPtrInst gep = new GetElementPtrInst(gv, indices, null);
+        gep.setParent(bb);
+        it.add(gep);
+        func.resolveLocalName(gep);
+        LoadInst load = new LoadInst(gep, null);
+        load.setParent(bb);
+        it.add(load);
+        func.resolveLocalName(load);
+        StoreInst store = new StoreInst(load, alloca, null);
+        store.setParent(bb);
+        it.add(store);
+        protectedInsts.add(gep);
+        protectedInsts.add(load);
     }
 
     private boolean hoistArrayBase(GlobalVariable gv, Function func, List<GetElementPtrInst> geps) {
