@@ -71,9 +71,11 @@ public class TailRecursionEliminationPass implements Pass {
         oldEntry.getInstructions().clear();
         for (Instruction inst : oldEntryInsts) {
             if (inst instanceof AllocaInst) {
-                oldEntry.addInstruction(inst);
+                oldEntry.getInstructions().add(inst);
+                inst.setParent(oldEntry);
             } else {
-                oldEntryBody.addInstruction(inst);
+                oldEntryBody.getInstructions().add(inst);
+                inst.setParent(oldEntryBody);
             }
         }
         oldEntry.addInstruction(new BrInst(treHeader, oldEntry));

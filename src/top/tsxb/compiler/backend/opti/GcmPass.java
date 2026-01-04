@@ -109,7 +109,8 @@ public class GcmPass implements Pass {
 
             if (inst.getParent() != best) {
                 inst.getParent().getInstructions().remove(inst);
-                best.addInstruction(inst);
+                best.getInstructions().add(inst);
+                inst.setParent(best);
                 changed = true;
             }
         }
@@ -141,12 +142,15 @@ public class GcmPass implements Pass {
 
             bb.getInstructions().clear();
             for (PhiInst phi : phis) {
-                bb.addInstruction(phi);
+                bb.getInstructions().add(phi);
+                phi.setParent(bb);
             }
 
             if (rest.isEmpty()) {
-                if (terminator != null)
-                    bb.addInstruction(terminator);
+                if (terminator != null) {
+                    bb.getInstructions().add(terminator);
+                    terminator.setParent(bb);
+                }
                 continue;
             }
 
@@ -190,7 +194,8 @@ public class GcmPass implements Pass {
 
             while (!ready.isEmpty()) {
                 Instruction curr = ready.poll();
-                bb.addInstruction(curr);
+                bb.getInstructions().add(curr);
+                curr.setParent(bb);
                 for (Instruction next : adj.get(curr)) {
                     inDegree.put(next, inDegree.get(next) - 1);
                     if (inDegree.get(next) == 0) {
@@ -203,13 +208,16 @@ public class GcmPass implements Pass {
             if (bb.getInstructions().size() < phis.size() + rest.size()) {
                 for (Instruction inst : rest) {
                     if (!bb.getInstructions().contains(inst)) {
-                        bb.addInstruction(inst);
+                        bb.getInstructions().add(inst);
+                        inst.setParent(bb);
                     }
                 }
             }
 
-            if (terminator != null)
-                bb.addInstruction(terminator);
+            if (terminator != null) {
+                bb.getInstructions().add(terminator);
+                terminator.setParent(bb);
+            }
         }
     }
 

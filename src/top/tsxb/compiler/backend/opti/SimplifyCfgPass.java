@@ -235,7 +235,7 @@ public class SimplifyCfgPass implements Pass {
                             }
                         }
                         target.getInstructions().remove(inst);
-                        bb.addInstruction(inst);
+                        bb.getInstructions().add(inst);
                         inst.setParent(bb);
                     }
 

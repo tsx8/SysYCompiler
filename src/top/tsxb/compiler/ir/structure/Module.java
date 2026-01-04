@@ -2,8 +2,10 @@ package top.tsxb.compiler.ir.structure;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import top.tsxb.compiler.ir.base.Value;
 import top.tsxb.compiler.ir.constant.ConstString;
@@ -13,6 +15,7 @@ public class Module {
     private final List<Function> functionList = new ArrayList<>();
     private final Map<String, GlobalValue> symbolMap = new HashMap<>();
     private final Map<String, Integer> globalNameMap = new HashMap<>();
+    private final Set<String> usedGlobalNames = new HashSet<>();
 
     public List<GlobalVariable> getGlobalList() {
         return globalList;
@@ -41,7 +44,7 @@ public class Module {
     public GlobalVariable createString(String literal) {
         ConstString constString = new ConstString(literal);
         GlobalVariable gv =
-            new GlobalVariable(".str", constString.getType(), true, constString, GlobalValue.Linkage.INTERNAL);
+        new GlobalVariable(".str", constString.getType(), true, constString, GlobalValue.Linkage.INTERNAL);
         addGlobalVariable(gv);
         return gv;
     }
@@ -50,15 +53,23 @@ public class Module {
         String originalName = value.getName();
         if (originalName == null || originalName.isEmpty()) {
             originalName = "anonymous";
-            value.setName(originalName);
         }
-        if (globalNameMap.containsKey(originalName)) {
-            int count = globalNameMap.get(originalName);
-            value.setName(originalName + "." + count);
-            globalNameMap.put(originalName, count + 1);
+
+        String candidate = originalName;
+        if (usedGlobalNames.contains(candidate)) {
+            int count = globalNameMap.getOrDefault(originalName, 1);
+            do {
+                candidate = originalName + "." + count;
+                count++;
+            } while (usedGlobalNames.contains(candidate));
+            globalNameMap.put(originalName, count);
         } else {
-            globalNameMap.put(originalName, 1);
+            if (!globalNameMap.containsKey(originalName)) {
+                globalNameMap.put(originalName, 1);
+            }
         }
+        value.setName(candidate);
+        usedGlobalNames.add(candidate);
     }
 
     @Override

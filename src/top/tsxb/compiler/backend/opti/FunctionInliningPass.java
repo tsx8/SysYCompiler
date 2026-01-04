@@ -139,7 +139,8 @@ public class FunctionInliningPass implements Pass {
         bbInsts.subList(callIdx, bbInsts.size()).clear();
 
         for (Instruction inst : afterInsts) {
-            afterBlock.addInstruction(inst);
+            afterBlock.getInstructions().add(inst);
+            inst.setParent(afterBlock);
         }
 
         Map<Value, Value> valueMap = new LinkedHashMap<>();

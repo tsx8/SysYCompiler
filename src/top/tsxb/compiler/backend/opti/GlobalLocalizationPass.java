@@ -192,6 +192,7 @@ public class GlobalLocalizationPass implements Pass {
         int idx = entry.getInstructions().indexOf(alloca);
         entry.getInstructions().add(idx + 1, entryLoad);
         entryLoad.setParent(entry);
+        func.resolveLocalName(entryLoad);
         entry.getInstructions().add(idx + 2, entryStore);
         entryStore.setParent(entry);
 
@@ -214,6 +215,7 @@ public class GlobalLocalizationPass implements Pass {
                         LoadInst sLoad = new LoadInst(alloca, null);
                         sLoad.setParent(bb);
                         it.add(sLoad);
+                        func.resolveLocalName(sLoad);
                         StoreInst sStore = new StoreInst(sLoad, gv, null);
                         sStore.setParent(bb);
                         it.add(sStore);
@@ -225,6 +227,7 @@ public class GlobalLocalizationPass implements Pass {
                         LoadInst rLoad = new LoadInst(gv, null);
                         rLoad.setParent(bb);
                         it.add(rLoad);
+                        func.resolveLocalName(rLoad);
                         StoreInst rStore = new StoreInst(rLoad, alloca, null);
                         rStore.setParent(bb);
                         it.add(rStore);
@@ -251,6 +254,7 @@ public class GlobalLocalizationPass implements Pass {
                     LoadInst retLoad = new LoadInst(alloca, null);
                     retLoad.setParent(bb);
                     retIt.add(retLoad);
+                    func.resolveLocalName(retLoad);
                     StoreInst retStore = new StoreInst(retLoad, gv, null);
                     retStore.setParent(bb);
                     retIt.add(retStore);
@@ -386,8 +390,10 @@ public class GlobalLocalizationPass implements Pass {
             int idx = entry.getInstructions().indexOf(alloca);
             entry.getInstructions().add(idx + 1, tempGep);
             tempGep.setParent(entry);
+            func.resolveLocalName(tempGep);
             entry.getInstructions().add(idx + 2, load);
             load.setParent(entry);
+            func.resolveLocalName(load);
             entry.getInstructions().add(idx + 3, store);
             store.setParent(entry);
             protectedInsts.add(tempGep);
@@ -429,9 +435,11 @@ public class GlobalLocalizationPass implements Pass {
                                 LoadInst sLoad = new LoadInst(alloca, null);
                                 sLoad.setParent(bb);
                                 it.add(sLoad);
+                                func.resolveLocalName(sLoad);
                                 GetElementPtrInst sGep = new GetElementPtrInst(gv, indices, null);
                                 sGep.setParent(bb);
                                 it.add(sGep);
+                                func.resolveLocalName(sGep);
                                 StoreInst sStore = new StoreInst(sLoad, sGep, null);
                                 sStore.setParent(bb);
                                 it.add(sStore);
@@ -443,9 +451,11 @@ public class GlobalLocalizationPass implements Pass {
                                 GetElementPtrInst rGep = new GetElementPtrInst(gv, indices, null);
                                 rGep.setParent(bb);
                                 it.add(rGep);
+                                func.resolveLocalName(rGep);
                                 LoadInst rLoad = new LoadInst(rGep, null);
                                 rLoad.setParent(bb);
                                 it.add(rLoad);
+                                func.resolveLocalName(rLoad);
                                 StoreInst rStore = new StoreInst(rLoad, alloca, null);
                                 rStore.setParent(bb);
                                 it.add(rStore);
@@ -470,9 +480,11 @@ public class GlobalLocalizationPass implements Pass {
                         LoadInst retLoad = new LoadInst(alloca, null);
                         retLoad.setParent(bb);
                         retIt.add(retLoad);
+                        func.resolveLocalName(retLoad);
                         GetElementPtrInst retGep = new GetElementPtrInst(gv, indices, null);
                         retGep.setParent(bb);
                         retIt.add(retGep);
+                        func.resolveLocalName(retGep);
                         StoreInst retStore = new StoreInst(retLoad, retGep, null);
                         retStore.setParent(bb);
                         retIt.add(retStore);
@@ -498,6 +510,7 @@ public class GlobalLocalizationPass implements Pass {
         }
         entry.getInstructions().add(insertIdx, baseGep);
         baseGep.setParent(entry);
+        func.resolveLocalName(baseGep);
 
         boolean changed = false;
         for (GetElementPtrInst gep : geps) {
@@ -509,6 +522,7 @@ public class GlobalLocalizationPass implements Pass {
             }
             GetElementPtrInst newGep = new GetElementPtrInst(baseGep, newIndices, null);
             newGep.setParent(gep.getParent());
+            func.resolveLocalName(newGep);
             gep.replaceAllUsesWith(newGep);
             int idx = gep.getParent().getInstructions().indexOf(gep);
             gep.getParent().getInstructions().set(idx, newGep);
