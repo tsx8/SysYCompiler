@@ -9,6 +9,7 @@
 
 ## CHANGELOG
 
+- [2026.01.04] Finished opti part.
 - [2025.12.31] Finished mips part.
 - [2025.12.07] Finished llvm_ir part.
 - [2025.11.06] Finished semantic part.
