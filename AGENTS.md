@@ -6,18 +6,19 @@ This document provides essential information for contributors to the SysYCompile
 
 The compiler is organized into a multi-stage pipeline:
 
-- `src/top/tsxb/compiler/`:
+- [src/top/tsxb/compiler/](src/top/tsxb/compiler/):
     - `frontend/`: Lexer, Parser (CST), and Semantic Analysis (AST/Symbol Table).
     - `ir/`: SSA-based Intermediate Representation definitions.
     - `backend/`: LLVM IR generation, MIPS code generation, and optimization passes.
+    - `common/`: Shared utilities and base classes.
     - `driver/`: Entry point ([Compiler.java](src/top/tsxb/compiler/driver/Compiler.java)) and pipeline management.
-- `test/`: Test framework source code.
-- `testcases/`: Organized by stage (e.g., `lexer/`, `llvm/`, `mips/`).
-- `assets/`: Grammar definitions (`SysY.g4`), runtime library (`libsysy/`), MIPS simulator (`mars.jar`) and informations about every homework.
+- [test/](test/): Custom testing framework source code.
+- [testcases/](testcases/): Test cases organized by stage (e.g., `lexer/`, `llvm/`, `mips/`).
+- [assets/](assets/): Grammar definitions (`SysY.g4`), runtime library (`libsysy/`), MIPS simulator (`mars.jar`), and homework specifications.
 
 ## Build, Test, and Development Commands
 
-The project uses raw `javac` for compilation. Always run specific test first to avoid long time testing.
+The project uses raw `javac` for compilation.
 
 - **Compile Source**:
   ```powershell
@@ -39,20 +40,22 @@ The project uses raw `javac` for compilation. Always run specific test first to 
 ## Coding Style & Naming Conventions
 
 - **Language**: Java 8+.
-- **Naming**: Use `PascalCase` for classes and `camelCase` for methods and variables.
+- **Indentation**: 4 spaces.
+- **Naming**: `PascalCase` for classes, `camelCase` for methods and variables.
 - **Patterns**: Strictly follow the **Visitor Pattern** for CST (`CstVisitor`) and AST (`AstVisitor`) traversals.
-- **Error Handling**: Use `ErrorReporter` for diagnostics instead of throwing exceptions for user-level errors.
-- **Determinism**: Ensure all optimization passes are deterministic. Avoid using `HashSet` or `HashMap` when iterating over IR elements (e.g., instructions, blocks, functions); use `LinkedHashSet` or `LinkedHashMap` instead to maintain consistent iteration order and avoid performance fluctuations.
+- **Error Handling**: Use `ErrorReporter` for diagnostics; avoid throwing exceptions for user-level errors.
+- **Determinism**: Use `LinkedHashSet` or `LinkedHashMap` when iterating over IR elements (instructions, blocks, functions) to ensure consistent optimization results and avoid performance fluctuations.
 
 ## Testing Guidelines
 
-- **Framework**: Custom testing suite in `top.tsxb.compiler.CompilerTest`.
-- **Coverage**: Ensure new features pass all relevant cases in `testcases/`.
-- **Caveat**: Avoid parallel testing if using `mars.jar` due to known timeout issues.
+- **Framework**: Custom suite in [CompilerTest.java](test/top/tsxb/compiler/CompilerTest.java).
+- **Coverage**: Ensure new features pass all relevant cases in [testcases/](testcases/).
+- **Execution**: Always run specific tests first to verify local changes before running the full suite.
+- **Caveat**: Avoid parallel testing when using `mars.jar` due to known timeout issues.
 
 ## Commit & Pull Request Guidelines
 
-- **Commit Messages**: Always use English. Follow the `type: description` convention:
+- **Commit Messages**: Use English and follow the `type: description` convention:
     - `feat`: New features.
     - `fix`: Bug fixes.
     - `perf`: Optimization changes.
@@ -63,4 +66,4 @@ The project uses raw `javac` for compilation. Always run specific test first to 
 
 ## Architecture Overview
 
-The compiler follows a standard frontend-middle-backend split. The middle-end performs SSA-based optimizations (Mem2Reg, GVN, DCE, etc.) managed by `PassManager`. The backend targets MIPS with graph-coloring register allocation and peephole optimizations.
+The compiler features a standard frontend-middle-backend split. The middle-end performs SSA-based optimizations (Mem2Reg, GVN, DCE, etc.) managed by `PassManager`. The backend targets MIPS with graph-coloring register allocation and peephole optimizations.
