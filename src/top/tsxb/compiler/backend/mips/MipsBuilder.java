@@ -345,6 +345,16 @@ public class MipsBuilder {
         calculateStackFrame(func);
         computePredecessors(func);
 
+        emitPrologue(func);
+        // Load global addresses into assigned registers
+        for (Map.Entry<Value, MipsRegister> entry : regMapping.entrySet()) {
+            if (entry.getKey() instanceof GlobalVariable gv) {
+                String regName = entry.getValue().getName();
+                invalidateCache(regName);
+                currentSb.append("    la ").append(regName).append(", ").append(getLabel(gv)).append("\n");
+            }
+        }
+
         // Move arguments 0-3 to caller-saved registers
         List<Argument> args = func.getArguments();
         for (int i = 0; i < Math.min(args.size(), 4); i++) {
@@ -362,32 +372,6 @@ public class MipsBuilder {
             BasicBlock bb = blocks.get(i);
             currentBlock = bb;
             BasicBlock nextBb = (i + 1 < blocks.size()) ? blocks.get(i + 1) : null;
-
-            if (frameRegion.contains(bb)) {
-                boolean hasEntryFromOutside = false;
-                if (bb == func.getBasicBlocks().get(0)) {
-                    hasEntryFromOutside = true;
-                } else {
-                    for (BasicBlock pred : predecessorsMap.get(bb)) {
-                        if (!frameRegion.contains(pred)) {
-                            hasEntryFromOutside = true;
-                            break;
-                        }
-                    }
-                }
-                if (hasEntryFromOutside) {
-                    currentSb.append(getLabel(bb)).append("_prologue:\n");
-                    emitPrologue(func);
-                    // Load global addresses into assigned registers
-                    for (Map.Entry<Value, MipsRegister> entry : regMapping.entrySet()) {
-                        if (entry.getKey() instanceof GlobalVariable gv) {
-                            String regName = entry.getValue().getName();
-                            invalidateCache(regName);
-                            currentSb.append("    la ").append(regName).append(", ").append(getLabel(gv)).append("\n");
-                        }
-                    }
-                }
-            }
 
             currentSb.append(getLabel(bb)).append(":\n");
             globalAddrCache.clear();
@@ -490,29 +474,9 @@ public class MipsBuilder {
         return false;
     }
 
-    private void calculateFrameRegion(Function func) {
-        frameRegion.clear();
-        Set<BasicBlock> initial = new LinkedHashSet<>();
-        for (BasicBlock bb : func.getBasicBlocks()) {
-            if (blockNeedsFrame(func, bb)) {
-                initial.add(bb);
-            }
-        }
-        frameRegion.addAll(initial);
-        Queue<BasicBlock> queue = new LinkedList<>(initial);
-        while (!queue.isEmpty()) {
-            BasicBlock curr = queue.poll();
-            for (BasicBlock succ : getSuccessors(curr)) {
-                if (frameRegion.add(succ)) {
-                    queue.add(succ);
-                }
-            }
-        }
-    }
-
     private void updateIsLeaf() {
         isLeaf = true;
-        for (BasicBlock bb : frameRegion) {
+        for (BasicBlock bb : currentFunction.getBasicBlocks()) {
             for (Instruction inst : bb.getInstructions()) {
                 if (inst instanceof CallInst) {
                     isLeaf = false;
@@ -522,10 +486,7 @@ public class MipsBuilder {
         }
     }
 
-    private String getJumpTarget(BasicBlock current, BasicBlock target) {
-        if (frameRegion.contains(target) && !frameRegion.contains(current)) {
-            return getLabel(target) + "_prologue";
-        }
+    private String getJumpTarget(BasicBlock target) {
         return getLabel(target);
     }
 
@@ -600,7 +561,6 @@ public class MipsBuilder {
             }
         }
 
-        calculateFrameRegion(func);
         updateIsLeaf();
 
         int localsSize = offset;
@@ -670,20 +630,6 @@ public class MipsBuilder {
         } else if (val instanceof AllocaInst alloca) {
             int dataOffset = getAllocaDataOffset(alloca);
             addI(reg, "$sp", dataOffset + spShift);
-        } else if (val instanceof Argument arg && !frameRegion.contains(currentBlock)) {
-            int argIndex = currentFunction.getArguments().indexOf(arg);
-            if (argIndex < 4) {
-                if (!reg.equals("$a" + argIndex)) {
-                    invalidateCache(reg);
-                    currentSb.append("    move ").append(reg).append(", $a").append(argIndex).append("\n");
-                }
-                return;
-            }
-            Integer offset = stackOffsets.get(val);
-            if (offset == null) {
-                throw new RuntimeException("Value not found in stack or register: " + val);
-            }
-            loadStack(reg, offset + spShift);
         } else if (regMapping.containsKey(val)) {
             MipsRegister srcReg = regMapping.get(val);
             if (!srcReg.getName().equals(reg)) {
@@ -720,17 +666,6 @@ public class MipsBuilder {
         } else if (val instanceof AllocaInst alloca) {
             int dataOffset = getAllocaDataOffset(alloca);
             addI(tempReg, "$sp", dataOffset + spShift);
-            return tempReg;
-        } else if (val instanceof Argument arg && !frameRegion.contains(currentBlock)) {
-            int argIndex = currentFunction.getArguments().indexOf(arg);
-            if (argIndex < 4) {
-                return "$a" + argIndex;
-            }
-            Integer offset = stackOffsets.get(val);
-            if (offset == null) {
-                throw new RuntimeException("Value not found in stack or register: " + val);
-            }
-            loadStack(tempReg, offset + spShift);
             return tempReg;
         } else if (regMapping.containsKey(val)) {
             return regMapping.get(val).getName();
@@ -1209,7 +1144,7 @@ public class MipsBuilder {
 
     private void emitConditionalBranch(IcmpInst icmp, String r0, String r1, boolean jumpIfTrue, BasicBlock target,
         boolean hasPhis, BasicBlock current) {
-        String label = getJumpTarget(current, target);
+        String label = getJumpTarget(target);
         String branchLabel = label;
         if (hasPhis) {
             branchLabel = "br_bridge_" + (brCounter++);
@@ -1240,9 +1175,9 @@ public class MipsBuilder {
             BasicBlock target = (BasicBlock)inst.getOperand(0);
             fillPhis(inst.getParent(), target);
             if (target != nextBb) {
-                currentSb.append("    j ").append(getJumpTarget(inst.getParent(), target)).append("\n");
+                currentSb.append("    j ").append(getJumpTarget(target)).append("\n");
             } else if (frameRegion.contains(target) && !frameRegion.contains(inst.getParent())) {
-                currentSb.append("    j ").append(getJumpTarget(inst.getParent(), target)).append("\n");
+                currentSb.append("    j ").append(getJumpTarget(target)).append("\n");
             }
         } else {
             Value cond = inst.getOperand(0);
@@ -1271,7 +1206,7 @@ public class MipsBuilder {
                 // Fall through to False
                 emitConditionalBranch(icmp, r0, r1, true, targetTrue, phisTrue, inst.getParent());
                 if (frameRegion.contains(targetFalse) && !frameRegion.contains(inst.getParent())) {
-                    currentSb.append("    j ").append(getJumpTarget(inst.getParent(), targetFalse)).append("\n");
+                    currentSb.append("    j ").append(getJumpTarget(targetFalse)).append("\n");
                 } else {
                     fillPhis(inst.getParent(), targetFalse);
                 }
@@ -1279,7 +1214,7 @@ public class MipsBuilder {
                 // Fall through to True
                 emitConditionalBranch(icmp, r0, r1, false, targetFalse, phisFalse, inst.getParent());
                 if (frameRegion.contains(targetTrue) && !frameRegion.contains(inst.getParent())) {
-                    currentSb.append("    j ").append(getJumpTarget(inst.getParent(), targetTrue)).append("\n");
+                    currentSb.append("    j ").append(getJumpTarget(targetTrue)).append("\n");
                 } else {
                     fillPhis(inst.getParent(), targetTrue);
                 }
@@ -1287,7 +1222,7 @@ public class MipsBuilder {
                 // Neither is next
                 emitConditionalBranch(icmp, r0, r1, false, targetFalse, phisFalse, inst.getParent());
                 fillPhis(inst.getParent(), targetTrue);
-                currentSb.append("    j ").append(getJumpTarget(inst.getParent(), targetTrue)).append("\n");
+                currentSb.append("    j ").append(getJumpTarget(targetTrue)).append("\n");
             }
         }
     }
@@ -1388,7 +1323,7 @@ public class MipsBuilder {
             loadValue(inst.getOperand(0), "$v0");
         }
 
-        if (frameRegion.contains(inst.getParent()) && currentStackSize > 0) {
+        if (currentStackSize > 0) {
             // Restore callee-saved registers
             int regOffset = currentStackSize - (isLeaf ? 4 : 8);
             for (MipsRegister reg : usedCalleeSaved) {
