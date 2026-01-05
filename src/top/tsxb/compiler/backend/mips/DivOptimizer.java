@@ -8,13 +8,12 @@ public final class DivOptimizer {
             throw new IllegalArgumentException("Division by zero");
         }
         long ad = Math.abs((long)d);
-        long two31 = 1L << 31;
-        long t = two31;
+        long t = 1L << 31;
         long anc = t - 1 - (t % ad);
-        long q1 = two31 / anc;
-        long r1 = two31 - q1 * anc;
-        long q2 = two31 / ad;
-        long r2 = two31 - q2 * ad;
+        long q1 = t / anc;
+        long r1 = t - q1 * anc;
+        long q2 = t / ad;
+        long r2 = t - q2 * ad;
         long p = 31;
         long delta;
         do {

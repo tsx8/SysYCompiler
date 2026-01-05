@@ -1,6 +1,10 @@
 package top.tsxb.compiler.backend.opti;
 
 import java.util.ArrayList;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -24,18 +28,20 @@ public class FunctionInliningPass implements Pass {
     public boolean run(Module module) {
         boolean changed = false;
         Set<Function> recursiveFunctions = findRecursiveFunctions(module);
+        Map<Function, Integer> instCountByFunction = countInstructions(module);
         List<Function> functions = new ArrayList<>(module.getFunctionList());
         for (Function caller : functions) {
             if (caller.isDeclaration())
                 continue;
-            if (inlineInFunction(caller, recursiveFunctions)) {
+            if (inlineInFunction(caller, recursiveFunctions, instCountByFunction)) {
                 changed = true;
             }
         }
         return changed;
     }
 
-    private boolean inlineInFunction(Function caller, Set<Function> recursiveFunctions) {
+    private boolean inlineInFunction(Function caller, Set<Function> recursiveFunctions,
+        Map<Function, Integer> instCountByFunction) {
         boolean changed = false;
         boolean localChanged = true;
         while (localChanged) {
@@ -46,7 +52,7 @@ public class FunctionInliningPass implements Pass {
                 for (Instruction inst : instructions) {
                     if (inst instanceof CallInst call) {
                         Function callee = (Function)call.getOperand(0);
-                        if (shouldInline(call, callee, recursiveFunctions)) {
+                        if (shouldInline(call, callee, recursiveFunctions, instCountByFunction)) {
                             inlineCall(caller, bb, call, callee);
                             changed = true;
                             localChanged = true;
@@ -61,7 +67,8 @@ public class FunctionInliningPass implements Pass {
         return changed;
     }
 
-    private boolean shouldInline(CallInst call, Function callee, Set<Function> recursiveFunctions) {
+    private boolean shouldInline(CallInst call, Function callee, Set<Function> recursiveFunctions,
+        Map<Function, Integer> instCountByFunction) {
         if (callee.isDeclaration())
             return false;
         if (callee.getName().equals("main"))
@@ -76,10 +83,7 @@ public class FunctionInliningPass implements Pass {
             }
         }
 
-        int instCount = 0;
-        for (BasicBlock bb : callee.getBasicBlocks()) {
-            instCount += bb.getInstructions().size();
-        }
+        int instCount = instCountByFunction.getOrDefault(callee, 0);
 
         if (recursive) {
             return allConst && instCount < MAX_RECURSIVE_INLINE_SIZE;
@@ -88,10 +92,22 @@ public class FunctionInliningPass implements Pass {
         return instCount < MAX_INLINE_SIZE;
     }
 
-    private Set<Function> findRecursiveFunctions(Module module) {
-        Set<Function> recursiveFunctions = new LinkedHashSet<>();
-        Map<Function, Set<Function>> callGraph = new LinkedHashMap<>();
+    private Map<Function, Integer> countInstructions(Module module) {
+        Map<Function, Integer> instCount = new LinkedHashMap<>();
+        for (Function f : module.getFunctionList()) {
+            if (f.isDeclaration())
+                continue;
+            int count = 0;
+            for (BasicBlock bb : f.getBasicBlocks()) {
+                count += bb.getInstructions().size();
+            }
+            instCount.put(f, count);
+        }
+        return instCount;
+    }
 
+    private Set<Function> findRecursiveFunctions(Module module) {
+        Map<Function, Set<Function>> callGraph = new LinkedHashMap<>();
         for (Function f : module.getFunctionList()) {
             if (f.isDeclaration())
                 continue;
@@ -99,35 +115,73 @@ public class FunctionInliningPass implements Pass {
             for (BasicBlock bb : f.getBasicBlocks()) {
                 for (Instruction inst : bb.getInstructions()) {
                     if (inst instanceof CallInst call) {
-                        callees.add((Function)call.getOperand(0));
+                        Function callee = (Function)call.getOperand(0);
+                        if (!callee.isDeclaration()) {
+                            callees.add(callee);
+                        }
                     }
                 }
             }
             callGraph.put(f, callees);
         }
 
+        return computeRecursiveFunctionsByScc(callGraph);
+    }
+
+    private Set<Function> computeRecursiveFunctionsByScc(Map<Function, Set<Function>> callGraph) {
+        Set<Function> recursiveFunctions = new LinkedHashSet<>();
+
+        Map<Function, Integer> index = new IdentityHashMap<>();
+        Map<Function, Integer> lowlink = new IdentityHashMap<>();
+        Deque<Function> stack = new ArrayDeque<>();
+        Set<Function> onStack = Collections.newSetFromMap(new IdentityHashMap<>());
+        int[] nextIndex = new int[] {0};
+
         for (Function f : callGraph.keySet()) {
-            if (hasPath(f, f, callGraph, new LinkedHashSet<>())) {
-                recursiveFunctions.add(f);
+            if (!index.containsKey(f)) {
+                strongConnect(f, callGraph, index, lowlink, stack, onStack, nextIndex, recursiveFunctions);
             }
         }
+
         return recursiveFunctions;
     }
 
-    private boolean hasPath(Function start, Function target, Map<Function, Set<Function>> graph,
-        Set<Function> visited) {
-        Set<Function> callees = graph.get(start);
-        if (callees == null)
-            return false;
-        for (Function callee : callees) {
-            if (callee == target)
-                return true;
-            if (visited.add(callee)) {
-                if (hasPath(callee, target, graph, visited))
-                    return true;
+    private void strongConnect(Function v, Map<Function, Set<Function>> callGraph, Map<Function, Integer> index,
+        Map<Function, Integer> lowlink, Deque<Function> stack, Set<Function> onStack, int[] nextIndex,
+        Set<Function> recursiveFunctions) {
+        index.put(v, nextIndex[0]);
+        lowlink.put(v, nextIndex[0]);
+        nextIndex[0]++;
+        stack.push(v);
+        onStack.add(v);
+
+        for (Function w : callGraph.getOrDefault(v, Set.of())) {
+            if (!index.containsKey(w)) {
+                strongConnect(w, callGraph, index, lowlink, stack, onStack, nextIndex, recursiveFunctions);
+                lowlink.put(v, Math.min(lowlink.get(v), lowlink.get(w)));
+            } else if (onStack.contains(w)) {
+                lowlink.put(v, Math.min(lowlink.get(v), index.get(w)));
             }
         }
-        return false;
+
+        if (lowlink.get(v).equals(index.get(v))) {
+            List<Function> scc = new ArrayList<>();
+            Function w;
+            do {
+                w = stack.pop();
+                onStack.remove(w);
+                scc.add(w);
+            } while (w != v);
+
+            if (scc.size() > 1) {
+                recursiveFunctions.addAll(scc);
+            } else {
+                Function single = scc.get(0);
+                if (callGraph.getOrDefault(single, Set.of()).contains(single)) {
+                    recursiveFunctions.add(single);
+                }
+            }
+        }
     }
 
     private void inlineCall(Function caller, BasicBlock bb, CallInst call, Function callee) {

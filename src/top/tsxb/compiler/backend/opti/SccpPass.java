@@ -65,6 +65,8 @@ public class SccpPass implements Pass {
         while (!cfgWorklist.isEmpty() || !ssaWorklist.isEmpty()) {
             if (!cfgWorklist.isEmpty()) {
                 BasicBlock bb = cfgWorklist.poll();
+                if (bb == null)
+                    continue;
                 if (reachableBlocks.contains(bb))
                     continue;
                 reachableBlocks.add(bb);
@@ -168,24 +170,36 @@ public class SccpPass implements Pass {
 
     private void visitBr(BrInst br) {
         if (br.getNumOperands() == 1) {
-            BasicBlock dest = (BasicBlock)br.getOperand(0);
-            addEdge(br.getParent(), dest);
+            if (br.getOperand(0) instanceof BasicBlock dest) {
+                addEdge(br.getParent(), dest);
+            }
         } else {
             LatticeValue cond = getLatticeValue(br.getOperand(0));
             if (cond.status() == LatticeStatus.CONSTANT) {
                 if (cond.value() != 0) {
-                    addEdge(br.getParent(), (BasicBlock)br.getOperand(1));
+                    if (br.getOperand(1) instanceof BasicBlock dest) {
+                        addEdge(br.getParent(), dest);
+                    }
                 } else {
-                    addEdge(br.getParent(), (BasicBlock)br.getOperand(2));
+                    if (br.getOperand(2) instanceof BasicBlock dest) {
+                        addEdge(br.getParent(), dest);
+                    }
                 }
             } else if (cond.status() == LatticeStatus.BOTTOM) {
-                addEdge(br.getParent(), (BasicBlock)br.getOperand(1));
-                addEdge(br.getParent(), (BasicBlock)br.getOperand(2));
+                if (br.getOperand(1) instanceof BasicBlock destTrue) {
+                    addEdge(br.getParent(), destTrue);
+                }
+                if (br.getOperand(2) instanceof BasicBlock destFalse) {
+                    addEdge(br.getParent(), destFalse);
+                }
             }
         }
     }
 
     private void addEdge(BasicBlock from, BasicBlock to) {
+        if (from == null || to == null) {
+            return;
+        }
         Edge edge = new Edge(from, to);
         if (!executableEdges.contains(edge)) {
             executableEdges.add(edge);
@@ -211,10 +225,12 @@ public class SccpPass implements Pass {
             for (Instruction inst : insts) {
                 LatticeValue lv = getLatticeValue(inst);
                 if (lv.status() == LatticeStatus.CONSTANT) {
-                    inst.replaceAllUsesWith(new ConstInt((IntType)inst.getType(), lv.value()));
-                    inst.dropAllReferences();
-                    bb.getInstructions().remove(inst);
-                    changed = true;
+                    if (inst.getType() instanceof IntType intType) {
+                        inst.replaceAllUsesWith(new ConstInt(intType, lv.value()));
+                        inst.dropAllReferences();
+                        bb.getInstructions().remove(inst);
+                        changed = true;
+                    }
                 }
             }
         }
@@ -227,7 +243,10 @@ public class SccpPass implements Pass {
             if (last instanceof BrInst br && br.getNumOperands() == 3) {
                 LatticeValue cond = getLatticeValue(br.getOperand(0));
                 if (cond.status() == LatticeStatus.CONSTANT) {
-                    BasicBlock dest = (BasicBlock)(cond.value() != 0 ? br.getOperand(1) : br.getOperand(2));
+                    Value chosen = cond.value() != 0 ? br.getOperand(1) : br.getOperand(2);
+                    if (!(chosen instanceof BasicBlock dest)) {
+                        continue;
+                    }
 
                     // Replace with unconditional branch
                     br.dropAllReferences();

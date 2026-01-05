@@ -53,6 +53,7 @@ public class GvnPass implements Pass {
     private boolean runOnFunction(Function function) {
         if (function.getBasicBlocks().isEmpty())
             return false;
+        this.singleStoreAllocaValue = collectSingleStoreAllocaValue(function);
         DominatorAnalysis.DominatorInfo domInfo = DominatorAnalysis.computeDominators(function);
         return runOnDomTree(function.getBasicBlocks().get(0), new LinkedHashMap<>(), new LinkedHashMap<>(), domInfo);
     }
@@ -70,21 +71,25 @@ public class GvnPass implements Pass {
             // Memory Forwarding
             if (inst.getOpCode() == OpCode.LOAD) {
                 Value ptr = getCanonical(inst.getOperand(0));
-                if (localMemoryTable.containsKey(ptr)) {
-                    Value existing = getCanonical(localMemoryTable.get(ptr));
-                    inst.replaceAllUsesWith(existing);
-                    replacementMap.put(inst, existing);
-                    it.remove();
-                    changed = true;
-                    continue;
-                } else {
-                    localMemoryTable.put(ptr, inst);
+                if (!isVolatilePointer(ptr)) {
+                    if (localMemoryTable.containsKey(ptr)) {
+                        Value existing = getCanonical(localMemoryTable.get(ptr));
+                        inst.replaceAllUsesWith(existing);
+                        replacementMap.put(inst, existing);
+                        it.remove();
+                        changed = true;
+                        continue;
+                    } else {
+                        localMemoryTable.put(ptr, inst);
+                    }
                 }
             } else if (inst.getOpCode() == OpCode.STORE) {
                 localMemoryTable.clear();
                 Value val = getCanonical(inst.getOperand(0));
                 Value ptr = getCanonical(inst.getOperand(1));
-                localMemoryTable.put(ptr, val);
+                if (!isVolatilePointer(ptr)) {
+                    localMemoryTable.put(ptr, val);
+                }
             } else if (inst.getOpCode() == OpCode.CALL) {
                 if (!isPureCall(inst)) {
                     localMemoryTable.clear();

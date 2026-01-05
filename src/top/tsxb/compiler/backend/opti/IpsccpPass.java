@@ -100,6 +100,8 @@ public class IpsccpPass implements Pass {
         while (!flowWorklist.isEmpty() || !ssaWorklist.isEmpty()) {
             while (!flowWorklist.isEmpty()) {
                 BasicBlock bb = flowWorklist.poll();
+                if (bb == null)
+                    continue;
                 if (reachableBlocks.contains(bb))
                     continue;
                 reachableBlocks.add(bb);
@@ -206,7 +208,8 @@ public class IpsccpPass implements Pass {
         if (br.getNumOperands() == 3) {
             LatticeValue cond = getLatticeValue(br.getOperand(0));
             if (cond.status() == LatticeStatus.CONSTANT) {
-                BasicBlock target = cond.value() != 0 ? (BasicBlock)br.getOperand(1) : (BasicBlock)br.getOperand(2);
+                BasicBlock target =
+                    cond.value() != 0 ? (BasicBlock)br.getOperand(1) : (BasicBlock)br.getOperand(2);
                 markEdgeExecutable(br.getParent(), target);
             } else if (cond.status() == LatticeStatus.BOTTOM) {
                 markEdgeExecutable(br.getParent(), (BasicBlock)br.getOperand(1));
@@ -218,6 +221,9 @@ public class IpsccpPass implements Pass {
     }
 
     private void markEdgeExecutable(BasicBlock from, BasicBlock to) {
+        if (from == null || to == null) {
+            return;
+        }
         Edge edge = new Edge(from, to);
         if (!executableEdges.contains(edge)) {
             executableEdges.add(edge);
@@ -472,8 +478,10 @@ public class IpsccpPass implements Pass {
             for (Argument arg : func.getArguments()) {
                 LatticeValue lv = getLatticeValue(arg);
                 if (lv.status() == LatticeStatus.CONSTANT) {
-                    arg.replaceAllUsesWith(new ConstInt((IntType)arg.getType(), lv.value()));
-                    changed = true;
+                    if (arg.getType() instanceof IntType intType) {
+                        arg.replaceAllUsesWith(new ConstInt(intType, lv.value()));
+                        changed = true;
+                    }
                 }
             }
 
@@ -483,7 +491,9 @@ public class IpsccpPass implements Pass {
                     LatticeValue lv = getLatticeValue(inst);
                     if (lv.status() == LatticeStatus.CONSTANT) {
                         if (!(inst instanceof BrInst) && !(inst instanceof ReturnInst)) {
-                            inst.replaceAllUsesWith(new ConstInt((IntType)inst.getType(), lv.value()));
+                            if (inst.getType() instanceof IntType intType) {
+                                inst.replaceAllUsesWith(new ConstInt(intType, lv.value()));
+                            }
                             boolean canRemove = true;
                             if (inst instanceof CallInst call) {
                                 Function callee = (Function)call.getOperand(0);

@@ -144,20 +144,35 @@ public class DominatorAnalysis {
     public static List<BasicBlock> getReversePostOrder(BasicBlock entry, Map<BasicBlock, List<BasicBlock>> successors) {
         List<BasicBlock> postOrder = new ArrayList<>();
         Set<BasicBlock> visited = new LinkedHashSet<>();
-        dfsPostOrder(entry, successors, visited, postOrder);
+        dfsPostOrderIterative(entry, successors, visited, postOrder);
         Collections.reverse(postOrder);
         return postOrder;
     }
 
-    private static void dfsPostOrder(BasicBlock block, Map<BasicBlock, List<BasicBlock>> successors,
+    private static void dfsPostOrderIterative(BasicBlock entry, Map<BasicBlock, List<BasicBlock>> successors,
         Set<BasicBlock> visited, List<BasicBlock> postOrder) {
-        visited.add(block);
-        for (BasicBlock succ : successors.getOrDefault(block, List.of())) {
-            if (!visited.contains(succ)) {
-                dfsPostOrder(succ, successors, visited, postOrder);
-            }
+        record Frame(BasicBlock block, int nextSuccIndex) {
         }
-        postOrder.add(block);
+
+        List<Frame> stack = new ArrayList<>();
+        visited.add(entry);
+        stack.add(new Frame(entry, 0));
+
+        while (!stack.isEmpty()) {
+            Frame top = stack.get(stack.size() - 1);
+            List<BasicBlock> succs = successors.getOrDefault(top.block(), List.of());
+            if (top.nextSuccIndex() < succs.size()) {
+                BasicBlock succ = succs.get(top.nextSuccIndex());
+                stack.set(stack.size() - 1, new Frame(top.block(), top.nextSuccIndex() + 1));
+                if (visited.add(succ)) {
+                    stack.add(new Frame(succ, 0));
+                }
+                continue;
+            }
+
+            postOrder.add(top.block());
+            stack.remove(stack.size() - 1);
+        }
     }
 
     private static BasicBlock intersect(Map<BasicBlock, BasicBlock> idom, Map<BasicBlock, Integer> order,

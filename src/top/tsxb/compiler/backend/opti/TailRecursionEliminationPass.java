@@ -65,7 +65,7 @@ public class TailRecursionEliminationPass implements Pass {
             phi.setIncoming(oldEntry, arg);
             phis.add(phi);
         }
-        treHeader.addInstruction(new BrInst(oldEntryBody, treHeader));
+        new BrInst(oldEntryBody, treHeader);
 
         List<Instruction> oldEntryInsts = new ArrayList<>(oldEntry.getInstructions());
         oldEntry.getInstructions().clear();
@@ -78,7 +78,7 @@ public class TailRecursionEliminationPass implements Pass {
                 inst.setParent(oldEntryBody);
             }
         }
-        oldEntry.addInstruction(new BrInst(treHeader, oldEntry));
+        new BrInst(treHeader, oldEntry);
 
         for (CallInst call : tailCalls) {
             BasicBlock bb = call.getParent();
