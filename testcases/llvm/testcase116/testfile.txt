@@ -1,0 +1,32 @@
+int data[10000];
+int kernel[20];
+int result[10000];
+int N = 10000;
+int K = 20;
+
+int main() {
+    int i;
+    int j;
+    
+    for (i = 0; i < N; i = i + 1) {
+        data[i] = i % 10;
+    }
+    
+    for (i = 0; i < K; i = i + 1) {
+        kernel[i] = 1; 
+    }
+
+    int limit = N - K;
+    for (i = 0; i < limit; i = i + 1) {
+        int sum = 0;
+        
+        for (j = 0; j < K; j = j + 1) {
+            sum = sum + data[i + j] * kernel[j];
+        }
+        
+        result[i] = sum;
+    }
+    
+    printf("%d\n", result[limit - 1]);
+    return 0;
+}
