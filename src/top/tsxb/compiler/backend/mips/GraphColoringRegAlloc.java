@@ -178,10 +178,17 @@ public class GraphColoringRegAlloc {
     }
 
     private LiveInterval getAlias(LiveInterval n) {
-        if (alias.get(n) == n)
+        if (n == null) {
+            return null;
+        }
+        LiveInterval current = alias.get(n);
+        if (current == null || current == n) {
             return n;
-        LiveInterval a = getAlias(alias.get(n));
-        alias.put(n, a);
+        }
+        LiveInterval a = getAlias(current);
+        if (a != null) {
+            alias.put(n, a);
+        }
         return a;
     }
 

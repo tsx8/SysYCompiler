@@ -7,9 +7,11 @@ import java.util.List;
 import java.util.Map;
 
 import top.tsxb.compiler.ir.base.Value;
+import top.tsxb.compiler.ir.constant.ConstInt;
 import top.tsxb.compiler.ir.constant.Constant;
 import top.tsxb.compiler.ir.inst.CallInst;
 import top.tsxb.compiler.ir.inst.Instruction;
+import top.tsxb.compiler.ir.inst.GetElementPtrInst;
 import top.tsxb.compiler.ir.inst.PhiInst;
 import top.tsxb.compiler.ir.structure.Argument;
 import top.tsxb.compiler.ir.structure.BasicBlock;
@@ -172,11 +174,15 @@ public class LiveIntervalAnalysis {
             double weight = Math.pow(10, loopAnalysis.getLoopDepth(bb));
 
             for (Value v : liveness.getLiveOut(bb)) {
-                getOrCreateInterval(v).addRange(bEnd, bEnd);
+                if (isAllocatable(v)) {
+                    getOrCreateInterval(v).addRange(bEnd, bEnd);
+                }
             }
 
             for (Value v : liveness.getLiveIn(bb)) {
-                getOrCreateInterval(v).addRange(bStart, bStart);
+                if (isAllocatable(v)) {
+                    getOrCreateInterval(v).addRange(bStart, bStart);
+                }
             }
 
             // Process instructions in reverse
@@ -224,7 +230,33 @@ public class LiveIntervalAnalysis {
             return false;
         if (val instanceof Constant || val instanceof BasicBlock)
             return false;
+        // Rematerializable constant-address GEPs (e.g. strings) are cheaper to recompute than to keep live/spill.
+        if (val instanceof GetElementPtrInst gep && isRematerializableConstGep(gep)) {
+            return false;
+        }
         return !(val instanceof Instruction inst) || !(inst.getType() instanceof NoneType);
+    }
+
+    private boolean isRematerializableConstGep(GetElementPtrInst gep) {
+        // Only handle pure constant address computations: base is ultimately a global, all indices are constants.
+        Value base = gep.getOperand(0);
+        while (base instanceof GetElementPtrInst nested) {
+            for (int i = 1; i < nested.getNumOperands(); i++) {
+                if (!(nested.getOperand(i) instanceof ConstInt)) {
+                    return false;
+                }
+            }
+            base = nested.getOperand(0);
+        }
+        if (!(base instanceof GlobalVariable)) {
+            return false;
+        }
+        for (int i = 1; i < gep.getNumOperands(); i++) {
+            if (!(gep.getOperand(i) instanceof ConstInt)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     public List<LiveInterval> getIntervals() {

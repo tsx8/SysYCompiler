@@ -549,7 +549,18 @@ public class MipsBuilder {
         if (val instanceof ConstInt ci) {
             invalidateCache(reg);
             currentSb.append("    li ").append(reg).append(", ").append(ci.getValue()).append("\n");
-        } else if (val instanceof GlobalValue gv) {
+            return;
+        }
+
+        if (val instanceof GetElementPtrInst gep) {
+            ConstGlobalAddr addr = tryBuildConstGlobalAddr(gep);
+            if (addr != null) {
+                materializeConstGlobalAddr(addr, reg);
+                return;
+            }
+        }
+
+        if (val instanceof GlobalValue gv) {
             if (regMapping.containsKey(gv)) {
                 MipsRegister srcReg = regMapping.get(gv);
                 invalidateCache(reg);
@@ -569,22 +580,29 @@ public class MipsBuilder {
                 currentSb.append("    la ").append(reg).append(", ").append(getLabel(gv)).append("\n");
                 updateCache(gv, reg);
             }
-        } else if (val instanceof AllocaInst alloca) {
+            return;
+        }
+
+        if (val instanceof AllocaInst alloca) {
             int dataOffset = getAllocaDataOffset(alloca);
             addI(reg, "$sp", dataOffset + spShift);
-        } else if (regMapping.containsKey(val)) {
+            return;
+        }
+
+        if (regMapping.containsKey(val)) {
             MipsRegister srcReg = regMapping.get(val);
             if (!srcReg.getName().equals(reg)) {
                 invalidateCache(reg);
                 currentSb.append("    move ").append(reg).append(", ").append(srcReg.getName()).append("\n");
             }
-        } else {
-            Integer offset = stackOffsets.get(val);
-            if (offset == null) {
-                throw new RuntimeException("Value not found in stack or register: " + val);
-            }
-            loadStack(reg, offset + spShift);
+            return;
         }
+
+        Integer offset = stackOffsets.get(val);
+        if (offset == null) {
+            throw new RuntimeException("Value not found in stack or register: " + val);
+        }
+        loadStack(reg, offset + spShift);
     }
 
     private String getValueReg(Value val, String tempReg) {
@@ -594,7 +612,17 @@ public class MipsBuilder {
             invalidateCache(tempReg);
             currentSb.append("    li ").append(tempReg).append(", ").append(ci.getValue()).append("\n");
             return tempReg;
-        } else if (val instanceof GlobalValue gv) {
+        }
+
+        if (val instanceof GetElementPtrInst gep) {
+            ConstGlobalAddr addr = tryBuildConstGlobalAddr(gep);
+            if (addr != null) {
+                materializeConstGlobalAddr(addr, tempReg);
+                return tempReg;
+            }
+        }
+
+        if (val instanceof GlobalValue gv) {
             if (regMapping.containsKey(gv)) {
                 return regMapping.get(gv).getName();
             }
@@ -605,20 +633,24 @@ public class MipsBuilder {
             currentSb.append("    la ").append(tempReg).append(", ").append(getLabel(gv)).append("\n");
             updateCache(gv, tempReg);
             return tempReg;
-        } else if (val instanceof AllocaInst alloca) {
+        }
+
+        if (val instanceof AllocaInst alloca) {
             int dataOffset = getAllocaDataOffset(alloca);
             addI(tempReg, "$sp", dataOffset + spShift);
             return tempReg;
-        } else if (regMapping.containsKey(val)) {
-            return regMapping.get(val).getName();
-        } else {
-            Integer offset = stackOffsets.get(val);
-            if (offset == null) {
-                throw new RuntimeException("Value not found in stack or register: " + val);
-            }
-            loadStack(tempReg, offset + spShift);
-            return tempReg;
         }
+
+        if (regMapping.containsKey(val)) {
+            return regMapping.get(val).getName();
+        }
+
+        Integer offset = stackOffsets.get(val);
+        if (offset == null) {
+            throw new RuntimeException("Value not found in stack or register: " + val);
+        }
+        loadStack(tempReg, offset + spShift);
+        return tempReg;
     }
 
     private String getDestReg(Instruction inst, String tempReg) {
@@ -1318,16 +1350,19 @@ public class MipsBuilder {
     private void genCall(CallInst inst) {
         Function target = (Function)inst.getOperand(0);
         int numArgs = inst.getNumOperands() - 1;
+        boolean clobbersCallerSaved = !isRuntimeSyscallWrapper(target);
 
         // Save caller-saved registers that are live across this call
         int instId = instToId.get(inst);
         List<MipsRegister> toSave = new ArrayList<>();
-        for (Map.Entry<Value, MipsRegister> entry : regMapping.entrySet()) {
-            MipsRegister reg = entry.getValue();
-            if (reg.isCallerSaved()) {
-                LiveInterval interval = intervals.get(entry.getKey());
-                if (interval != null && interval.getStart() < instId && interval.getEnd() > instId) {
-                    toSave.add(reg);
+        if (clobbersCallerSaved) {
+            for (Map.Entry<Value, MipsRegister> entry : regMapping.entrySet()) {
+                MipsRegister reg = entry.getValue();
+                if (reg.isCallerSaved()) {
+                    LiveInterval interval = intervals.get(entry.getKey());
+                    if (interval != null && interval.getStart() < instId && interval.getEnd() > instId) {
+                        toSave.add(reg);
+                    }
                 }
             }
         }
@@ -1364,7 +1399,9 @@ public class MipsBuilder {
             }
         }
         currentSb.append("    jal ").append(getLabel(target)).append("\n");
-        invalidateCallerSaved();
+        if (clobbersCallerSaved) {
+            invalidateCallerSaved();
+        }
 
         if (stackSpace > 0) {
             addI("$sp", "$sp", stackSpace);
@@ -1389,6 +1426,11 @@ public class MipsBuilder {
         }
     }
 
+    private boolean isRuntimeSyscallWrapper(Function target) {
+        String name = target.getName();
+        return name.equals("getint") || name.equals("putint") || name.equals("putch") || name.equals("putstr");
+    }
+
     private void genZext(ZextInst inst) {
         String dst = getDestReg(inst, "$t0");
         loadValue(inst.getOperand(0), dst);
@@ -1397,6 +1439,10 @@ public class MipsBuilder {
     }
 
     private void genGep(GetElementPtrInst inst) {
+        if (!regMapping.containsKey(inst) && tryBuildConstGlobalAddr(inst) != null) {
+            // Rematerializable constant-address GEP: skip emission here, materialize at each use.
+            return;
+        }
         String dst = getDestReg(inst, "$t0");
         String accum = dst;
         boolean conflict = dst.equals("$t1") || dst.equals("$t2");
@@ -1482,6 +1528,58 @@ public class MipsBuilder {
 
         if (!regMapping.containsKey(inst))
             storeStack(dst, stackOffsets.get(inst) + spShift);
+    }
+
+    private record ConstGlobalAddr(GlobalVariable base, int offset) {
+    }
+
+    private ConstGlobalAddr tryBuildConstGlobalAddr(Value value) {
+        if (value instanceof GlobalVariable gv) {
+            return new ConstGlobalAddr(gv, 0);
+        }
+        if (!(value instanceof GetElementPtrInst gep)) {
+            return null;
+        }
+
+        ConstGlobalAddr baseAddr = tryBuildConstGlobalAddr(gep.getOperand(0));
+        if (baseAddr == null) {
+            return null;
+        }
+
+        long offset = baseAddr.offset;
+        IrType currentType = ((PtrType)gep.getOperand(0).getType()).getPointeeType();
+        for (int i = 1; i < gep.getNumOperands(); i++) {
+            Value index = gep.getOperand(i);
+            if (!(index instanceof ConstInt ci)) {
+                return null;
+            }
+
+            int elementSize;
+            if (i == 1) {
+                elementSize = getSize(currentType);
+            } else {
+                if (currentType instanceof ArrType at) {
+                    currentType = at.getElementType();
+                    elementSize = getSize(currentType);
+                } else {
+                    elementSize = 4;
+                }
+            }
+
+            offset += (long)ci.getValue() * elementSize;
+            if (offset < Integer.MIN_VALUE || offset > Integer.MAX_VALUE) {
+                return null;
+            }
+        }
+
+        return new ConstGlobalAddr(baseAddr.base, (int)offset);
+    }
+
+    private void materializeConstGlobalAddr(ConstGlobalAddr addr, String reg) {
+        loadValue(addr.base, reg);
+        if (addr.offset != 0) {
+            addI(reg, reg, addr.offset);
+        }
     }
 
     private List<GlobalVariable> analyzeGlobalUsage(Function func, LoopAnalysis loopAnalysis) {
