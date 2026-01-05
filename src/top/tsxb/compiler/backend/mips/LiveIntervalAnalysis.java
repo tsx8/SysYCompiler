@@ -23,6 +23,7 @@ public class LiveIntervalAnalysis {
     private final LoopAnalysis loopAnalysis;
     private final Map<Instruction, Integer> instToId = new LinkedHashMap<>();
     private final Map<Value, LiveInterval> intervals = new LinkedHashMap<>();
+    private final Map<Value, java.util.Set<Value>> interference = new LinkedHashMap<>();
     private final Map<BasicBlock, Integer> blockStart = new LinkedHashMap<>();
     private final Map<BasicBlock, Integer> blockEnd = new LinkedHashMap<>();
     private final List<Integer> callInstIds = new ArrayList<>();
@@ -36,8 +37,72 @@ public class LiveIntervalAnalysis {
     public void analyze() {
         linearize();
         computeIntervals();
+        computeInterference();
         checkSpansCall();
         collectHints();
+    }
+
+    private void addInterference(Value a, Value b) {
+        if (a == null || b == null || a == b)
+            return;
+        if (!isAllocatable(a) || !isAllocatable(b))
+            return;
+        if (!intervals.containsKey(a) || !intervals.containsKey(b))
+            return;
+
+        interference.computeIfAbsent(a, k -> new java.util.LinkedHashSet<>()).add(b);
+        interference.computeIfAbsent(b, k -> new java.util.LinkedHashSet<>()).add(a);
+    }
+
+    private void computeInterference() {
+        // For entry block, add a clique for all live-in values (arguments have no defining instruction).
+        if (!function.getBasicBlocks().isEmpty()) {
+            BasicBlock entry = function.getBasicBlocks().get(0);
+            java.util.List<Value> liveAtEntry = new java.util.ArrayList<>();
+            for (Value v : liveness.getLiveIn(entry)) {
+                if (isAllocatable(v) && intervals.containsKey(v)) {
+                    liveAtEntry.add(v);
+                }
+            }
+            for (int i = 0; i < liveAtEntry.size(); i++) {
+                for (int j = i + 1; j < liveAtEntry.size(); j++) {
+                    addInterference(liveAtEntry.get(i), liveAtEntry.get(j));
+                }
+            }
+        }
+
+        // Build interference edges by scanning instructions backwards with block liveOut as seed.
+        for (BasicBlock bb : function.getBasicBlocks()) {
+            java.util.Set<Value> live = new java.util.LinkedHashSet<>();
+            for (Value v : liveness.getLiveOut(bb)) {
+                if (isAllocatable(v) && intervals.containsKey(v)) {
+                    live.add(v);
+                }
+            }
+
+            java.util.List<Instruction> insts = bb.getInstructions();
+            for (int i = insts.size() - 1; i >= 0; i--) {
+                Instruction inst = insts.get(i);
+
+                // Def: add interference between the definition and values live *after* this instruction.
+                if (isAllocatable(inst) && intervals.containsKey(inst)) {
+                    for (Value v : live) {
+                        addInterference(inst, v);
+                    }
+                    live.remove(inst);
+                }
+
+                // Uses
+                if (!(inst instanceof PhiInst)) {
+                    for (int j = 0; j < inst.getNumOperands(); j++) {
+                        Value op = inst.getOperand(j);
+                        if (isAllocatable(op) && intervals.containsKey(op)) {
+                            live.add(op);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private void collectHints() {
@@ -131,7 +196,9 @@ public class LiveIntervalAnalysis {
                     }
                 }
 
-                // Use
+                if (inst instanceof PhiInst) {
+                    continue;
+                }
                 for (int j = 0; j < inst.getNumOperands(); j++) {
                     Value op = inst.getOperand(j);
                     if (isAllocatable(op)) {
@@ -173,6 +240,10 @@ public class LiveIntervalAnalysis {
 
     public Map<Value, LiveInterval> getIntervalMap() {
         return intervals;
+    }
+
+    public Map<Value, java.util.Set<Value>> getInterference() {
+        return interference;
     }
 
     public Map<Instruction, Integer> getInstToId() {

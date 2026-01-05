@@ -329,7 +329,8 @@ public class MipsBuilder {
         intervalAnalysis.analyze();
         this.intervals = intervalAnalysis.getIntervalMap();
         this.instToId = intervalAnalysis.getInstToId();
-        GraphColoringRegAlloc allocator = new GraphColoringRegAlloc(intervalAnalysis.getIntervals(), excludedRegs);
+        GraphColoringRegAlloc allocator =
+            new GraphColoringRegAlloc(intervalAnalysis.getIntervals(), excludedRegs, intervalAnalysis.getInterference());
         allocator.allocate();
         this.regMapping = allocator.getRegMapping();
         this.usedCalleeSaved = allocator.getUsedCalleeSaved();
@@ -1172,80 +1173,124 @@ public class MipsBuilder {
             return;
         }
 
-        Map<PhiInst, Value> assignments = new LinkedHashMap<>();
-        Map<PhiInst, Integer> useCount = new LinkedHashMap<>();
-
+        Map<PhiInst, Value> pending = new LinkedHashMap<>();
         for (PhiInst phi : phis) {
             Value incoming = phi.getIncomingValue(current);
-            if (incoming != null && incoming != phi) {
-                MipsRegister phiReg = regMapping.get(phi);
-                MipsRegister incomingReg = regMapping.get(incoming);
-                if (incomingReg != null && phiReg == incomingReg) {
-                    continue;
+            if (incoming == null || incoming == phi) {
+                continue;
+            }
+            MipsRegister dstReg = regMapping.get(phi);
+            MipsRegister srcReg = regMapping.get(incoming);
+            if (srcReg != null && dstReg == srcReg) {
+                continue;
+            }
+            pending.put(phi, incoming);
+        }
+
+        if (pending.isEmpty()) {
+            return;
+        }
+
+        for (java.util.Iterator<Map.Entry<PhiInst, Value>> it = pending.entrySet().iterator(); it.hasNext();) {
+            Map.Entry<PhiInst, Value> entry = it.next();
+            PhiInst phi = entry.getKey();
+            Value incoming = entry.getValue();
+            if (regMapping.get(phi) != null) {
+                continue;
+            }
+
+            String src = getValueReg(incoming, "$t0");
+            storeValue(phi, src);
+            it.remove();
+        }
+
+        if (pending.isEmpty()) {
+            return;
+        }
+
+        record RegCopy(String dst, String src, Value incoming) {
+        }
+
+        Map<String, RegCopy> copies = new LinkedHashMap<>();
+        for (Map.Entry<PhiInst, Value> entry : pending.entrySet()) {
+            PhiInst phi = entry.getKey();
+            Value incoming = entry.getValue();
+            MipsRegister dstReg = regMapping.get(phi);
+            if (dstReg == null) {
+                continue;
+            }
+            MipsRegister srcReg = regMapping.get(incoming);
+            String dst = dstReg.getName();
+            String src = srcReg != null ? srcReg.getName() : null;
+            if (src != null && src.equals(dst)) {
+                continue;
+            }
+            copies.put(dst, new RegCopy(dst, src, incoming));
+        }
+
+        if (copies.isEmpty()) {
+            return;
+        }
+
+        while (!copies.isEmpty()) {
+            boolean progressed = false;
+            Set<String> srcRegs = new LinkedHashSet<>();
+            for (RegCopy copy : copies.values()) {
+                if (copy.src != null) {
+                    srcRegs.add(copy.src);
                 }
-
-                assignments.put(phi, incoming);
             }
-        }
 
-        for (PhiInst phi : assignments.keySet()) {
-            Value incoming = assignments.get(phi);
-            if (incoming instanceof PhiInst incomingPhi && assignments.containsKey(incomingPhi)) {
-                useCount.put(incomingPhi, useCount.getOrDefault(incomingPhi, 0) + 1);
-            }
-        }
-
-        Queue<PhiInst> ready = new LinkedList<>();
-        for (PhiInst phi : assignments.keySet()) {
-            if (useCount.getOrDefault(phi, 0) == 0) {
-                ready.add(phi);
-            }
-        }
-
-        while (!ready.isEmpty()) {
-            PhiInst phi = ready.poll();
-            Value incoming = assignments.get(phi);
-
-            MipsRegister phiReg = regMapping.get(phi);
-            regMapping.get(incoming);
-
-            if (phiReg != null) {
-                loadValue(incoming, phiReg.getName());
-            } else {
-                String reg = getValueReg(incoming, "$t0");
-                storeValue(phi, reg);
-            }
-            assignments.remove(phi);
-
-            if (incoming instanceof PhiInst incomingPhi && assignments.containsKey(incomingPhi)) {
-                useCount.put(incomingPhi, useCount.get(incomingPhi) - 1);
-                if (useCount.get(incomingPhi) == 0) {
-                    ready.add(incomingPhi);
+            for (java.util.Iterator<Map.Entry<String, RegCopy>> it = copies.entrySet().iterator(); it.hasNext();) {
+                RegCopy copy = it.next().getValue();
+                if (copy.src == null || !srcRegs.contains(copy.dst)) {
+                    if (copy.src != null) {
+                        invalidateCache(copy.dst);
+                        currentSb.append("    move ").append(copy.dst).append(", ").append(copy.src).append("\n");
+                    } else {
+                        loadValue(copy.incoming, copy.dst);
+                    }
+                    it.remove();
+                    progressed = true;
+                    break;
                 }
             }
-        }
 
-        if (!assignments.isEmpty()) {
-            List<PhiInst> cyclePhis = new ArrayList<>(assignments.keySet());
-            int tempSpace = cyclePhis.size() * 4;
-            addI("$sp", "$sp", -tempSpace);
-            spShift += tempSpace;
-
-            for (int i = 0; i < cyclePhis.size(); i++) {
-                PhiInst phi = cyclePhis.get(i);
-                Value incoming = assignments.get(phi);
-                loadValue(incoming, "$t0");
-                storeStack("$t0", i * 4);
+            if (progressed) {
+                continue;
             }
 
-            for (int i = 0; i < cyclePhis.size(); i++) {
-                PhiInst phi = cyclePhis.get(i);
-                loadStack("$t0", i * 4);
-                storeValue(phi, "$t0");
+            RegCopy first = copies.values().iterator().next();
+            if (first.src == null) {
+                // Should be unreachable because src==null copies are always safe.
+                loadValue(first.incoming, first.dst);
+                copies.remove(first.dst);
+                continue;
             }
 
-            addI("$sp", "$sp", tempSpace);
-            spShift -= tempSpace;
+            String start = first.dst;
+            invalidateCache("$t0");
+            currentSb.append("    move $t0, ").append(start).append("\n");
+
+            String currentDst = start;
+            String currentSrc = first.src;
+            while (!currentSrc.equals(start)) {
+                invalidateCache(currentDst);
+                currentSb.append("    move ").append(currentDst).append(", ").append(currentSrc).append("\n");
+                copies.remove(currentDst);
+
+                RegCopy next = copies.get(currentSrc);
+                if (next == null || next.src == null) {
+                    currentDst = currentSrc;
+                    break;
+                }
+                currentDst = currentSrc;
+                currentSrc = next.src;
+            }
+
+            invalidateCache(currentDst);
+            currentSb.append("    move ").append(currentDst).append(", $t0\n");
+            copies.remove(currentDst);
         }
     }
 

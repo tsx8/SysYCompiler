@@ -25,6 +25,7 @@ public class LivenessAnalysis {
     private final Map<BasicBlock, Set<Value>> def = new LinkedHashMap<>();
     private final Map<BasicBlock, Set<Value>> use = new LinkedHashMap<>();
     private final Map<BasicBlock, Set<Value>> phiUse = new LinkedHashMap<>();
+    private final Map<BasicBlock, Set<Value>> phiDef = new LinkedHashMap<>();
     private final Map<BasicBlock, List<BasicBlock>> successors = new LinkedHashMap<>();
     private final Map<BasicBlock, List<BasicBlock>> predecessors = new LinkedHashMap<>();
 
@@ -43,6 +44,7 @@ public class LivenessAnalysis {
             successors.put(bb, new ArrayList<>());
             predecessors.putIfAbsent(bb, new ArrayList<>());
             phiUse.put(bb, new LinkedHashSet<>());
+            phiDef.put(bb, new LinkedHashSet<>());
         }
 
         for (BasicBlock bb : function.getBasicBlocks()) {
@@ -76,6 +78,7 @@ public class LivenessAnalysis {
                     // Phi defs
                     if (isAllocatable(inst)) {
                         bbDef.add(inst);
+                        phiDef.get(bb).add(inst);
                     }
                     continue;
                 }
@@ -139,11 +142,11 @@ public class LivenessAnalysis {
                 Set<Value> oldLiveIn = new LinkedHashSet<>(liveIn.get(bb));
                 Set<Value> oldLiveOut = new LinkedHashSet<>(liveOut.get(bb));
 
-                // Out[B] = Union(In[S] for S in successors(B)) + PhiUse[B]
-                // where PhiUse[B] are values used by Phi nodes in successors
                 Set<Value> newLiveOut = new LinkedHashSet<>();
                 for (BasicBlock succ : successors.get(bb)) {
-                    newLiveOut.addAll(liveIn.get(succ));
+                    Set<Value> succLiveIn = new LinkedHashSet<>(liveIn.get(succ));
+                    succLiveIn.removeAll(phiDef.get(succ));
+                    newLiveOut.addAll(succLiveIn);
                 }
                 // Add values needed for Phi nodes at successor edges
                 newLiveOut.addAll(phiUse.get(bb));

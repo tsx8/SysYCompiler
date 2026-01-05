@@ -15,6 +15,7 @@ public class GraphColoringRegAlloc {
     private final List<LiveInterval> intervals;
     private final int K;
     private final List<MipsRegister> allocatableRegs;
+    private final Map<Value, Set<Value>> interference;
     private final Map<LiveInterval, Set<LiveInterval>> adjList = new LinkedHashMap<>();
     private final Map<LiveInterval, Integer> degree = new LinkedHashMap<>();
     private final Set<LiveInterval> simplifyWorklist = new LinkedHashSet<>();
@@ -31,8 +32,14 @@ public class GraphColoringRegAlloc {
     private final Set<MipsRegister> usedCalleeSaved = new LinkedHashSet<>();
 
     public GraphColoringRegAlloc(List<LiveInterval> intervals, Set<MipsRegister> excludedRegs) {
+        this(intervals, excludedRegs, null);
+    }
+
+    public GraphColoringRegAlloc(List<LiveInterval> intervals, Set<MipsRegister> excludedRegs,
+        Map<Value, Set<Value>> interference) {
         this.intervals = new ArrayList<>(intervals);
         this.allocatableRegs = new ArrayList<>();
+        this.interference = interference;
 
         for (MipsRegister reg : MipsRegister.getAllocatable()) {
             if (excludedRegs.contains(reg))
@@ -78,12 +85,30 @@ public class GraphColoringRegAlloc {
             alias.put(interval, interval);
         }
 
-        for (int i = 0; i < intervals.size(); i++) {
-            for (int j = i + 1; j < intervals.size(); j++) {
-                LiveInterval u = intervals.get(i);
-                LiveInterval v = intervals.get(j);
-                if (interferes(u, v)) {
-                    addEdge(u, v);
+        if (interference != null) {
+            Map<Value, LiveInterval> valueToInterval = new LinkedHashMap<>();
+            for (LiveInterval interval : intervals) {
+                valueToInterval.put(interval.getValue(), interval);
+            }
+            for (Map.Entry<Value, Set<Value>> entry : interference.entrySet()) {
+                LiveInterval u = valueToInterval.get(entry.getKey());
+                if (u == null)
+                    continue;
+                for (Value vVal : entry.getValue()) {
+                    LiveInterval v = valueToInterval.get(vVal);
+                    if (v != null) {
+                        addEdge(u, v);
+                    }
+                }
+            }
+        } else {
+            for (int i = 0; i < intervals.size(); i++) {
+                for (int j = i + 1; j < intervals.size(); j++) {
+                    LiveInterval u = intervals.get(i);
+                    LiveInterval v = intervals.get(j);
+                    if (interferes(u, v)) {
+                        addEdge(u, v);
+                    }
                 }
             }
         }
