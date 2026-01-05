@@ -11,10 +11,14 @@ import java.util.Objects;
 import java.util.Set;
 
 import top.tsxb.compiler.ir.base.Value;
+import top.tsxb.compiler.ir.inst.AllocaInst;
 import top.tsxb.compiler.ir.inst.GetElementPtrInst;
 import top.tsxb.compiler.ir.inst.IcmpInst;
 import top.tsxb.compiler.ir.inst.Instruction;
+import top.tsxb.compiler.ir.inst.LoadInst;
 import top.tsxb.compiler.ir.inst.OpCode;
+import top.tsxb.compiler.ir.inst.PhiInst;
+import top.tsxb.compiler.ir.inst.StoreInst;
 import top.tsxb.compiler.ir.structure.Argument;
 import top.tsxb.compiler.ir.structure.BasicBlock;
 import top.tsxb.compiler.ir.structure.Function;
@@ -23,6 +27,8 @@ import top.tsxb.compiler.ir.structure.GlobalVariable;
 public class GvnPass implements Pass {
     private final Map<Value, Value> replacementMap = new IdentityHashMap<>();
     private final Set<Function> pureFunctions = new LinkedHashSet<>();
+
+    private Map<AllocaInst, Value> singleStoreAllocaValue = Map.of();
 
     @Override
     public boolean run(top.tsxb.compiler.ir.structure.Module module) {
@@ -120,6 +126,7 @@ public class GvnPass implements Pass {
 
             boolean sideEffect = false;
             Set<Function> callees = new LinkedHashSet<>();
+            this.singleStoreAllocaValue = collectSingleStoreAllocaValue(func);
             for (BasicBlock bb : func.getBasicBlocks()) {
                 for (Instruction inst : bb.getInstructions()) {
                     if (inst.getOpCode() == OpCode.STORE) {
@@ -174,23 +181,58 @@ public class GvnPass implements Pass {
     }
 
     private boolean isExternalPointer(Value ptr) {
-        Value base = getBase(ptr);
-        return base instanceof GlobalVariable || base instanceof Argument;
+        Value base = getBase(ptr, new LinkedHashSet<>());
+        if (base instanceof GlobalVariable || base instanceof Argument) {
+            return true;
+        }
+        return !(base instanceof AllocaInst);
     }
 
     private boolean isVolatilePointer(Value ptr) {
-        Value base = getBase(ptr);
+        Value base = getBase(ptr, new LinkedHashSet<>());
         if (base instanceof GlobalVariable gv) {
             return !gv.isConst();
         }
-        return base instanceof Argument;
+        if (base instanceof Argument) {
+            return true;
+        }
+        return !(base instanceof AllocaInst);
     }
 
-    private Value getBase(Value v) {
-        while (v instanceof GetElementPtrInst gep) {
-            v = gep.getOperand(0);
+    private Value getBase(Value v, Set<Value> visiting) {
+        if (!visiting.add(v)) {
+            return v;
         }
-        return v;
+        while (true) {
+            if (v instanceof GetElementPtrInst gep) {
+                v = gep.getOperand(0);
+                continue;
+            }
+            if (v instanceof LoadInst load) {
+                Value addr = load.getOperand(0);
+                if (addr instanceof AllocaInst alloca && singleStoreAllocaValue.containsKey(alloca)) {
+                    v = singleStoreAllocaValue.get(alloca);
+                    if (!visiting.add(v)) {
+                        return v;
+                    }
+                    continue;
+                }
+                return load;
+            }
+            if (v instanceof PhiInst phi) {
+                Value common = null;
+                for (Value incoming : phi.getIncoming().values()) {
+                    Value incomingBase = getBase(incoming, visiting);
+                    if (common == null) {
+                        common = incomingBase;
+                    } else if (common != incomingBase) {
+                        return phi;
+                    }
+                }
+                return common != null ? common : phi;
+            }
+            return v;
+        }
     }
 
     private boolean isPureCall(Instruction inst) {
@@ -198,6 +240,32 @@ public class GvnPass implements Pass {
             return pureFunctions.contains((Function)inst.getOperand(0));
         }
         return false;
+    }
+
+    private Map<AllocaInst, Value> collectSingleStoreAllocaValue(Function function) {
+        Map<AllocaInst, Value> singleStore = new LinkedHashMap<>();
+        Set<AllocaInst> multipleStores = new LinkedHashSet<>();
+        for (BasicBlock bb : function.getBasicBlocks()) {
+            for (Instruction inst : bb.getInstructions()) {
+                if (!(inst instanceof StoreInst store)) {
+                    continue;
+                }
+                Value ptr = store.getOperand(1);
+                if (!(ptr instanceof AllocaInst alloca)) {
+                    continue;
+                }
+                if (multipleStores.contains(alloca)) {
+                    continue;
+                }
+                if (singleStore.containsKey(alloca)) {
+                    singleStore.remove(alloca);
+                    multipleStores.add(alloca);
+                    continue;
+                }
+                singleStore.put(alloca, store.getOperand(0));
+            }
+        }
+        return singleStore;
     }
 
     private static class GvnKey {
