@@ -38,6 +38,7 @@
 
 ## CHANGELOG
 
+- [2026.01.05] Confirmed last commit on OJ.
 - [2026.01.04] Finished docs part.
 - [2026.01.04] Finished opti part.
 - [2025.12.31] Finished mips part.
