@@ -9,7 +9,7 @@ public final class DivOptimizer {
         }
         long ad = Math.abs((long)d);
         long two31 = 1L << 31;
-        long t = two31 + (d < 0 ? 1L : 0L);
+        long t = two31;
         long anc = t - 1 - (t % ad);
         long q1 = two31 / anc;
         long r1 = two31 - q1 * anc;
@@ -35,9 +35,6 @@ public final class DivOptimizer {
         } while (q1 < delta || (q1 == delta && r1 == 0));
 
         long multiplier = q2 + 1;
-        if (d < 0) {
-            multiplier = -multiplier;
-        }
         int shift = (int)(p - 32);
         return new MultiplierInfo(multiplier, shift);
     }
