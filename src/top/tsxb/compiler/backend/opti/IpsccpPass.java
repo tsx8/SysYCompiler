@@ -34,6 +34,13 @@ public class IpsccpPass implements Pass {
     private final Set<Function> visiting = new LinkedHashSet<>();
     private final Map<Function, Boolean> purityCache = new LinkedHashMap<>();
 
+    private static final int MAX_PURE_EVAL_STATES = 4096;
+    private static final int MAX_PURE_EVAL_TOTAL_STEPS = 200_000;
+    private int pureEvalStepsRemaining = MAX_PURE_EVAL_TOTAL_STEPS;
+    private final Map<EvalKey, Integer> pureEvalCache = new LinkedHashMap<>();
+    private final Set<EvalKey> pureEvalFailed = new LinkedHashSet<>();
+    private final Set<EvalKey> pureEvalVisiting = new LinkedHashSet<>();
+
     @Override
     public boolean run(Module module) {
         initialize(module);
@@ -51,6 +58,10 @@ public class IpsccpPass implements Pass {
         callSites.clear();
         visiting.clear();
         purityCache.clear();
+        pureEvalStepsRemaining = MAX_PURE_EVAL_TOTAL_STEPS;
+        pureEvalCache.clear();
+        pureEvalFailed.clear();
+        pureEvalVisiting.clear();
 
         for (GlobalVariable gv : module.getGlobalList()) {
             if (gv.isConst() && gv.getNumOperands() > 0 && gv.getOperand(0) instanceof ConstInt ci) {
@@ -361,19 +372,49 @@ public class IpsccpPass implements Pass {
     }
 
     private Integer evaluatePureFunction(Function func, List<Integer> args) {
+        EvalKey key = new EvalKey(func, List.copyOf(args));
+        if (pureEvalCache.containsKey(key)) {
+            return pureEvalCache.get(key);
+        }
+        if (pureEvalFailed.contains(key)) {
+            return null;
+        }
+        if ((pureEvalCache.size() + pureEvalFailed.size()) >= MAX_PURE_EVAL_STATES) {
+            return null;
+        }
+        if (pureEvalVisiting.contains(key)) {
+            return null;
+        }
+
+        pureEvalVisiting.add(key);
+        Integer res = interpretPureFunction(func, args);
+        pureEvalVisiting.remove(key);
+
+        if (res == null) {
+            pureEvalFailed.add(key);
+            return null;
+        }
+
+        pureEvalCache.put(key, res);
+        return res;
+    }
+
+    private Integer interpretPureFunction(Function func, List<Integer> args) {
         Map<Value, Integer> context = new LinkedHashMap<>();
         for (int i = 0; i < func.getArguments().size(); i++) {
             context.put(func.getArguments().get(i), args.get(i));
         }
 
-        int steps = 0;
-        int maxSteps = 1000;
-
         BasicBlock currentBlock = func.getBasicBlocks().get(0);
         BasicBlock prevBlock = null;
 
-        while (steps++ < maxSteps) {
+        outer:
+        while (true) {
             for (Instruction inst : currentBlock.getInstructions()) {
+                if (!consumePureEvalStep()) {
+                    return null;
+                }
+
                 if (inst instanceof ReturnInst ret) {
                     if (ret.getNumOperands() > 0) {
                         Value retVal = ret.getOperand(0);
@@ -394,7 +435,7 @@ public class IpsccpPass implements Pass {
                     } else {
                         currentBlock = (BasicBlock)br.getOperand(0);
                     }
-                    break;
+                    continue outer;
                 }
 
                 if (inst instanceof BinaryInst bin) {
@@ -417,6 +458,11 @@ public class IpsccpPass implements Pass {
                     if (res == null)
                         return null;
                     context.put(icmp, res.getValue());
+                } else if (inst instanceof ZextInst zext) {
+                    Integer v = getVal(zext.getOperand(0), context);
+                    if (v == null)
+                        return null;
+                    context.put(zext, v);
                 } else if (inst instanceof PhiInst phi) {
                     if (prevBlock == null)
                         return null;
@@ -427,12 +473,33 @@ public class IpsccpPass implements Pass {
                     if (v == null)
                         return null;
                     context.put(phi, v);
+                } else if (inst instanceof CallInst call) {
+                    Function callee = (Function)call.getOperand(0);
+                    if (!isPure(callee)) {
+                        return null;
+                    }
+                    List<Integer> calleeArgs = new ArrayList<>();
+                    for (int i = 1; i < call.getNumOperands(); i++) {
+                        Integer v = getVal(call.getOperand(i), context);
+                        if (v == null)
+                            return null;
+                        calleeArgs.add(v);
+                    }
+                    Integer callRes = evaluatePureFunction(callee, calleeArgs);
+                    if (callRes == null)
+                        return null;
+                    context.put(call, callRes);
                 } else {
                     return null;
                 }
             }
+
+            return null;
         }
-        return null;
+    }
+
+    private boolean consumePureEvalStep() {
+        return pureEvalStepsRemaining-- > 0;
     }
 
     private Integer getVal(Value v, Map<Value, Integer> context) {
@@ -557,5 +624,8 @@ public class IpsccpPass implements Pass {
     }
 
     private record Edge(BasicBlock from, BasicBlock to) {
+    }
+
+    private record EvalKey(Function function, List<Integer> args) {
     }
 }

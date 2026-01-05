@@ -23,6 +23,8 @@ public class PassManager {
         manager.fixedPointPasses.add(new IpsccpPass());
         manager.fixedPointPasses.add(new SccpPass());
         manager.fixedPointPasses.add(new FunctionInliningPass());
+        // Inlining can re-introduce scalar allocas into the caller; re-run Mem2Reg to avoid spill-heavy codegen.
+        manager.fixedPointPasses.add(new Mem2RegPass());
         manager.fixedPointPasses.add(new TailRecursionEliminationPass());
         manager.fixedPointPasses.add(new DeadCodeEliminationPass());
         manager.fixedPointPasses.add(new SimplifyCfgPass());

@@ -17,45 +17,62 @@ import top.tsxb.compiler.ir.inst.*;
 import top.tsxb.compiler.ir.structure.BasicBlock;
 import top.tsxb.compiler.ir.structure.Function;
 import top.tsxb.compiler.ir.structure.Module;
+import top.tsxb.compiler.ir.type.ArrType;
 import top.tsxb.compiler.ir.type.FuncType;
+import top.tsxb.compiler.ir.type.IntType;
+import top.tsxb.compiler.ir.type.IrType;
 import top.tsxb.compiler.ir.type.NoneType;
+import top.tsxb.compiler.ir.type.PtrType;
 
 public class FunctionInliningPass implements Pass {
     private static final int MAX_INLINE_SIZE = 30;
-    private static final int MAX_RECURSIVE_INLINE_SIZE = 1024;
+    private static final int MAX_INLINE_SIZE_IN_LOOP = 16;
+    private static final int MAX_RECURSIVE_INLINE_SIZE = 64;
+    private static final int MAX_INLINE_ALLOCA_BYTES = 512;
+    private static final int MAX_CALLER_SIZE_AFTER_INLINE = 4096;
+    private static final int MAX_INLINED_CALLS_PER_FUNCTION = 256;
 
     @Override
     public boolean run(Module module) {
         boolean changed = false;
         Set<Function> recursiveFunctions = findRecursiveFunctions(module);
-        Map<Function, Integer> instCountByFunction = countInstructions(module);
         List<Function> functions = new ArrayList<>(module.getFunctionList());
         for (Function caller : functions) {
             if (caller.isDeclaration())
                 continue;
-            if (inlineInFunction(caller, recursiveFunctions, instCountByFunction)) {
+            if (inlineInFunction(caller, recursiveFunctions)) {
                 changed = true;
             }
         }
         return changed;
     }
 
-    private boolean inlineInFunction(Function caller, Set<Function> recursiveFunctions,
-        Map<Function, Integer> instCountByFunction) {
+    private boolean inlineInFunction(Function caller, Set<Function> recursiveFunctions) {
         boolean changed = false;
         boolean localChanged = true;
+        int inlinedCalls = 0;
         while (localChanged) {
             localChanged = false;
+            if (inlinedCalls >= MAX_INLINED_CALLS_PER_FUNCTION) {
+                break;
+            }
+            int callerInstCount = countInstructions(caller);
+            if (callerInstCount >= MAX_CALLER_SIZE_AFTER_INLINE) {
+                break;
+            }
+            Set<BasicBlock> callerLoopBlocks = computeLoopBlocks(caller);
             List<BasicBlock> blocks = new ArrayList<>(caller.getBasicBlocks());
             for (BasicBlock bb : blocks) {
                 List<Instruction> instructions = new ArrayList<>(bb.getInstructions());
                 for (Instruction inst : instructions) {
                     if (inst instanceof CallInst call) {
                         Function callee = (Function)call.getOperand(0);
-                        if (shouldInline(call, callee, recursiveFunctions, instCountByFunction)) {
+                        boolean inLoop = callerLoopBlocks.contains(bb);
+                        if (shouldInline(call, callerInstCount, callee, recursiveFunctions, inLoop)) {
                             inlineCall(caller, bb, call, callee);
                             changed = true;
                             localChanged = true;
+                            inlinedCalls++;
                             break;
                         }
                     }
@@ -67,43 +84,144 @@ public class FunctionInliningPass implements Pass {
         return changed;
     }
 
-    private boolean shouldInline(CallInst call, Function callee, Set<Function> recursiveFunctions,
-        Map<Function, Integer> instCountByFunction) {
+    private boolean shouldInline(CallInst call, int callerInstCount, Function callee, Set<Function> recursiveFunctions,
+        boolean callsiteInLoop) {
         if (callee.isDeclaration())
             return false;
         if (callee.getName().equals("main"))
             return false;
 
+        int calleeInstCount = countInstructions(callee);
+
         boolean recursive = recursiveFunctions.contains(callee);
-        boolean allConst = true;
-        for (int i = 1; i < call.getNumOperands(); i++) {
-            if (!(call.getOperand(i) instanceof ConstInt)) {
-                allConst = false;
-                break;
+        if (recursive) {
+            // Only inline recursive calls for compile-time specialization (all-const args), and avoid cases like fib()
+            // where multiple recursive calls can quickly cause exponential IR growth.
+            if (!allArgsConstInt(call)) {
+                return false;
+            }
+            if (countCallsTo(recursiveFunctions, callee) > 1) {
+                return false;
+            }
+            if (calleeInstCount >= MAX_RECURSIVE_INLINE_SIZE) {
+                return false;
+            }
+        } else {
+            // Avoid inlining loop-containing callees into loop nests; this tends to create spill-heavy hot paths.
+            if (callsiteInLoop && hasLoop(callee)) {
+                return false;
+            }
+
+            int maxInlineSize = callsiteInLoop ? MAX_INLINE_SIZE_IN_LOOP : MAX_INLINE_SIZE;
+            if (calleeInstCount >= maxInlineSize) {
+                return false;
             }
         }
 
-        int instCount = instCountByFunction.getOrDefault(callee, 0);
-
-        if (recursive) {
-            return allConst && instCount < MAX_RECURSIVE_INLINE_SIZE;
+        // Avoid inlining stack-heavy callees, as inlining duplicates their frame into the caller.
+        if (estimateAllocaBytes(callee) > MAX_INLINE_ALLOCA_BYTES) {
+            return false;
         }
 
-        return instCount < MAX_INLINE_SIZE;
+        // Keep the caller from growing too large; large IR tends to spill badly in both LLVM and our MIPS backend.
+        return callerInstCount + calleeInstCount < MAX_CALLER_SIZE_AFTER_INLINE;
     }
 
-    private Map<Function, Integer> countInstructions(Module module) {
-        Map<Function, Integer> instCount = new LinkedHashMap<>();
-        for (Function f : module.getFunctionList()) {
-            if (f.isDeclaration())
-                continue;
-            int count = 0;
-            for (BasicBlock bb : f.getBasicBlocks()) {
-                count += bb.getInstructions().size();
+    private boolean allArgsConstInt(CallInst call) {
+        for (int i = 1; i < call.getNumOperands(); i++) {
+            if (!(call.getOperand(i) instanceof ConstInt)) {
+                return false;
             }
-            instCount.put(f, count);
         }
-        return instCount;
+        return true;
+    }
+
+    private int countCallsTo(Set<Function> targetFunctions, Function function) {
+        int count = 0;
+        for (BasicBlock bb : function.getBasicBlocks()) {
+            for (Instruction inst : bb.getInstructions()) {
+                if (inst instanceof CallInst call) {
+                    Function callee = (Function)call.getOperand(0);
+                    if (targetFunctions.contains(callee)) {
+                        count++;
+                    }
+                }
+            }
+        }
+        return count;
+    }
+
+    private int countInstructions(Function function) {
+        int count = 0;
+        for (BasicBlock bb : function.getBasicBlocks()) {
+            count += bb.getInstructions().size();
+        }
+        return count;
+    }
+
+    private boolean hasLoop(Function function) {
+        DominatorAnalysis.Cfg cfg = DominatorAnalysis.computeCfg(function);
+        DominatorAnalysis.DominatorInfo domInfo = DominatorAnalysis.computeDominators(function);
+        for (BasicBlock n : function.getBasicBlocks()) {
+            if (!domInfo.dominators().containsKey(n)) {
+                continue;
+            }
+            for (BasicBlock succ : cfg.successors().getOrDefault(n, List.of())) {
+                if (domInfo.dominators().get(n).contains(succ)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private Set<BasicBlock> computeLoopBlocks(Function function) {
+        Set<BasicBlock> loopBlocks = new LinkedHashSet<>();
+        if (function.getBasicBlocks().isEmpty()) {
+            return loopBlocks;
+        }
+        DominatorAnalysis.Cfg cfg = DominatorAnalysis.computeCfg(function);
+        DominatorAnalysis.DominatorInfo domInfo = DominatorAnalysis.computeDominators(function);
+        for (BasicBlock n : function.getBasicBlocks()) {
+            if (!domInfo.dominators().containsKey(n)) {
+                continue;
+            }
+            for (BasicBlock succ : cfg.successors().getOrDefault(n, List.of())) {
+                if (domInfo.dominators().get(n).contains(succ)) {
+                    loopBlocks.addAll(DominatorAnalysis.findLoopBlocks(n, succ, cfg.predecessors()));
+                }
+            }
+        }
+        return loopBlocks;
+    }
+
+    private int estimateAllocaBytes(Function function) {
+        int bytes = 0;
+        for (BasicBlock bb : function.getBasicBlocks()) {
+            for (Instruction inst : bb.getInstructions()) {
+                if (inst instanceof AllocaInst alloca) {
+                    bytes += sizeOf(alloca.getAllocatedType());
+                    if (bytes > MAX_INLINE_ALLOCA_BYTES) {
+                        return bytes;
+                    }
+                }
+            }
+        }
+        return bytes;
+    }
+
+    private int sizeOf(IrType type) {
+        if (type instanceof IntType intType) {
+            return Math.max(1, (intType.getBitWidth() + 7) / 8);
+        }
+        if (type instanceof ArrType arr) {
+            long total = (long)arr.getNumElements() * sizeOf(arr.getElementType());
+            if (total > Integer.MAX_VALUE) {
+                return Integer.MAX_VALUE;
+            }
+            return (int)total;
+        }
+        return 4;
     }
 
     private Set<Function> findRecursiveFunctions(Module module) {
