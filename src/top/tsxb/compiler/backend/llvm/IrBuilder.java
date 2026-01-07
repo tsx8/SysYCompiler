@@ -276,7 +276,12 @@ public class IrBuilder implements AstVisitor<Value> {
 
     @Override
     public Value visit(BlockStmt node) {
-        node.items.forEach(stmt -> stmt.accept(this));
+        for (AstNode item : node.items) {
+            if (context.currentBlock != null && context.blockTerminated()) {
+                break;
+            }
+            item.accept(this);
+        }
         return null;
     }
 
