@@ -59,7 +59,15 @@ public class TestcasesImporter {
                 return;
             }
 
+            int nextTestcaseIndex = findNextTestcaseIndex(baseDestinationDir);
+            if (nextTestcaseIndex == 1) {
+                System.out.println("目标目录中未发现现有测试用例，将从 testcase1 开始导入。");
+            } else {
+                System.out.println("目标目录中已存在 " + (nextTestcaseIndex - 1) + " 个测试用例，新增测试用例将从 testcase" + nextTestcaseIndex + " 开始导入。");
+            }
+
             int testcaseCount = 0;
+            int testcaseIndex = nextTestcaseIndex - 1;
             // 排序以保证 testcase 文件夹按顺序命名
             List<String> sortedDirs = new ArrayList<>(directoryContents.keySet());
             Collections.sort(sortedDirs);
@@ -69,9 +77,10 @@ public class TestcasesImporter {
 
                 if (files.contains(ANS_FILE) && files.contains(TEST_FILE)) {
                     testcaseCount++;
-                    System.out.println("\n找到一个测试用例 (Testcase " + testcaseCount + ") 在目录: '" + dirPath + "'");
+                    testcaseIndex++;
+                    System.out.println("\n找到一个测试用例 (Zip内序号 " + testcaseCount + " -> 导入为 testcase" + testcaseIndex + ") 在目录: '" + dirPath + "'");
 
-                    Path destinationDir = baseDestinationDir.resolve("testcase" + testcaseCount);
+                    Path destinationDir = baseDestinationDir.resolve("testcase" + testcaseIndex);
 
                     // 2. 实现强制覆盖逻辑
                     if (Files.exists(destinationDir)) {
@@ -89,6 +98,23 @@ public class TestcasesImporter {
                     extractFile(zipFile, dirPath + INPUT_FILE, destinationDir.resolve(INPUT_FILE));
                 }
             }
+        }
+    }
+
+    private static int findNextTestcaseIndex(Path baseDestinationDir) throws IOException {
+        if (!Files.exists(baseDestinationDir) || !Files.isDirectory(baseDestinationDir)) {
+            return 1;
+        }
+
+        try (Stream<Path> paths = Files.list(baseDestinationDir)) {
+            return paths.filter(Files::isDirectory)
+                .map(p -> p.getFileName().toString())
+                .filter(name -> name.startsWith("testcase"))
+                .map(name -> name.substring("testcase".length()))
+                .filter(s -> !s.isEmpty() && s.chars().allMatch(Character::isDigit))
+                .mapToInt(Integer::parseInt)
+                .max()
+                .orElse(0) + 1;
         }
     }
 
