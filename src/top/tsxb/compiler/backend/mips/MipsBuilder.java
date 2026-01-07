@@ -1275,7 +1275,7 @@ public class MipsBuilder {
 
             for (java.util.Iterator<Map.Entry<String, RegCopy>> it = copies.entrySet().iterator(); it.hasNext();) {
                 RegCopy copy = it.next().getValue();
-                if (copy.src == null || !srcRegs.contains(copy.dst)) {
+                if (!srcRegs.contains(copy.dst)) {
                     if (copy.src != null) {
                         invalidateCache(copy.dst);
                         currentSb.append("    move ").append(copy.dst).append(", ").append(copy.src).append("\n");
@@ -1292,9 +1292,9 @@ public class MipsBuilder {
                 continue;
             }
 
-            RegCopy first = copies.values().iterator().next();
+            RegCopy first = copies.values().stream().filter(copy -> copy.src != null).findFirst()
+                .orElse(copies.values().iterator().next());
             if (first.src == null) {
-                // Should be unreachable because src==null copies are always safe.
                 loadValue(first.incoming, first.dst);
                 copies.remove(first.dst);
                 continue;
