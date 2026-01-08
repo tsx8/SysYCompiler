@@ -1,7 +1,7 @@
 package top.tsxb.compiler.backend.mips;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -318,8 +318,8 @@ public class MipsBuilder {
 
         // Global Address Hoisting
         List<GlobalVariable> globals = analyzeGlobalUsage(func, loopAnalysis);
-        Set<MipsRegister> excludedRegs = new HashSet<>();
-        Map<GlobalVariable, MipsRegister> globalRegs = new HashMap<>();
+        Set<MipsRegister> excludedRegs = EnumSet.noneOf(MipsRegister.class);
+        Map<GlobalVariable, MipsRegister> globalRegs = new LinkedHashMap<>();
 
         // Use S0-S7 for globals, limit to 3 globals
         MipsRegister[] sRegs = {MipsRegister.S0, MipsRegister.S1, MipsRegister.S2, MipsRegister.S3, MipsRegister.S4,
@@ -1631,7 +1631,7 @@ public class MipsBuilder {
     }
 
     private List<GlobalVariable> analyzeGlobalUsage(Function func, LoopAnalysis loopAnalysis) {
-        Map<GlobalVariable, Double> scores = new HashMap<>();
+        Map<GlobalVariable, Double> scores = new LinkedHashMap<>();
         for (BasicBlock bb : func.getBasicBlocks()) {
             int depth = loopAnalysis.getLoopDepth(bb);
             double weight = Math.pow(10, depth);
@@ -1648,7 +1648,13 @@ public class MipsBuilder {
         scores.entrySet().removeIf(entry -> entry.getValue() < 5.0);
 
         List<GlobalVariable> sorted = new ArrayList<>(scores.keySet());
-        sorted.sort((a, b) -> Double.compare(scores.get(b), scores.get(a)));
+        sorted.sort((a, b) -> {
+            int cmp = Double.compare(scores.get(b), scores.get(a));
+            if (cmp != 0) {
+                return cmp;
+            }
+            return a.getName().compareTo(b.getName());
+        });
         return sorted;
     }
 
