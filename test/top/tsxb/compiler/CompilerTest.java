@@ -36,7 +36,7 @@ public class CompilerTest {
     public static final String LLI_PATH = "lli";
     public static final String MARS_PATH = "assets/mars.jar";
     public static final Path LIBSYSY_DIR = Paths.get("assets/libsysy");
-    public static final int TEST_THREADS = Runtime.getRuntime().availableProcessors();
+    public static final int TEST_THREADS = Runtime.getRuntime().availableProcessors() / 2;
 
     private static final Path TEST_CASES_ROOT = Paths.get("testcases", CompilerConfig.CURRENT_HOMEWORK);
     private static final Path LOGS_ROOT =
