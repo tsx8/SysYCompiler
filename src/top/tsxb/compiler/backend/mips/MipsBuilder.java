@@ -1,6 +1,14 @@
 package top.tsxb.compiler.backend.mips;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.PriorityQueue;
+import java.util.Set;
 
 import top.tsxb.compiler.ir.base.Use;
 import top.tsxb.compiler.ir.base.User;
@@ -329,8 +337,8 @@ public class MipsBuilder {
         intervalAnalysis.analyze();
         this.intervals = intervalAnalysis.getIntervalMap();
         this.instToId = intervalAnalysis.getInstToId();
-        GraphColoringRegAlloc allocator =
-            new GraphColoringRegAlloc(intervalAnalysis.getIntervals(), excludedRegs, intervalAnalysis.getInterference());
+        GraphColoringRegAlloc allocator = new GraphColoringRegAlloc(intervalAnalysis.getIntervals(), excludedRegs,
+            intervalAnalysis.getInterference());
         allocator.allocate();
         this.regMapping = allocator.getRegMapping();
         this.usedCalleeSaved = allocator.getUsedCalleeSaved();
@@ -660,17 +668,18 @@ public class MipsBuilder {
         return tempReg;
     }
 
-    private void storeValue(Value inst, String reg) {
+    private void storeValue(Value inst) {
         if (regMapping.containsKey(inst)) {
             MipsRegister destReg = regMapping.get(inst);
-            if (!destReg.getName().equals(reg)) {
+            if (!destReg.getName().equals("$v0")) {
                 invalidateCache(destReg.getName());
-                currentSb.append("    move ").append(destReg.getName()).append(", ").append(reg).append("\n");
+                currentSb.append("    move ").append(destReg.getName()).append(", ").append(
+                "$v0").append("\n");
             }
         } else {
             Integer offset = stackOffsets.get(inst);
             if (offset != null) {
-                storeStack(reg, offset + spShift);
+                storeStack("$v0", offset + spShift);
             }
         }
     }
@@ -1204,60 +1213,21 @@ public class MipsBuilder {
         if (phis.isEmpty()) {
             return;
         }
-
-        Map<PhiInst, Value> pending = new LinkedHashMap<>();
+        Map<String, PhiCopy> copies = new LinkedHashMap<>();
         for (PhiInst phi : phis) {
             Value incoming = phi.getIncomingValue(current);
             if (incoming == null || incoming == phi) {
                 continue;
             }
-            MipsRegister dstReg = regMapping.get(phi);
-            MipsRegister srcReg = regMapping.get(incoming);
-            if (srcReg != null && dstReg == srcReg) {
+            PhiLoc dst = getPhiLoc(phi);
+            if (dst == null) {
                 continue;
             }
-            pending.put(phi, incoming);
-        }
-
-        if (pending.isEmpty()) {
-            return;
-        }
-
-        for (java.util.Iterator<Map.Entry<PhiInst, Value>> it = pending.entrySet().iterator(); it.hasNext();) {
-            Map.Entry<PhiInst, Value> entry = it.next();
-            PhiInst phi = entry.getKey();
-            Value incoming = entry.getValue();
-            if (regMapping.get(phi) != null) {
+            PhiSrc src = getPhiSrc(incoming);
+            if (src.loc != null && src.loc.key.equals(dst.key)) {
                 continue;
             }
-
-            String src = getValueReg(incoming, "$t0");
-            storeValue(phi, src);
-            it.remove();
-        }
-
-        if (pending.isEmpty()) {
-            return;
-        }
-
-        record RegCopy(String dst, String src, Value incoming) {
-        }
-
-        Map<String, RegCopy> copies = new LinkedHashMap<>();
-        for (Map.Entry<PhiInst, Value> entry : pending.entrySet()) {
-            PhiInst phi = entry.getKey();
-            Value incoming = entry.getValue();
-            MipsRegister dstReg = regMapping.get(phi);
-            if (dstReg == null) {
-                continue;
-            }
-            MipsRegister srcReg = regMapping.get(incoming);
-            String dst = dstReg.getName();
-            String src = srcReg != null ? srcReg.getName() : null;
-            if (src != null && src.equals(dst)) {
-                continue;
-            }
-            copies.put(dst, new RegCopy(dst, src, incoming));
+            copies.put(dst.key, new PhiCopy(dst, src));
         }
 
         if (copies.isEmpty()) {
@@ -1265,23 +1235,18 @@ public class MipsBuilder {
         }
 
         while (!copies.isEmpty()) {
-            boolean progressed = false;
-            Set<String> srcRegs = new LinkedHashSet<>();
-            for (RegCopy copy : copies.values()) {
-                if (copy.src != null) {
-                    srcRegs.add(copy.src);
+            Set<String> srcLocs = new LinkedHashSet<>();
+            for (PhiCopy copy : copies.values()) {
+                if (copy.src.loc != null) {
+                    srcLocs.add(copy.src.loc.key);
                 }
             }
 
-            for (java.util.Iterator<Map.Entry<String, RegCopy>> it = copies.entrySet().iterator(); it.hasNext();) {
-                RegCopy copy = it.next().getValue();
-                if (!srcRegs.contains(copy.dst)) {
-                    if (copy.src != null) {
-                        invalidateCache(copy.dst);
-                        currentSb.append("    move ").append(copy.dst).append(", ").append(copy.src).append("\n");
-                    } else {
-                        loadValue(copy.incoming, copy.dst);
-                    }
+            boolean progressed = false;
+            for (java.util.Iterator<Map.Entry<String, PhiCopy>> it = copies.entrySet().iterator(); it.hasNext();) {
+                PhiCopy copy = it.next().getValue();
+                if (!srcLocs.contains(copy.dst.key)) {
+                    emitPhiCopy(copy);
                     it.remove();
                     progressed = true;
                     break;
@@ -1292,38 +1257,121 @@ public class MipsBuilder {
                 continue;
             }
 
-            RegCopy first = copies.values().stream().filter(copy -> copy.src != null).findFirst()
-                .orElse(copies.values().iterator().next());
-            if (first.src == null) {
-                loadValue(first.incoming, first.dst);
-                copies.remove(first.dst);
+            PhiCopy first = copies.values().iterator().next();
+            if (first.src.loc == null) {
+                emitPhiCopy(first);
+                copies.remove(first.dst.key);
                 continue;
             }
 
-            String start = first.dst;
-            invalidateCache("$t0");
-            currentSb.append("    move $t0, ").append(start).append("\n");
+            PhiLoc start = first.dst;
+            loadFromPhiLoc(start, "$t0");
 
-            String currentDst = start;
-            String currentSrc = first.src;
-            while (!currentSrc.equals(start)) {
-                invalidateCache(currentDst);
-                currentSb.append("    move ").append(currentDst).append(", ").append(currentSrc).append("\n");
-                copies.remove(currentDst);
+            PhiLoc currentDst = start;
+            PhiLoc currentSrc = first.src.loc;
+            while (!currentSrc.key.equals(start.key)) {
+                loadFromPhiLoc(currentSrc, "$t1");
+                storeToPhiLoc(currentDst, "$t1");
+                copies.remove(currentDst.key);
 
-                RegCopy next = copies.get(currentSrc);
-                if (next == null || next.src == null) {
+                PhiCopy next = copies.get(currentSrc.key);
+                if (next == null || next.src.loc == null) {
                     currentDst = currentSrc;
                     break;
                 }
                 currentDst = currentSrc;
-                currentSrc = next.src;
+                currentSrc = next.src.loc;
             }
 
-            invalidateCache(currentDst);
-            currentSb.append("    move ").append(currentDst).append(", $t0\n");
-            copies.remove(currentDst);
+            storeToPhiLoc(currentDst, "$t0");
+            copies.remove(currentDst.key);
         }
+    }
+
+    private PhiLoc getPhiLoc(Value v) {
+        MipsRegister reg = regMapping.get(v);
+        if (reg != null) {
+            return new PhiLoc("R:" + reg.getName(), reg.getName(), null);
+        }
+        Integer offset = stackOffsets.get(v);
+        if (offset != null) {
+            return new PhiLoc("S:" + offset, null, offset);
+        }
+        return null;
+    }
+
+    private PhiSrc getPhiSrc(Value v) {
+        if (v instanceof ConstInt || v instanceof GlobalValue || v instanceof AllocaInst) {
+            return new PhiSrc(null, v);
+        }
+        if (v instanceof GetElementPtrInst gep && !regMapping.containsKey(v) && tryBuildConstGlobalAddr(gep) != null) {
+            return new PhiSrc(null, v);
+        }
+        PhiLoc loc = getPhiLoc(v);
+        return new PhiSrc(loc, loc != null ? null : v);
+    }
+
+    private void loadFromPhiLoc(PhiLoc loc, String destReg) {
+        if (loc.reg != null) {
+            if (!loc.reg.equals(destReg)) {
+                invalidateCache(destReg);
+                currentSb.append("    move ").append(destReg).append(", ").append(loc.reg).append("\n");
+            }
+            return;
+        }
+        loadStack(destReg, loc.stackOffset + spShift);
+    }
+
+    private void storeToPhiLoc(PhiLoc loc, String srcReg) {
+        if (loc.reg != null) {
+            if (!loc.reg.equals(srcReg)) {
+                invalidateCache(loc.reg);
+                currentSb.append("    move ").append(loc.reg).append(", ").append(srcReg).append("\n");
+            }
+            return;
+        }
+        storeStack(srcReg, loc.stackOffset + spShift);
+    }
+
+    private void emitPhiCopy(PhiCopy copy) {
+        PhiLoc dst = copy.dst;
+        PhiSrc src = copy.src;
+        if (dst.reg != null) {
+            if (src.loc != null) {
+                if (src.loc.reg != null) {
+                    if (!dst.reg.equals(src.loc.reg)) {
+                        invalidateCache(dst.reg);
+                        currentSb.append("    move ").append(dst.reg).append(", ").append(src.loc.reg).append("\n");
+                    }
+                } else {
+                    loadStack(dst.reg, src.loc.stackOffset + spShift);
+                }
+            } else {
+                loadValue(src.value, dst.reg);
+            }
+            return;
+        }
+
+        if (src.loc != null) {
+            if (src.loc.reg != null) {
+                storeStack(src.loc.reg, dst.stackOffset + spShift);
+            } else {
+                loadStack("$t1", src.loc.stackOffset + spShift);
+                storeStack("$t1", dst.stackOffset + spShift);
+            }
+        } else {
+            loadValue(src.value, "$t1");
+            storeStack("$t1", dst.stackOffset + spShift);
+        }
+    }
+
+    private record PhiLoc(String key, String reg, Integer stackOffset) {
+    }
+
+    private record PhiSrc(PhiLoc loc, Value value) {
+    }
+
+    private record PhiCopy(PhiLoc dst, PhiSrc src) {
     }
 
     private void genRet(ReturnInst inst) {
@@ -1422,7 +1470,7 @@ public class MipsBuilder {
         }
 
         if (!(inst.getType() instanceof NoneType)) {
-            storeValue(inst, "$v0");
+            storeValue(inst);
         }
     }
 

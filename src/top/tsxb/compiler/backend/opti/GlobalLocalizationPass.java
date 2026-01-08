@@ -284,18 +284,6 @@ public class GlobalLocalizationPass implements Pass {
         return false;
     }
 
-    private boolean isArrayLocalized(GlobalVariable gv, Function func, List<Value> indices) {
-        String targetName = gv.getName() + "." + indicesToString(indices);
-        for (BasicBlock bb : func.getBasicBlocks()) {
-            for (Instruction inst : bb.getInstructions()) {
-                if (inst instanceof AllocaInst alloca && alloca.getName().startsWith(targetName)) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
     private boolean isBaseHoisted(GlobalVariable gv, Function func) {
         for (BasicBlock bb : func.getBasicBlocks()) {
             for (Instruction inst : bb.getInstructions()) {
