@@ -33,6 +33,9 @@ public class GlobalLocalizationPass implements Pass {
     private Map<GlobalVariable, Function> uniqueUserCache;
     private SideEffectAnalysis sea;
 
+    private record ConstIndexKey(List<Integer> indices) {
+    }
+
     private static GlobalVariable getGlobalVariable(Value v) {
         if (v instanceof GlobalVariable gv)
             return gv;
@@ -337,20 +340,11 @@ public class GlobalLocalizationPass implements Pass {
             return false;
 
         boolean allConstant = otherUses.isEmpty();
-        Set<List<Value>> uniqueConstantIndices = new LinkedHashSet<>();
+        Set<ConstIndexKey> uniqueConstantIndices = new LinkedHashSet<>();
         int constantCount = 0;
         for (GetElementPtrInst gep : geps) {
-            boolean thisGepConstant = true;
-            List<Value> indices = new ArrayList<>();
-            for (int i = 1; i < gep.getNumOperands(); i++) {
-                Value idx = gep.getOperand(i);
-                if (!(idx instanceof ConstInt)) {
-                    thisGepConstant = false;
-                    break;
-                }
-                indices.add(idx);
-            }
-            if (thisGepConstant) {
+            ConstIndexKey indices = getConstIndexKey(gep);
+            if (indices != null) {
                 uniqueConstantIndices.add(indices);
                 constantCount++;
             } else {
@@ -371,22 +365,59 @@ public class GlobalLocalizationPass implements Pass {
         return result;
     }
 
-    private boolean localizeArrayElements(GlobalVariable gv, Function func, Set<List<Value>> constantIndices) {
-        Map<List<Value>, AllocaInst> indexToAlloca = new LinkedHashMap<>();
+    private ConstIndexKey getConstIndexKey(GetElementPtrInst gep) {
+        List<Integer> indices = new ArrayList<>();
+        for (int i = 1; i < gep.getNumOperands(); i++) {
+            Value idx = gep.getOperand(i);
+            if (!(idx instanceof ConstInt ci)) {
+                return null;
+            }
+            indices.add(ci.getValue());
+        }
+        return new ConstIndexKey(List.copyOf(indices));
+    }
+
+    private List<Value> buildConstIndices(ConstIndexKey key) {
+        List<Value> indices = new ArrayList<>(key.indices().size());
+        for (Integer idx : key.indices()) {
+            indices.add(new ConstInt(IntType.I32, idx));
+        }
+        return indices;
+    }
+
+    private AllocaInst findArrayElementAlloca(GlobalVariable gv, Function func, ConstIndexKey key) {
+        String targetName = gv.getName() + "." + indicesToString(buildConstIndices(key));
+        for (BasicBlock bb : func.getBasicBlocks()) {
+            for (Instruction inst : bb.getInstructions()) {
+                if (inst instanceof AllocaInst alloca && alloca.getName().startsWith(targetName)) {
+                    return alloca;
+                }
+            }
+        }
+        return null;
+    }
+
+    private boolean localizeArrayElements(GlobalVariable gv, Function func, Set<ConstIndexKey> constantIndices) {
+        Map<ConstIndexKey, AllocaInst> indexToAlloca = new LinkedHashMap<>();
         BasicBlock entry = func.getBasicBlocks().get(0);
         boolean modified = isModifiedIn(gv, func);
         isOnlyUsedIn(gv, func);
         Set<Instruction> protectedInsts = new LinkedHashSet<>();
 
-        for (List<Value> indices : constantIndices) {
-            if (isArrayLocalized(gv, func, indices))
+        for (ConstIndexKey key : constantIndices) {
+            AllocaInst existing = findArrayElementAlloca(gv, func, key);
+            if (existing != null) {
+                indexToAlloca.put(key, existing);
                 continue;
+            }
+
+            List<Value> indices = buildConstIndices(key);
             GetElementPtrInst tempGep = new GetElementPtrInst(gv, indices, null);
             IrType elementType = ((PtrType)tempGep.getType()).getPointeeType();
             String name = gv.getName() + "." + indicesToString(indices);
             AllocaInst alloca = new AllocaInst(elementType, name, null);
             entry.addFirst(alloca);
-            indexToAlloca.put(indices, alloca);
+            indexToAlloca.put(key, alloca);
 
             LoadInst load = new LoadInst(tempGep, null);
             StoreInst store = new StoreInst(load, alloca, null);
@@ -413,11 +444,8 @@ public class GlobalLocalizationPass implements Pass {
                 if (protectedInsts.contains(inst))
                     continue;
                 if (inst instanceof GetElementPtrInst gep && gep.getOperand(0) == gv) {
-                    List<Value> indices = new ArrayList<>();
-                    for (int i = 1; i < gep.getNumOperands(); i++) {
-                        indices.add(gep.getOperand(i));
-                    }
-                    AllocaInst alloca = indexToAlloca.get(indices);
+                    ConstIndexKey indices = getConstIndexKey(gep);
+                    AllocaInst alloca = indices == null ? null : indexToAlloca.get(indices);
                     if (alloca != null) {
                         gep.replaceAllUsesWith(alloca);
                         it.remove();
@@ -430,8 +458,8 @@ public class GlobalLocalizationPass implements Pass {
                     boolean reloadNeeded = needsReload(gv, call);
 
                     if (storeNeeded || reloadNeeded) {
-                        for (Map.Entry<List<Value>, AllocaInst> entry_ : indexToAlloca.entrySet()) {
-                            List<Value> indices = entry_.getKey();
+                        for (Map.Entry<ConstIndexKey, AllocaInst> entry_ : indexToAlloca.entrySet()) {
+                            ConstIndexKey indices = entry_.getKey();
                             AllocaInst alloca = entry_.getValue();
                             if (storeNeeded) {
                                 it.previous();
@@ -453,8 +481,8 @@ public class GlobalLocalizationPass implements Pass {
                 if (last instanceof ReturnInst) {
                     ListIterator<Instruction> retIt =
                         bb.getInstructions().listIterator(bb.getInstructions().size() - 1);
-                    for (Map.Entry<List<Value>, AllocaInst> entry_ : indexToAlloca.entrySet()) {
-                        List<Value> indices = entry_.getKey();
+                    for (Map.Entry<ConstIndexKey, AllocaInst> entry_ : indexToAlloca.entrySet()) {
+                        ConstIndexKey indices = entry_.getKey();
                         AllocaInst alloca = entry_.getValue();
                         storeBackToArray(gv, indices, alloca, bb, retIt, func, protectedInsts);
                     }
@@ -464,13 +492,13 @@ public class GlobalLocalizationPass implements Pass {
         return true;
     }
 
-    private void storeBackToArray(GlobalVariable gv, List<Value> indices, AllocaInst alloca, BasicBlock bb,
+    private void storeBackToArray(GlobalVariable gv, ConstIndexKey indices, AllocaInst alloca, BasicBlock bb,
         ListIterator<Instruction> it, Function func, Set<Instruction> protectedInsts) {
         LoadInst load = new LoadInst(alloca, null);
         load.setParent(bb);
         it.add(load);
         func.resolveLocalName(load);
-        GetElementPtrInst gep = new GetElementPtrInst(gv, indices, null);
+        GetElementPtrInst gep = new GetElementPtrInst(gv, buildConstIndices(indices), null);
         gep.setParent(bb);
         it.add(gep);
         func.resolveLocalName(gep);
@@ -481,9 +509,9 @@ public class GlobalLocalizationPass implements Pass {
         protectedInsts.add(store);
     }
 
-    private void reloadFromArray(GlobalVariable gv, List<Value> indices, AllocaInst alloca, BasicBlock bb,
+    private void reloadFromArray(GlobalVariable gv, ConstIndexKey indices, AllocaInst alloca, BasicBlock bb,
         ListIterator<Instruction> it, Function func, Set<Instruction> protectedInsts) {
-        GetElementPtrInst gep = new GetElementPtrInst(gv, indices, null);
+        GetElementPtrInst gep = new GetElementPtrInst(gv, buildConstIndices(indices), null);
         gep.setParent(bb);
         it.add(gep);
         func.resolveLocalName(gep);
