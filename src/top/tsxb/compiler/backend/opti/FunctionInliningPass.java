@@ -22,7 +22,6 @@ import top.tsxb.compiler.ir.type.FuncType;
 import top.tsxb.compiler.ir.type.IntType;
 import top.tsxb.compiler.ir.type.IrType;
 import top.tsxb.compiler.ir.type.NoneType;
-import top.tsxb.compiler.ir.type.PtrType;
 
 public class FunctionInliningPass implements Pass {
     private static final int MAX_INLINE_SIZE = 30;
@@ -128,6 +127,9 @@ public class FunctionInliningPass implements Pass {
     }
 
     private boolean allArgsConstInt(CallInst call) {
+        if (call.getNumOperands() <= 1) {
+            return false;
+        }
         for (int i = 1; i < call.getNumOperands(); i++) {
             if (!(call.getOperand(i) instanceof ConstInt)) {
                 return false;
@@ -320,7 +322,7 @@ public class FunctionInliningPass implements Pass {
             valueMap.put(callee.getArguments().get(i), call.getOperand(i + 1));
         }
 
-        for (BasicBlock calleeBB : callee.getBasicBlocks()) {
+        for (BasicBlock calleeBB : new ArrayList<>(callee.getBasicBlocks())) {
             BasicBlock clonedBB = new BasicBlock(calleeBB.getName() + ".inline", caller);
             valueMap.put(calleeBB, clonedBB);
         }
