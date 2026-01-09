@@ -270,15 +270,8 @@ public class LiveIntervalAnalysis {
         return result;
     }
 
-    public Map<Value, LiveInterval> getIntervalMap() {
-        return intervals;
-    }
-
     public Map<Value, java.util.Set<Value>> getInterference() {
         return interference;
     }
 
-    public Map<Instruction, Integer> getInstToId() {
-        return instToId;
-    }
 }

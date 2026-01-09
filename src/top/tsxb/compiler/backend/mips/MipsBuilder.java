@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Set;
+import java.util.Comparator;
 
 import top.tsxb.compiler.ir.base.Use;
 import top.tsxb.compiler.ir.base.User;
@@ -41,8 +42,7 @@ public class MipsBuilder {
     private final Map<BasicBlock, List<BasicBlock>> predecessorsMap = new LinkedHashMap<>();
     private StringBuilder currentSb = sb;
     private Map<Value, MipsRegister> regMapping = new LinkedHashMap<>();
-    private Map<Value, LiveInterval> intervals = new LinkedHashMap<>();
-    private Map<Instruction, Integer> instToId = new LinkedHashMap<>();
+    private final Map<CallInst, List<MipsRegister>> callSavedRegs = new LinkedHashMap<>();
     private Set<MipsRegister> usedCalleeSaved = new LinkedHashSet<>();
     private int currentStackSize;
     private int brCounter = 0;
@@ -335,13 +335,13 @@ public class MipsBuilder {
 
         LiveIntervalAnalysis intervalAnalysis = new LiveIntervalAnalysis(func, liveness, loopAnalysis);
         intervalAnalysis.analyze();
-        this.intervals = intervalAnalysis.getIntervalMap();
-        this.instToId = intervalAnalysis.getInstToId();
         GraphColoringRegAlloc allocator = new GraphColoringRegAlloc(intervalAnalysis.getIntervals(), excludedRegs,
             intervalAnalysis.getInterference());
         allocator.allocate();
         this.regMapping = allocator.getRegMapping();
         this.usedCalleeSaved = allocator.getUsedCalleeSaved();
+
+        computeCallSavedRegs(func, liveness);
 
         // Add global mappings
         for (Map.Entry<GlobalVariable, MipsRegister> entry : globalRegs.entrySet()) {
@@ -394,6 +394,60 @@ public class MipsBuilder {
         }
 
         currentSb.append("\n");
+    }
+
+    private void computeCallSavedRegs(Function func, LivenessAnalysis liveness) {
+        callSavedRegs.clear();
+        for (BasicBlock bb : func.getBasicBlocks()) {
+            Set<Value> live = new LinkedHashSet<>();
+            for (Value v : liveness.getLiveOut(bb)) {
+                if (regMapping.containsKey(v)) {
+                    live.add(v);
+                }
+            }
+
+            List<Instruction> insts = bb.getInstructions();
+            for (int i = insts.size() - 1; i >= 0; i--) {
+                Instruction inst = insts.get(i);
+
+                if (regMapping.containsKey(inst)) {
+                    live.remove(inst);
+                }
+
+                if (inst instanceof PhiInst) {
+                    continue;
+                }
+
+                if (inst instanceof CallInst call) {
+                    // Save only values live across the call. (The call result itself is a def and has been removed.)
+                    EnumSet<MipsRegister> regsToSave = EnumSet.noneOf(MipsRegister.class);
+                    for (Value v : live) {
+                        MipsRegister reg = regMapping.get(v);
+                        if (reg != null && reg.isCallerSaved()) {
+                            regsToSave.add(reg);
+                        }
+                    }
+                    List<MipsRegister> ordered = new ArrayList<>(regsToSave);
+                    ordered.sort(Comparator.comparingInt(Enum::ordinal));
+                    callSavedRegs.put(call, ordered);
+
+                    for (int opIdx = 1; opIdx < call.getNumOperands(); opIdx++) {
+                        Value op = call.getOperand(opIdx);
+                        if (regMapping.containsKey(op)) {
+                            live.add(op);
+                        }
+                    }
+                    continue;
+                }
+
+                for (int opIdx = 0; opIdx < inst.getNumOperands(); opIdx++) {
+                    Value op = inst.getOperand(opIdx);
+                    if (regMapping.containsKey(op)) {
+                        live.add(op);
+                    }
+                }
+            }
+        }
     }
 
     private List<BasicBlock> getSuccessors(BasicBlock bb) {
@@ -1400,19 +1454,9 @@ public class MipsBuilder {
         int numArgs = inst.getNumOperands() - 1;
         boolean clobbersCallerSaved = !isRuntimeSyscallWrapper(target);
 
-        // Save caller-saved registers that are live across this call
-        int instId = instToId.get(inst);
         List<MipsRegister> toSave = new ArrayList<>();
         if (clobbersCallerSaved) {
-            for (Map.Entry<Value, MipsRegister> entry : regMapping.entrySet()) {
-                MipsRegister reg = entry.getValue();
-                if (reg.isCallerSaved()) {
-                    LiveInterval interval = intervals.get(entry.getKey());
-                    if (interval != null && interval.getStart() < instId && interval.getEnd() > instId) {
-                        toSave.add(reg);
-                    }
-                }
-            }
+            toSave.addAll(callSavedRegs.getOrDefault(inst, List.of()));
         }
 
         // Save to stack (below current sp)
