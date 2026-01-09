@@ -185,7 +185,7 @@ public class SccpPass implements Pass {
                         addEdge(br.getParent(), dest);
                     }
                 }
-            } else if (cond.status() == LatticeStatus.BOTTOM) {
+            } else {
                 if (br.getOperand(1) instanceof BasicBlock destTrue) {
                     addEdge(br.getParent(), destTrue);
                 }

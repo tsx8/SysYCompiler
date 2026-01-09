@@ -222,7 +222,7 @@ public class IpsccpPass implements Pass {
                 BasicBlock target =
                     cond.value() != 0 ? (BasicBlock)br.getOperand(1) : (BasicBlock)br.getOperand(2);
                 markEdgeExecutable(br.getParent(), target);
-            } else if (cond.status() == LatticeStatus.BOTTOM) {
+            } else {
                 markEdgeExecutable(br.getParent(), (BasicBlock)br.getOperand(1));
                 markEdgeExecutable(br.getParent(), (BasicBlock)br.getOperand(2));
             }
