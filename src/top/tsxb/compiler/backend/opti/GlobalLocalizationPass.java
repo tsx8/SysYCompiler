@@ -210,8 +210,8 @@ public class GlobalLocalizationPass implements Pass {
                     continue;
 
                 if (inst instanceof CallInst call) {
-                    boolean storeNeeded = needsStore(gv, call) && modified;
                     boolean reloadNeeded = needsReload(gv, call);
+                    boolean storeNeeded = modified && (needsStore(gv, call) || reloadNeeded);
 
                     if (storeNeeded) {
                         it.previous();
@@ -442,8 +442,8 @@ public class GlobalLocalizationPass implements Pass {
                 }
 
                 if (inst instanceof CallInst call) {
-                    boolean storeNeeded = needsStore(gv, call) && modified;
                     boolean reloadNeeded = needsReload(gv, call);
+                    boolean storeNeeded = modified && (needsStore(gv, call) || reloadNeeded);
 
                     if (storeNeeded || reloadNeeded) {
                         for (Map.Entry<ConstIndexKey, AllocaInst> entry_ : indexToAlloca.entrySet()) {
