@@ -222,20 +222,22 @@ public class IrBuilder implements AstVisitor<Value> {
         if (node.symbol == null)
             return new ConstInt(IntType.I32, 0);
         if (node.symbol.isConst()) {
-            var initValues = node.symbol.initialValues();
-            if (node.indices.isEmpty()) {
-                if (!initValues.isEmpty()) {
-                    return new ConstInt(IntType.I32, initValues.get(0));
+            if (!(node.symbol.type() instanceof ArrayType && node.indices.isEmpty())) {
+                var initValues = node.symbol.initialValues();
+                if (node.indices.isEmpty()) {
+                    if (!initValues.isEmpty()) {
+                        return new ConstInt(IntType.I32, initValues.get(0));
+                    }
+                    return new ConstInt(IntType.I32, 0);
                 }
-                return new ConstInt(IntType.I32, 0);
-            }
-            Value indexVal = node.indices.get(0).accept(this);
-            if (indexVal instanceof ConstInt idxConst) {
-                int idx = idxConst.getValue();
-                if (idx >= 0 && idx < initValues.size()) {
-                    return new ConstInt(IntType.I32, initValues.get(idx));
+                Value indexVal = node.indices.get(0).accept(this);
+                if (indexVal instanceof ConstInt idxConst) {
+                    int idx = idxConst.getValue();
+                    if (idx >= 0 && idx < initValues.size()) {
+                        return new ConstInt(IntType.I32, initValues.get(idx));
+                    }
+                    return new ConstInt(IntType.I32, 0);
                 }
-                return new ConstInt(IntType.I32, 0);
             }
         }
         Value ptr = getAddress(node);
