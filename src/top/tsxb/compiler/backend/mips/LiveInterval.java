@@ -9,6 +9,7 @@ public class LiveInterval implements Comparable<LiveInterval> {
     private final Value value;
     private final List<LiveInterval> hints = new ArrayList<>();
     private final List<LiveInterval> phiHints = new ArrayList<>();
+    private final List<LiveInterval> avoidSameRegWith = new ArrayList<>();
     private int start;
     private int end;
     private MipsRegister reg;
@@ -35,6 +36,16 @@ public class LiveInterval implements Comparable<LiveInterval> {
 
     public List<LiveInterval> getPhiHints() {
         return phiHints;
+    }
+
+    public void addAvoidSameRegWith(LiveInterval interval) {
+        if (interval != null && interval != this && !avoidSameRegWith.contains(interval)) {
+            avoidSameRegWith.add(interval);
+        }
+    }
+
+    public List<LiveInterval> getAvoidSameRegWith() {
+        return avoidSameRegWith;
     }
 
     public Value getValue() {

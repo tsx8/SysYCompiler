@@ -9,7 +9,9 @@ import java.util.Map;
 import top.tsxb.compiler.ir.base.Value;
 import top.tsxb.compiler.ir.constant.ConstInt;
 import top.tsxb.compiler.ir.constant.Constant;
+import top.tsxb.compiler.ir.inst.BrInst;
 import top.tsxb.compiler.ir.inst.CallInst;
+import top.tsxb.compiler.ir.inst.IcmpInst;
 import top.tsxb.compiler.ir.inst.Instruction;
 import top.tsxb.compiler.ir.inst.GetElementPtrInst;
 import top.tsxb.compiler.ir.inst.PhiInst;
@@ -96,6 +98,20 @@ public class LiveIntervalAnalysis {
 
                 // Uses
                 if (!(inst instanceof PhiInst)) {
+                    if (inst instanceof BrInst br) {
+                        IcmpInst icmp = IcmpBranchFusion.getFusableIcmpFromBr(br);
+                        if (icmp != null) {
+                            Value lhs = icmp.getOperand(0);
+                            if (isAllocatable(lhs) && intervals.containsKey(lhs)) {
+                                live.add(lhs);
+                            }
+                            Value rhs = icmp.getOperand(1);
+                            if (isAllocatable(rhs) && intervals.containsKey(rhs)) {
+                                live.add(rhs);
+                            }
+                            continue;
+                        }
+                    }
                     for (int j = 0; j < inst.getNumOperands(); j++) {
                         Value op = inst.getOperand(j);
                         if (isAllocatable(op) && intervals.containsKey(op)) {
@@ -109,6 +125,15 @@ public class LiveIntervalAnalysis {
 
     private void collectHints() {
         for (BasicBlock bb : function.getBasicBlocks()) {
+            List<PhiInst> blockPhis = new ArrayList<>();
+            for (Instruction inst : bb.getInstructions()) {
+                if (inst instanceof PhiInst phi) {
+                    blockPhis.add(phi);
+                } else {
+                    break;
+                }
+            }
+
             for (Instruction inst : bb.getInstructions()) {
                 if (inst instanceof PhiInst phi) {
                     LiveInterval phiInterval = intervals.get(phi);
@@ -121,6 +146,31 @@ public class LiveIntervalAnalysis {
                         if (incomingInterval != null) {
                             phiInterval.addPhiHint(incomingInterval);
                             incomingInterval.addPhiHint(phiInterval);
+                        }
+                    }
+
+                    if (loopAnalysis.isLoopHeader(bb) && !blockPhis.isEmpty()) {
+                        for (var entry : phi.getIncoming().entrySet()) {
+                            BasicBlock pred = entry.getKey();
+                            if (loopAnalysis.getLoopDepth(pred) <= 0) {
+                                continue;
+                            }
+                            Value incoming = entry.getValue();
+                            LiveInterval incomingInterval = intervals.get(incoming);
+                            if (incomingInterval == null) {
+                                continue;
+                            }
+                            for (PhiInst otherPhi : blockPhis) {
+                                if (otherPhi == phi) {
+                                    continue;
+                                }
+                                LiveInterval otherInterval = intervals.get(otherPhi);
+                                if (otherInterval == null) {
+                                    continue;
+                                }
+                                incomingInterval.addAvoidSameRegWith(otherInterval);
+                                otherInterval.addAvoidSameRegWith(incomingInterval);
+                            }
                         }
                     }
                 }
@@ -205,6 +255,24 @@ public class LiveIntervalAnalysis {
                 if (inst instanceof PhiInst) {
                     continue;
                 }
+                if (inst instanceof BrInst br) {
+                    IcmpInst icmp = IcmpBranchFusion.getFusableIcmpFromBr(br);
+                    if (icmp != null) {
+                        Value lhs = icmp.getOperand(0);
+                        if (isAllocatable(lhs)) {
+                            LiveInterval interval = getOrCreateInterval(lhs);
+                            interval.addRange(bStart, instId);
+                            interval.addWeight(weight);
+                        }
+                        Value rhs = icmp.getOperand(1);
+                        if (isAllocatable(rhs)) {
+                            LiveInterval interval = getOrCreateInterval(rhs);
+                            interval.addRange(bStart, instId);
+                            interval.addWeight(weight);
+                        }
+                        continue;
+                    }
+                }
                 for (int j = 0; j < inst.getNumOperands(); j++) {
                     Value op = inst.getOperand(j);
                     if (isAllocatable(op)) {
@@ -227,6 +295,8 @@ public class LiveIntervalAnalysis {
         if (val instanceof GlobalVariable)
             return false;
         if (val instanceof top.tsxb.compiler.ir.inst.AllocaInst)
+            return false;
+        if (val instanceof IcmpInst icmp && IcmpBranchFusion.isFusableIcmp(icmp))
             return false;
         if (val instanceof Constant || val instanceof BasicBlock)
             return false;

@@ -11,6 +11,7 @@ import java.util.Set;
 import top.tsxb.compiler.ir.base.Value;
 import top.tsxb.compiler.ir.constant.Constant;
 import top.tsxb.compiler.ir.inst.BrInst;
+import top.tsxb.compiler.ir.inst.IcmpInst;
 import top.tsxb.compiler.ir.inst.Instruction;
 import top.tsxb.compiler.ir.inst.PhiInst;
 import top.tsxb.compiler.ir.structure.BasicBlock;
@@ -84,6 +85,20 @@ public class LivenessAnalysis {
                 }
                 // Use
                 for (int i = 0; i < inst.getNumOperands(); i++) {
+                    if (inst instanceof BrInst br && br.getNumOperands() == 3 && i == 0) {
+                        IcmpInst icmp = IcmpBranchFusion.getFusableIcmpFromBr(br);
+                        if (icmp != null) {
+                            Value lhs = icmp.getOperand(0);
+                            if (isAllocatable(lhs) && !bbDef.contains(lhs)) {
+                                bbUse.add(lhs);
+                            }
+                            Value rhs = icmp.getOperand(1);
+                            if (isAllocatable(rhs) && !bbDef.contains(rhs)) {
+                                bbUse.add(rhs);
+                            }
+                            continue;
+                        }
+                    }
                     Value op = inst.getOperand(i);
                     if (isAllocatable(op) && !bbDef.contains(op)) {
                         bbUse.add(op);
@@ -125,6 +140,8 @@ public class LivenessAnalysis {
         if (val instanceof GlobalVariable)
             return false;
         if (val instanceof top.tsxb.compiler.ir.inst.AllocaInst)
+            return false;
+        if (val instanceof IcmpInst icmp && IcmpBranchFusion.isFusableIcmp(icmp))
             return false;
         if (val instanceof Constant || val instanceof BasicBlock)
             return false;

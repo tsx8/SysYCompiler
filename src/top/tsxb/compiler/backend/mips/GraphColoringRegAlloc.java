@@ -403,10 +403,35 @@ public class GraphColoringRegAlloc {
             }
 
             MipsRegister color = null;
+            Set<MipsRegister> candidateColors = okColors;
+            if (!n.getAvoidSameRegWith().isEmpty()) {
+                Set<MipsRegister> avoidRegs = new LinkedHashSet<>();
+                for (LiveInterval other : n.getAvoidSameRegWith()) {
+                    LiveInterval a = getAlias(other);
+                    if (a == null) {
+                        continue;
+                    }
+                    MipsRegister r = a.getReg();
+                    if (r != null) {
+                        avoidRegs.add(r);
+                    }
+                    MipsRegister mapped = regMapping.get(a.getValue());
+                    if (mapped != null) {
+                        avoidRegs.add(mapped);
+                    }
+                }
+                if (!avoidRegs.isEmpty()) {
+                    Set<MipsRegister> filtered = new LinkedHashSet<>(okColors);
+                    filtered.removeAll(avoidRegs);
+                    if (!filtered.isEmpty()) {
+                        candidateColors = filtered;
+                    }
+                }
+            }
 
             for (LiveInterval hint : n.getPhiHints()) {
                 MipsRegister hintReg = getAlias(hint).getReg();
-                if (hintReg != null && okColors.contains(hintReg)) {
+                if (hintReg != null && candidateColors.contains(hintReg)) {
                     color = hintReg;
                     break;
                 }
@@ -415,7 +440,7 @@ public class GraphColoringRegAlloc {
             if (color == null) {
                 for (LiveInterval hint : n.getHints()) {
                     MipsRegister hintReg = getAlias(hint).getReg();
-                    if (hintReg != null && okColors.contains(hintReg)) {
+                    if (hintReg != null && candidateColors.contains(hintReg)) {
                         color = hintReg;
                         break;
                     }
@@ -424,14 +449,14 @@ public class GraphColoringRegAlloc {
 
             if (color == null) {
                 if (n.isSpansCall()) {
-                    for (MipsRegister r : okColors) {
+                    for (MipsRegister r : candidateColors) {
                         if (r.isCalleeSaved()) {
                             color = r;
                             break;
                         }
                     }
                 } else {
-                    for (MipsRegister r : okColors) {
+                    for (MipsRegister r : candidateColors) {
                         if (r.isCallerSaved()) {
                             color = r;
                             break;
@@ -441,7 +466,7 @@ public class GraphColoringRegAlloc {
             }
 
             if (color == null) {
-                color = okColors.iterator().next();
+                color = candidateColors.iterator().next();
             }
 
             if (color != null) {

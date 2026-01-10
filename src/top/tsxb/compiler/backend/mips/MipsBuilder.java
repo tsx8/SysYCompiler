@@ -11,8 +11,6 @@ import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.Comparator;
 
-import top.tsxb.compiler.ir.base.Use;
-import top.tsxb.compiler.ir.base.User;
 import top.tsxb.compiler.ir.base.Value;
 import top.tsxb.compiler.ir.constant.ConstArray;
 import top.tsxb.compiler.ir.constant.ConstInt;
@@ -558,7 +556,8 @@ public class MipsBuilder {
                     size = (size + 3) / 4 * 4; // Align to 4 bytes
                     stackOffsets.put(inst, offset);
                     offset += size;
-                } else if (!(inst.getType() instanceof NoneType) && !regMapping.containsKey(inst)) {
+                } else if (!(inst.getType() instanceof NoneType) && !regMapping.containsKey(inst)
+                    && !(inst instanceof IcmpInst icmp && isFusableIcmp(icmp))) {
                     stackOffsets.put(inst, offset);
                     offset += 4;
                 }
@@ -1010,15 +1009,7 @@ public class MipsBuilder {
     }
 
     private boolean isFusableIcmp(IcmpInst inst) {
-        List<Use> uses = inst.getUseList();
-        if (uses.size() != 1) {
-            return false;
-        }
-        User user = uses.get(0).user();
-        if (!(user instanceof BrInst br)) {
-            return false;
-        }
-        return br.getParent() == inst.getParent() && br.getOperand(0) == inst;
+        return IcmpBranchFusion.isFusableIcmp(inst);
     }
 
     private String getBranchInst(String predicate, boolean jumpIfTrue) {
@@ -1324,8 +1315,12 @@ public class MipsBuilder {
             PhiLoc currentDst = start;
             PhiLoc currentSrc = first.src.loc;
             while (!currentSrc.key.equals(start.key)) {
-                loadFromPhiLoc(currentSrc, "$t1");
-                storeToPhiLoc(currentDst, "$t1");
+                if (currentSrc.reg != null) {
+                    storeToPhiLoc(currentDst, currentSrc.reg);
+                } else {
+                    loadFromPhiLoc(currentSrc, "$t1");
+                    storeToPhiLoc(currentDst, "$t1");
+                }
                 copies.remove(currentDst.key);
 
                 PhiCopy next = copies.get(currentSrc.key);
