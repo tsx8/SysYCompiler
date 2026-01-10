@@ -24,6 +24,12 @@ public class ConstantFolder {
                     return null;
                 res = l % r;
             }
+            case AND -> res = l & r;
+            case OR -> res = l | r;
+            case XOR -> res = l ^ r;
+            case SHL -> res = l << (r & 31);
+            case LSHR -> res = l >>> (r & 31);
+            case ASHR -> res = l >> (r & 31);
             default -> {
                 return null;
             }

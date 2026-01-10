@@ -591,7 +591,7 @@ public class MipsBuilder {
     private void genInstruction(Instruction inst, BasicBlock nextBb) {
         // currentSb.append(" # ").append(inst.toString()).append("\n");
         switch (inst.getOpCode()) {
-            case ADD, SUB, MUL, SDIV, SREM -> genBinary(inst);
+            case ADD, SUB, MUL, SDIV, SREM, AND, OR, XOR, SHL, LSHR, ASHR -> genBinary(inst);
             case ICMP -> genIcmp((IcmpInst)inst);
             case ALLOCA -> genAlloca();
             case LOAD -> genLoad((LoadInst)inst);
@@ -811,6 +811,18 @@ public class MipsBuilder {
                     .append(rd).append("\n");
                 case SREM -> currentSb.append("    div ").append(r1).append(", ").append(r2).append("\n    mfhi ")
                     .append(rd).append("\n");
+                case AND -> currentSb.append("    and ").append(rd).append(", ").append(r1).append(", ").append(r2)
+                    .append("\n");
+                case OR -> currentSb.append("    or ").append(rd).append(", ").append(r1).append(", ").append(r2)
+                    .append("\n");
+                case XOR -> currentSb.append("    xor ").append(rd).append(", ").append(r1).append(", ").append(r2)
+                    .append("\n");
+                case SHL -> currentSb.append("    sllv ").append(rd).append(", ").append(r1).append(", ").append(r2)
+                    .append("\n");
+                case LSHR -> currentSb.append("    srlv ").append(rd).append(", ").append(r1).append(", ").append(r2)
+                    .append("\n");
+                case ASHR -> currentSb.append("    srav ").append(rd).append(", ").append(r1).append(", ").append(r2)
+                    .append("\n");
             }
             if (!regMapping.containsKey(inst)) {
                 storeStack(rd, stackOffsets.get(inst) + spShift);
