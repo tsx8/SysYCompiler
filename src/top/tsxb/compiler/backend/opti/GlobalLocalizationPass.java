@@ -445,18 +445,20 @@ public class GlobalLocalizationPass implements Pass {
                     boolean reloadNeeded = needsReload(gv, call);
                     boolean storeNeeded = modified && (needsStore(gv, call) || reloadNeeded);
 
-                    if (storeNeeded || reloadNeeded) {
+                    if (storeNeeded) {
+                        it.previous(); // Move to just before the call.
                         for (Map.Entry<ConstIndexKey, AllocaInst> entry_ : indexToAlloca.entrySet()) {
                             ConstIndexKey indices = entry_.getKey();
                             AllocaInst alloca = entry_.getValue();
-                            if (storeNeeded) {
-                                it.previous();
-                                storeBackToArray(gv, indices, alloca, bb, it, func, protectedInsts);
-                                it.next();
-                            }
-                            if (reloadNeeded) {
-                                reloadFromArray(gv, indices, alloca, bb, it, func, protectedInsts);
-                            }
+                            storeBackToArray(gv, indices, alloca, bb, it, func, protectedInsts);
+                        }
+                        it.next(); // Move back to just after the call.
+                    }
+                    if (reloadNeeded) {
+                        for (Map.Entry<ConstIndexKey, AllocaInst> entry_ : indexToAlloca.entrySet()) {
+                            ConstIndexKey indices = entry_.getKey();
+                            AllocaInst alloca = entry_.getValue();
+                            reloadFromArray(gv, indices, alloca, bb, it, func, protectedInsts);
                         }
                     }
                 }
