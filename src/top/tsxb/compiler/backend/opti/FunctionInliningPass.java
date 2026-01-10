@@ -1,15 +1,6 @@
 package top.tsxb.compiler.backend.opti;
 
-import java.util.ArrayList;
-import java.util.ArrayDeque;
-import java.util.Deque;
-import java.util.Collections;
-import java.util.IdentityHashMap;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 import top.tsxb.compiler.ir.base.Value;
 import top.tsxb.compiler.ir.constant.ConstInt;
@@ -94,12 +85,16 @@ public class FunctionInliningPass implements Pass {
 
         boolean recursive = recursiveFunctions.contains(callee);
         if (recursive) {
-            // Only inline recursive calls for compile-time specialization (all-const args), and avoid cases like fib()
-            // where multiple recursive calls can quickly cause exponential IR growth.
+            if (callsiteInLoop || hasLoop(callee)) {
+                return false;
+            }
             if (!allArgsConstInt(call)) {
                 return false;
             }
-            if (countCallsTo(recursiveFunctions, callee) > 1) {
+            if (callsOtherRecursiveFunction(callee, recursiveFunctions)) {
+                return false;
+            }
+            if (countSelfRecursiveCalls(callee) > 1) {
                 return false;
             }
             if (calleeInstCount >= MAX_RECURSIVE_INLINE_SIZE) {
@@ -138,13 +133,27 @@ public class FunctionInliningPass implements Pass {
         return true;
     }
 
-    private int countCallsTo(Set<Function> targetFunctions, Function function) {
+    private boolean callsOtherRecursiveFunction(Function function, Set<Function> recursiveFunctions) {
+        for (BasicBlock bb : function.getBasicBlocks()) {
+            for (Instruction inst : bb.getInstructions()) {
+                if (inst instanceof CallInst call) {
+                    Function callee = (Function)call.getOperand(0);
+                    if (recursiveFunctions.contains(callee) && callee != function) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    private int countSelfRecursiveCalls(Function function) {
         int count = 0;
         for (BasicBlock bb : function.getBasicBlocks()) {
             for (Instruction inst : bb.getInstructions()) {
                 if (inst instanceof CallInst call) {
                     Function callee = (Function)call.getOperand(0);
-                    if (targetFunctions.contains(callee)) {
+                    if (callee == function) {
                         count++;
                     }
                 }
