@@ -32,6 +32,7 @@ public class GlobalLocalizationPass implements Pass {
     private final Set<String> localizedInFunc = new LinkedHashSet<>();
     private Map<GlobalVariable, Function> uniqueUserCache;
     private SideEffectAnalysis sea;
+    private static final int HEAVY_SYNC_SCALAR_THRESHOLD = 4;
 
     private record ConstIndexKey(List<Integer> indices) {
     }
@@ -113,6 +114,11 @@ public class GlobalLocalizationPass implements Pass {
         List<Loop> loops = findLoops(func);
         boolean isRecursive = isRecursive(func);
 
+        Set<BasicBlock> loopBlocks = new LinkedHashSet<>();
+        for (Loop loop : loops) {
+            loopBlocks.addAll(loop.blocks());
+        }
+
         for (BasicBlock bb : func.getBasicBlocks()) {
             boolean inLoop = false;
             for (Loop loop : loops) {
@@ -135,8 +141,19 @@ public class GlobalLocalizationPass implements Pass {
             }
         }
 
+        Set<GlobalVariable> syncHeavyScalars = new LinkedHashSet<>();
+        for (GlobalVariable gv : globalsInFunc) {
+            if (isScalarGlobal(gv) && globalsInLoops.contains(gv) && !isOnlyUsedIn(gv, func)
+                && hasSyncingCallInLoop(gv, func, loopBlocks)) {
+                syncHeavyScalars.add(gv);
+            }
+        }
+
         Set<GlobalVariable> result = new LinkedHashSet<>();
         for (GlobalVariable gv : globalsInFunc) {
+            if (syncHeavyScalars.size() >= HEAVY_SYNC_SCALAR_THRESHOLD && syncHeavyScalars.contains(gv)) {
+                continue;
+            }
             if (isOnlyUsedIn(gv, func)) {
                 // If it's recursive and modified, localization might be bad due to syncs
                 if (isRecursive && isModifiedIn(gv, func)) {
@@ -154,6 +171,34 @@ public class GlobalLocalizationPass implements Pass {
             }
         }
         return result;
+    }
+
+    private boolean isScalarGlobal(GlobalVariable gv) {
+        IrType pointee = ((PtrType)gv.getType()).getPointeeType();
+        return !(pointee instanceof ArrType);
+    }
+
+    private boolean hasSyncingCallInLoop(GlobalVariable gv, Function func, Set<BasicBlock> loopBlocks) {
+        if (loopBlocks.isEmpty()) {
+            return false;
+        }
+        boolean modifiedInFunc = isModifiedIn(gv, func);
+        for (BasicBlock bb : func.getBasicBlocks()) {
+            if (!loopBlocks.contains(bb)) {
+                continue;
+            }
+            for (Instruction inst : bb.getInstructions()) {
+                if (!(inst instanceof CallInst call)) {
+                    continue;
+                }
+                boolean reloadNeeded = needsReload(gv, call);
+                boolean storeNeeded = modifiedInFunc && (needsStore(gv, call) || reloadNeeded);
+                if (reloadNeeded || storeNeeded) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private boolean isRecursive(Function func) {
